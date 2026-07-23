@@ -1,0 +1,36 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Database files
+*.db
+*.sqlite3
+
+# Log files
+*.log
+live_system.log
+
+# Environment variables & local configs
+.env
+workspace_config.json
+
+# IDEs & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Tự động sinh ra (Reports)
+ClaudeSuite_Kanban_Report_*
+*.html
+*.md
