@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['e:\\exe\\agent_manager.py'],
+    ['agent_manager.py'],
     pathex=[],
     binaries=[],
-    datas=[('e:\\exe\\modules', 'modules')],
+    datas=[('modules', 'modules')],
     hiddenimports=['sqlite3', 'win32gui', 'win32con', 'win32api', 'win32clipboard'],
     hookspath=[],
     hooksconfig={},
