@@ -2137,8 +2137,11 @@ class ClaudeSuiteApp(ctk.CTk):
         if hasattr(self, "lbl_ws_summary"):
             self.lbl_ws_summary.configure(
                 text=f"🟢 {cnt} Files Context",
-                text_color=("#38bdf8" if current_theme == "dark" else "#0284c7")
+                text_color=("#38bdf8" if self.current_theme == "dark" else "#0284c7")
             )
+            
+        if hasattr(self, "cockpit_frame"):
+            self.cockpit_frame.set_workspace(folder)
 
     def _pick_quick_folder(self):
         desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")

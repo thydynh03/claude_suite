@@ -162,6 +162,19 @@ class CockpitTabFrame(ctk.CTkFrame):
             self.txt_coder_log.pack_forget()
             self.txt_human_log.pack(fill="both", expand=True, padx=5, pady=5)
 
+    def set_workspace(self, folder_path):
+        """Called by main app when global workspace changes via Menu"""
+        if not folder_path or not os.path.exists(folder_path):
+            return
+            
+        from modules.document_parser import DocumentParser
+        # Quét nhanh 100 file để làm bối cảnh mặc định (có thể optimize sau)
+        res = DocumentParser.scan_folder(folder_path, max_files=100)
+        self.attached_files.clear()
+        for k, v in res.items():
+            self.attached_files[k] = v
+        self._update_chips()
+
     def _attach_folder(self):
         folder = filedialog.askdirectory(title="Chọn Folder Dự Án")
         if folder:
