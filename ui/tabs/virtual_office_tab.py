@@ -12,6 +12,12 @@ class VirtualOfficeTabFrame(ctk.CTkFrame):
         self.canvas = tk.Canvas(self, bg="#1e293b", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=10, pady=10)
         
+        self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        self.btn_demo = ctk.CTkButton(self.btn_frame, text="▶ Chạy thử Demo (Run Animation)", command=self._run_demo, fg_color="#8b5cf6", hover_color="#7c3aed")
+        self.btn_demo.pack(side="right")
+        
         # Desks and Agents
         self.desks = {}
         self.agents = {}
@@ -207,6 +213,22 @@ class VirtualOfficeTabFrame(ctk.CTkFrame):
     def complete_task(self, agent_name):
         self.show_bubble(agent_name, "✅ Task Completed!", 3.0)
         
+    def _run_demo(self):
+        # Fake animation sequence
+        self.assign_task("Chief Architect & Tech Lead", "Thiết kế System Architecture")
+        
+        self.after(2000, lambda: self.trigger_communication("Chief Architect & Tech Lead", "Senior Fullstack Developer", "Bản vẽ xong rồi, code đi em!"))
+        
+        self.after(5000, lambda: self.assign_task("Senior Fullstack Developer", "Code REST API..."))
+        
+        self.after(8000, lambda: self.trigger_communication("Senior Fullstack Developer", "Senior Code Reviewer & Security Auditor", "Review giúp đoạn auth nha"))
+        
+        self.after(11000, lambda: self.assign_task("Lead QA & Test Automation Specialist", "Viết Cypress E2E test"))
+        
+        self.after(14000, lambda: self.trigger_communication("Lead QA & Test Automation Specialist", "Technical Project Manager (PM)", "Test pass hết rồi sếp!"))
+        
+        self.after(17000, lambda: self.complete_task("Technical Project Manager (PM)"))
+
     def destroy(self):
         self.running = False
         super().destroy()
