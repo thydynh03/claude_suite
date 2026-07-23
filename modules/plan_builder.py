@@ -45,8 +45,9 @@ Rules:
 - priority: "low" | "normal" | "high" | "urgent"
 """
 
-    def __init__(self, cli=None):
+    def __init__(self, cli=None, on_engine_fallback: Optional[Callable] = None):
         self.cli = cli   # ClaudeCLI instance (optional)
+        self.on_engine_fallback = on_engine_fallback
 
     def build_from_description(
         self,
@@ -70,8 +71,19 @@ Rules:
         )
 
         if not result.success:
-            log(f"CLI fail: {result.error}, dung fallback", "WARN")
-            return self._simple_decompose(project)
+            if "api_error_status" in result.error or "429" in result.error or "is_error" in result.output:
+                if getattr(self, "on_engine_fallback", None):
+                    new_model = self.on_engine_fallback("AI Decomposer", result.error or result.output)
+                    if new_model:
+                        log(f"⚠️ Đổi model sang {new_model} để Decompose...", "WARN")
+                        result = self.cli.run_once(
+                            prompt, model=new_model,
+                            output_format="json", on_log=log
+                        )
+            
+            if not result.success:
+                log(f"CLI fail: {result.error}, dung fallback", "WARN")
+                return self._simple_decompose(project)
 
         try:
             # result.output có thể là JSON string hoặc đã parse

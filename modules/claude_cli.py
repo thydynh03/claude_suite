@@ -264,9 +264,11 @@ class ClaudeCLI:
 
             if proc.returncode != 0:
                 err = stderr.strip() or f"Exit code {proc.returncode}"
+                if "is_error" in stdout or "api_error" in stdout:
+                    err += f"\n[STDOUT]: {stdout.strip()}"
                 if on_log:
                     on_log(f"Loi CLI: {err[:120]}", "ERROR")
-                return RunResult(success=False, output="",
+                return RunResult(success=False, output=stdout,
                                  error=err, duration_s=duration)
 
             # Parse JSON output & token usage

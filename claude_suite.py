@@ -84,7 +84,7 @@ class ClaudeSuiteApp(ctk.CTk):
         self.board        = TaskBoard()
         self.memory       = MemoryStore()
         self.ctx_mgr      = ContextManager()
-        self.plan_bld     = PlanBuilder(cli=self.cli)
+        self.plan_bld     = PlanBuilder(cli=self.cli, on_engine_fallback=self._prompt_engine_fallback)
         self.exporter     = ReportExporter()
         self.webhook_srv  = WebhookServer(port=9090, on_payload=self._on_webhook_received)
         self._quick_context_paths = []
