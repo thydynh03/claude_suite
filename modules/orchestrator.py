@@ -30,7 +30,8 @@ class Orchestrator:
                  on_log: Optional[Callable] = None,
                  get_context_fn: Optional[Callable[[], str]] = None,
                  get_workspace_fn: Optional[Callable[[], str]] = None,
-                 on_task_event: Optional[Callable] = None):
+                 on_task_event: Optional[Callable] = None,
+                 on_engine_fallback: Optional[Callable] = None):
         self.registry = registry
         self.board    = board
         self.cli      = cli
@@ -39,6 +40,7 @@ class Orchestrator:
         self.get_context_fn = get_context_fn
         self.get_workspace_fn = get_workspace_fn
         self.on_task_event = on_task_event
+        self.on_engine_fallback = on_engine_fallback
 
         self._running  = False
         self._thread   = None
@@ -218,18 +220,33 @@ class Orchestrator:
 
         # Check for Token Quota Exhaustion -> Smart Fallback to Antigravity CLI
         fresh_agent = self.registry.get(agent.agent_id) or agent
-        if not result.success and self._is_quota_exhausted(fresh_agent, result.error):
-            fallback_info = fresh_agent.fallback_to_antigravity()
-            self.registry.update(fresh_agent)
-            self.log(f"⚠️ [SMART FALLBACK] Hết Token/Quota Claude CLI! Tự động chuyển Agent '{fresh_agent.name}' sang Antigravity CLI ({fresh_agent.model})", "WARN")
-            
-            # Retry immediately via Antigravity CLI
-            result = self.cli.run_agent(
-                fresh_agent, prompt,
-                on_log=lambda m, lvl="INFO": self.log(f"  [{fresh_agent.name}] (Fallback) {m}", lvl)
-            )
-            if getattr(result, "tokens_used", 0) > 0:
-                self.registry.add_tokens(fresh_agent.agent_id, result.tokens_used)
+        if not result.success and ("api_error_status" in result.error or "429" in result.error or "400" in result.error):
+            if self.on_engine_fallback:
+                new_model = self.on_engine_fallback(fresh_agent.name, result.error)
+                if new_model:
+                    fresh_agent.model = new_model
+                    self.registry.update(fresh_agent)
+                    self.log(f"⚠️ Chuyển Agent '{fresh_agent.name}' sang {new_model} do lỗi API.", "WARN")
+                    
+                    # Retry immediately
+                    result = self.cli.run_agent(
+                        fresh_agent, prompt,
+                        on_log=lambda m, lvl="INFO": self.log(f"  [{fresh_agent.name}] (Fallback) {m}", lvl)
+                    )
+                    if getattr(result, "tokens_used", 0) > 0:
+                        self.registry.add_tokens(fresh_agent.agent_id, result.tokens_used)
+            elif self._is_quota_exhausted(fresh_agent, result.error):
+                fresh_agent.fallback_to_antigravity()
+                self.registry.update(fresh_agent)
+                self.log(f"⚠️ [SMART FALLBACK] Hết Quota! Tự động chuyển Agent '{fresh_agent.name}' sang Antigravity CLI ({fresh_agent.model})", "WARN")
+                
+                # Retry immediately via Antigravity CLI
+                result = self.cli.run_agent(
+                    fresh_agent, prompt,
+                    on_log=lambda m, lvl="INFO": self.log(f"  [{fresh_agent.name}] (Fallback) {m}", lvl)
+                )
+                if getattr(result, "tokens_used", 0) > 0:
+                    self.registry.add_tokens(fresh_agent.agent_id, result.tokens_used)
 
         if result.success:
             self.memory.add(MemoryItem(

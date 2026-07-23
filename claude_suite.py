@@ -97,12 +97,21 @@ class ClaudeSuiteApp(ctk.CTk):
         self._agent_page_size = 5
         self._kanban_col_limits = {s: 6 for s in STATUSES}
 
-        self.pipeline_eng = AgentPipeline(self.registry, self.cli, self.memory, on_log=self._global_log, get_context_fn=self._get_active_workspace_context, on_agent_communicate=self._trigger_office_communication)
-        self.orchestr   = Orchestrator(self.registry, self.board, self.cli,
-                                       on_log=self._global_log,
-                                       get_context_fn=self._get_active_workspace_context,
-                                       get_workspace_fn=lambda: self._global_workspace_folder,
-                                       on_task_event=self._trigger_office_task)
+        self.pipeline_eng = AgentPipeline(
+            self.registry, self.cli, self.memory, 
+            on_log=self._global_log, 
+            get_context_fn=self._get_active_workspace_context, 
+            on_agent_communicate=self._trigger_office_communication,
+            on_engine_fallback=self._prompt_engine_fallback
+        )
+        self.orchestr   = Orchestrator(
+            self.registry, self.board, self.cli,
+            on_log=self._global_log,
+            get_context_fn=self._get_active_workspace_context,
+            get_workspace_fn=lambda: self._global_workspace_folder,
+            on_task_event=self._trigger_office_task,
+            on_engine_fallback=self._prompt_engine_fallback
+        )
         self.log_count  = 0
         self.current_theme = "dark"
 
@@ -1942,9 +1951,14 @@ class ClaudeSuiteApp(ctk.CTk):
         task_objects = self.plan_bld.plan_to_tasks(self._pending_plan)
         self.orchestr.execute_plan(task_objects)
         self._refresh_tasks()
-        self.tabview.set("📋 Tasks Kanban")
+        self.tabview.set("📋 Task Board & Planning")
         self._global_log(f"Execute plan: {len(task_objects)} tasks đã thêm vào board.", "SUCCESS")
         self.btn_execute_plan.configure(state="disabled")
+        
+        # Cập nhật UI Orchestrator
+        self.btn_orch.configure(text="⏹  Stop Orchestrator")
+        self.lbl_orch_dot.configure(text_color="#22c55e")
+        self.lbl_orch_txt.configure(text="Orchestrator: Active", text_color="#22c55e")
 
     def _show_file_menu(self):
         menu = tk.Menu(
@@ -2241,6 +2255,26 @@ class ClaudeSuiteApp(ctk.CTk):
             self.after(0, _done)
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _prompt_engine_fallback(self, agent_name: str, error_msg: str) -> str:
+        """Hiển thị popup hỏi người dùng đổi Engine khi có lỗi API. Chạy trong UI thread."""
+        event = threading.Event()
+        result = {"model": ""}
+
+        def _ask():
+            msg = (
+                f"Agent '{agent_name}' gặp lỗi API (Quota Exceeded/Rate Limit).\n\n"
+                f"Chi tiết: {error_msg[:150]}...\n\n"
+                "Bạn có muốn chuyển sang dùng Antigravity CLI (Gemini 3.6 Flash) để tiếp tục không?"
+            )
+            ans = messagebox.askyesno("Lỗi API - Chuyển đổi AI Engine", msg, parent=self)
+            if ans:
+                result["model"] = "gemini-3.6-flash-high"
+            event.set()
+
+        self.after(0, _ask)
+        event.wait()
+        return result["model"]
 
     def _toggle_orchestrator(self):
         if self.orchestr._running:
