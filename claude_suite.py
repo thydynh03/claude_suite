@@ -2321,15 +2321,37 @@ class ClaudeSuiteApp(ctk.CTk):
         result = {"model": ""}
 
         def _ask():
-            msg = (
-                f"Agent '{agent_name}' gặp lỗi API (Quota Exceeded/Rate Limit).\n\n"
-                f"Chi tiết: {error_msg[:150]}...\n\n"
-                "Bạn có muốn chuyển sang dùng Antigravity CLI (Gemini 3.6 Flash) để tiếp tục không?"
-            )
-            ans = messagebox.askyesno("Lỗi API - Chuyển đổi AI Engine", msg, parent=self)
-            if ans:
-                result["model"] = "gemini-3.6-flash-high"
-            event.set()
+            dlg = ctk.CTkToplevel(self)
+            dlg.title("Lỗi API - Chuyển đổi AI Engine")
+            dlg.geometry("400x250")
+            dlg.attributes("-topmost", True)
+            dlg.grab_set()
+
+            ctk.CTkLabel(dlg, text=f"Agent '{agent_name}' gặp lỗi API (Rate Limit / Quota)", font=ctk.CTkFont(size=14, weight="bold"), text_color="#ef4444").pack(pady=(20, 5))
+            
+            err_lbl = ctk.CTkTextbox(dlg, height=60, fg_color="transparent")
+            err_lbl.pack(fill="x", padx=20)
+            err_lbl.insert("1.0", f"Chi tiết: {error_msg[:100]}...")
+            err_lbl.configure(state="disabled")
+            
+            ctk.CTkLabel(dlg, text="Bạn muốn đổi sang Engine nào để tiếp tục?").pack(pady=(5, 10))
+
+            def _choose(model_id):
+                result["model"] = model_id
+                dlg.destroy()
+                event.set()
+
+            btn_frame = ctk.CTkFrame(dlg, fg_color="transparent")
+            btn_frame.pack(fill="x", pady=10)
+            
+            ctk.CTkButton(btn_frame, text="Antigravity (Gemini)", fg_color="#10b981", hover_color="#059669", 
+                          command=lambda: _choose("gemini-3.6-flash-high")).pack(side="left", expand=True, padx=10)
+            ctk.CTkButton(btn_frame, text="Claude 4.8 Flash", fg_color="#3b82f6", hover_color="#2563eb",
+                          command=lambda: _choose("claude-flash-4-8")).pack(side="left", expand=True, padx=10)
+            ctk.CTkButton(btn_frame, text="Hủy (Bỏ qua)", fg_color="#ef4444", hover_color="#dc2626",
+                          command=lambda: _choose("")).pack(side="left", expand=True, padx=10)
+            
+            dlg.protocol("WM_DELETE_WINDOW", lambda: _choose(""))
 
         self.after(0, _ask)
         event.wait()

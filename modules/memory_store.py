@@ -54,6 +54,17 @@ class MemoryStore:
                 INSERT INTO agent_memory VALUES (?,?,?,?,?,?,?,?)
             """, (item.memory_id, item.agent_id, item.task_id, item.session_id,
                   item.role, item.content, item.timestamp, item.tokens_used))
+            
+            # GC: Keep only latest 1000 items per agent
+            conn.execute("""
+                DELETE FROM agent_memory 
+                WHERE agent_id = ? AND memory_id NOT IN (
+                    SELECT memory_id FROM agent_memory 
+                    WHERE agent_id = ? 
+                    ORDER BY timestamp DESC LIMIT 1000
+                )
+            """, (item.agent_id, item.agent_id))
+            
             conn.commit()
         return item
 
