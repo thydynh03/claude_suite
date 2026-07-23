@@ -104,6 +104,7 @@ class ClaudeSuiteApp(ctk.CTk):
             on_agent_communicate=self._trigger_office_communication,
             on_engine_fallback=self._prompt_engine_fallback
         )
+        self.pipeline_eng._on_agent_provisioned = self._refresh_agents
         self.orchestr   = Orchestrator(
             self.registry, self.board, self.cli,
             on_log=self._global_log,

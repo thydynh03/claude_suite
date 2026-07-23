@@ -169,6 +169,26 @@ class AgentPipeline:
     def _find_agent_for_role(self, role_name: str, agents: List[Agent]) -> Optional[Agent]:
         role_lower = role_name.lower()
         for a in agents:
-            if any(k in a.name.lower() for k in role_lower.split()):
+            if any(k in a.name.lower() for k in role_lower.split() if len(k) > 3):
                 return a
-        return agents[0] if agents else None
+                
+        # AUTO-PROVISIONING (Văn phòng tự động scale)
+        import uuid
+        new_id = str(uuid.uuid4())
+        new_agent = Agent(
+            agent_id=new_id,
+            name=f"[Auto] {role_name}",
+            model="claude-opus-4-8",
+            icon="🤖",
+            system=f"You are a specialized {role_name}. Focus entirely on {role_name} tasks.",
+            status="idle"
+        )
+        self.registry.create(new_agent)
+        agents.append(new_agent)
+        self.on_log(f"🏢 Auto-Provisioned: Đã tự động tạo agent mới '{new_agent.name}' cho quy trình.", "INFO")
+        
+        # Trigger UI refresh if callback exists
+        if hasattr(self, "_on_agent_provisioned") and self._on_agent_provisioned:
+            self._on_agent_provisioned()
+            
+        return new_agent
