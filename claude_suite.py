@@ -53,6 +53,7 @@ from modules.workspace_config import WorkspaceConfigStore
 from ui.tabs.cockpit_tab import CockpitTabFrame
 from ui.tabs.task_board_tab import TaskBoardTabFrame
 from ui.tabs.studio_settings_tab import StudioSettingsTabFrame
+from ui.tabs.virtual_office_tab import VirtualOfficeTabFrame
 
 # Log Tag Colors (Dark / Light)
 LOG_TAGS = {
@@ -96,11 +97,12 @@ class ClaudeSuiteApp(ctk.CTk):
         self._agent_page_size = 5
         self._kanban_col_limits = {s: 6 for s in STATUSES}
 
-        self.pipeline_eng = AgentPipeline(self.registry, self.cli, self.memory, on_log=self._global_log, get_context_fn=self._get_active_workspace_context)
+        self.pipeline_eng = AgentPipeline(self.registry, self.cli, self.memory, on_log=self._global_log, get_context_fn=self._get_active_workspace_context, on_agent_communicate=self._trigger_office_communication)
         self.orchestr   = Orchestrator(self.registry, self.board, self.cli,
                                        on_log=self._global_log,
                                        get_context_fn=self._get_active_workspace_context,
-                                       get_workspace_fn=lambda: self._global_workspace_folder)
+                                       get_workspace_fn=lambda: self._global_workspace_folder,
+                                       on_task_event=self._trigger_office_task)
         self.log_count  = 0
         self.current_theme = "dark"
 
@@ -281,6 +283,7 @@ class ClaudeSuiteApp(ctk.CTk):
         self.tab_cockpit = self.tabview.add("🚀 AI Cockpit")
         self.tab_board = self.tabview.add("📋 Task Board & Planning")
         self.tab_studio = self.tabview.add("⚙️ Studio & Settings")
+        self.tab_office = self.tabview.add("🏢 Virtual Office")
 
         # Khởi tạo các module Tab Frame mới và đưa vào tab view
         self.cockpit_frame = CockpitTabFrame(self.tab_cockpit, app=self)
@@ -291,6 +294,9 @@ class ClaudeSuiteApp(ctk.CTk):
 
         self.studio_frame = StudioSettingsTabFrame(self.tab_studio, self.registry, self.cli)
         self.studio_frame.pack(fill="both", expand=True)
+
+        self.office_frame = VirtualOfficeTabFrame(self.tab_office, app=self)
+        self.office_frame.pack(fill="both", expand=True)
 
         # Render các UI component cũ vào các tab con mới tương ứng
         self._build_tasks_tab(parent=self.board_frame.tab_kanban)
@@ -2411,6 +2417,17 @@ class ClaudeSuiteApp(ctk.CTk):
             self.webhook_srv.start()
             self.btn_webhook.configure(text="🌐 Webhook: Port 9090", fg_color=("#16a34a", "#22c55e"))
             self._global_log("Webhook server đang lắng nghe tại http://localhost:9090", "SUCCESS")
+
+    def _trigger_office_communication(self, from_agent, to_agent, message):
+        if hasattr(self, 'office_frame'):
+            self.office_frame.trigger_communication(from_agent, to_agent, message)
+
+    def _trigger_office_task(self, agent_name, event, data):
+        if hasattr(self, 'office_frame'):
+            if event == "started":
+                self.office_frame.assign_task(agent_name, data)
+            elif event == "completed":
+                self.office_frame.complete_task(agent_name)
 
     def _on_webhook_received(self, payload: dict):
         title = payload.get("title", payload.get("action", "External Webhook Event"))

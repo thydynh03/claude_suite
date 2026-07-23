@@ -26,12 +26,14 @@ class AgentPipeline:
 
     def __init__(self, registry: AgentRegistry, cli: ClaudeCLI,
                  memory: MemoryStore, on_log: Optional[Callable] = None,
-                 get_context_fn: Optional[Callable[[], str]] = None):
+                 get_context_fn: Optional[Callable[[], str]] = None,
+                 on_agent_communicate: Optional[Callable] = None):
         self.registry = registry
         self.cli      = cli
         self.memory   = memory
         self.on_log   = on_log or (lambda msg, lvl="INFO": print(f"[{lvl}] {msg}"))
         self.get_context_fn = get_context_fn
+        self.on_agent_communicate = on_agent_communicate
 
     def create_default_software_pipeline(self, initial_goal: str) -> List[PipelineStep]:
         """Tạo Pipeline 5 bước tiêu chuẩn cho phát triển phần mềm."""
@@ -110,6 +112,12 @@ class AgentPipeline:
                         agent_id=matched_agent.agent_id if matched_agent else "pipeline",
                         role="assistant", content=f"[Pipeline Step {idx+1}: {step.role_name}]\n{result.output}"
                     ))
+                    
+                    if self.on_agent_communicate and matched_agent and idx + 1 < len(steps):
+                        next_step = steps[idx + 1]
+                        next_agent = self._find_agent_for_role(next_step.role_name, agents)
+                        if next_agent:
+                            self.on_agent_communicate(matched_agent.name, next_agent.name, "Chuyển giao tài liệu...")
 
                     # Accumulate output into context for NEXT agent step!
                     accumulated_context += f"\n\n=========================================\n📄 KẾT QUẢ BƯỚC {idx+1} ({step.role_name.upper()}):\n{result.output}\n=========================================\n"

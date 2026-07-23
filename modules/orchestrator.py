@@ -29,7 +29,8 @@ class Orchestrator:
                  cli: ClaudeCLI,
                  on_log: Optional[Callable] = None,
                  get_context_fn: Optional[Callable[[], str]] = None,
-                 get_workspace_fn: Optional[Callable[[], str]] = None):
+                 get_workspace_fn: Optional[Callable[[], str]] = None,
+                 on_task_event: Optional[Callable] = None):
         self.registry = registry
         self.board    = board
         self.cli      = cli
@@ -37,6 +38,7 @@ class Orchestrator:
         self.on_log   = on_log or (lambda m, lvl="INFO": print(f"[{lvl}] {m}"))
         self.get_context_fn = get_context_fn
         self.get_workspace_fn = get_workspace_fn
+        self.on_task_event = on_task_event
 
         self._running  = False
         self._thread   = None
@@ -115,6 +117,9 @@ class Orchestrator:
         self.board.assign(task.task_id, agent.agent_id)
         self.registry.update_status(agent.agent_id, "running",
                                     last_task=task.title)
+                                    
+        if self.on_task_event:
+            self.on_task_event(agent.name, "started", task.title)
 
         prompt = task.prompt or task.description or task.title
 
@@ -222,6 +227,9 @@ class Orchestrator:
 
         with self._lock:
             self._active_threads.pop(task.task_id, None)
+            
+        if self.on_task_event:
+            self.on_task_event(agent.name, "completed", None)
 
     # ── Manual dispatch ───────────────────────────────────────────────────
 
