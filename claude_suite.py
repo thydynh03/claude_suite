@@ -2142,6 +2142,10 @@ class ClaudeSuiteApp(ctk.CTk):
             
         if hasattr(self, "cockpit_frame"):
             self.cockpit_frame.set_workspace(folder)
+            
+        # Update Quick CLI badge as well if it exists
+        if hasattr(self, "lbl_ctx_badge"):
+            self._update_quick_context_badge()
 
     def _pick_quick_folder(self):
         desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")
@@ -2163,12 +2167,19 @@ class ClaudeSuiteApp(ctk.CTk):
 
     def _update_quick_context_badge(self):
         cnt = len(self._quick_context_paths)
-        if cnt == 0:
+        global_ws = self._global_workspace_folder
+        
+        if cnt == 0 and not global_ws:
             self.lbl_ctx_badge.configure(text="Chưa chọn file/folder", text_color="gray50")
         else:
-            names = [os.path.basename(p) for p in self._quick_context_paths[:2]]
-            suffix = f" (+{cnt-2} khác)" if cnt > 2 else ""
-            self.lbl_ctx_badge.configure(text=f"Đã nạp: {', '.join(names)}{suffix}", text_color="#38bdf8")
+            names = []
+            if global_ws:
+                names.append(os.path.basename(global_ws))
+            names.extend([os.path.basename(p) for p in self._quick_context_paths[:2]])
+            
+            total_items = (1 if global_ws else 0) + cnt
+            suffix = f" (+{total_items-2} khác)" if total_items > 2 else ""
+            self.lbl_ctx_badge.configure(text=f"Đã nạp: {', '.join(names[:2])}{suffix}", text_color="#38bdf8")
 
     def _quick_run(self):
         user_prompt = self.run_prompt.get("1.0", "end").strip()
@@ -2184,6 +2195,8 @@ class ClaudeSuiteApp(ctk.CTk):
 
         context_str = self.ctx_mgr.build_context_prompt(attached_paths)
         full_prompt = f"{context_str}\n\n{user_prompt}" if context_str else user_prompt
+        # Xóa ký tự null (nếu có do đọc nhầm file binary) để tránh lỗi 'embedded null character' của Windows subprocess
+        full_prompt = full_prompt.replace("\x00", "")
 
         agents = getattr(self, "_agents_list", [])
         sel_str = self.run_agent_var.get()
