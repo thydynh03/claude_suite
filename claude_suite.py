@@ -148,6 +148,30 @@ class ClaudeSuiteApp(ctk.CTk):
                     self.after(0, on_error_ui_reset)
         threading.Thread(target=_wrapper, daemon=True).start()
 
+    def show_toast(self, message: str, mtype: str = "info"):
+        toast = ctk.CTkFrame(self, corner_radius=8, fg_color="#10b981" if mtype == "success" else "#f59e0b" if mtype == "warning" else "#3b82f6")
+        lbl = ctk.CTkLabel(toast, text=message, font=ctk.CTkFont(size=12, weight="bold"), text_color="white")
+        lbl.pack(padx=20, pady=10)
+        
+        # Animate slide up
+        toast.place(relx=0.5, rely=1.0, anchor="s", y=50)
+        
+        def slide_up(y):
+            if y > -20:
+                toast.place(relx=0.5, rely=1.0, anchor="s", y=y)
+                self.after(20, slide_up, y - 5)
+            else:
+                self.after(3000, slide_down, -20)
+                
+        def slide_down(y):
+            if y < 50:
+                toast.place(relx=0.5, rely=1.0, anchor="s", y=y)
+                self.after(20, slide_down, y + 5)
+            else:
+                toast.destroy()
+                
+        slide_up(50)
+
     # ── Build UI ───────────────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -1565,7 +1589,7 @@ class ClaudeSuiteApp(ctk.CTk):
         def _save():
             name = name_var.get().strip()
             if not name:
-                messagebox.showwarning("Thiếu", "Nhập tên agent!"); return
+                self.show_toast("Nhập tên agent!", "warning"); return
             if agent:
                 agent.name   = name
                 agent.model  = model_var.get()
@@ -1807,7 +1831,7 @@ class ClaudeSuiteApp(ctk.CTk):
         def _execute():
             p = prompt_txt.get("1.0", "end").strip()
             if not p:
-                messagebox.showwarning("Thiếu prompt", "Vui lòng nhập nội dung prompt!"); return
+                self.show_toast("Vui lòng nhập nội dung prompt!", "warning"); return
             win.destroy()
             self._global_log(f"Manual run agent '{agent.name}'...", "SEND")
             self.orchestr.run_now(agent, p,
@@ -1868,7 +1892,7 @@ class ClaudeSuiteApp(ctk.CTk):
             t = title_var.get().strip()
             p = prompt_txt.get("1.0", "end").strip()
             if not t:
-                messagebox.showwarning("Thiếu", "Nhập tiêu đề!"); return
+                self.show_toast("Nhập tiêu đề!", "warning"); return
             task = Task(title=t, description=p, prompt=p, priority=pri_var.get())
             self.board.add(task)
             self._refresh_tasks()
@@ -1931,7 +1955,7 @@ class ClaudeSuiteApp(ctk.CTk):
     def _run_decompose(self):
         project = self.plan_input.get("1.0", "end").strip()
         if not project:
-            messagebox.showwarning("Thiếu", "Nhập mô tả project!"); return
+            self.show_toast("Nhập mô tả project!", "warning"); return
         self.btn_decompose.configure(state="disabled", text="⏳ Đang xử lý AI...")
         self.plan_status.configure(text="Đang gọi Claude Opus 4.8...", text_color="#f59e0b")
         self._pending_plan = []
@@ -1950,7 +1974,7 @@ class ClaudeSuiteApp(ctk.CTk):
     def _simple_split(self):
         project = self.plan_input.get("1.0", "end").strip()
         if not project:
-            messagebox.showwarning("Thiếu", "Nhập mô tả project!"); return
+            self.show_toast("Nhập mô tả project!", "warning"); return
         tasks = self.plan_bld._simple_decompose(project)
         self._show_plan(tasks)
 
@@ -2137,7 +2161,7 @@ class ClaudeSuiteApp(ctk.CTk):
 
     def _open_file_tree_explorer(self):
         if not self._global_workspace_folder or not os.path.exists(self._global_workspace_folder):
-            messagebox.showwarning("Chú ý", "Vui lòng chọn Folder Dự Án trước!", parent=self)
+            self.show_toast("Vui lòng chọn Folder Dự Án trước!", "warning");
             self._select_global_workspace_folder()
             if not self._global_workspace_folder:
                 return
@@ -2237,7 +2261,7 @@ class ClaudeSuiteApp(ctk.CTk):
     def _quick_run(self):
         user_prompt = self.run_prompt.get("1.0", "end").strip()
         if not user_prompt:
-            messagebox.showwarning("Thiếu", "Nhập prompt!"); return
+            self.show_toast("Nhập prompt!", "warning"); return
 
         # Build workspace context combining global project workspace & local attached files
         attached_paths = []
@@ -2441,7 +2465,7 @@ class ClaudeSuiteApp(ctk.CTk):
     def _run_pipeline_chain(self):
         goal = self.pipeline_input.get("1.0", "end").strip()
         if not goal:
-            messagebox.showwarning("Thiếu mục tiêu", "Vui lòng nhập mục tiêu dự án!"); return
+            self.show_toast("Vui lòng nhập mục tiêu dự án!", "warning"); return
 
         self.btn_run_pipeline.configure(state="disabled", text="⏳ Đang chạy Pipeline 5 bước...")
         self._active_pipeline_steps = self.pipeline_eng.create_default_software_pipeline(goal)
@@ -2468,14 +2492,14 @@ class ClaudeSuiteApp(ctk.CTk):
     def _export_pipeline_report(self):
         goal = self.pipeline_input.get("1.0", "end").strip()
         if not self._active_pipeline_steps:
-            messagebox.showwarning("Thiếu dữ liệu", "Chưa có kết quả Pipeline để xuất!"); return
+            self.show_toast("Chưa có kết quả Pipeline để xuất!", "warning"); return
         res = self.exporter.export_pipeline_report(goal, self._active_pipeline_steps)
         messagebox.showinfo("Đã xuất báo cáo", f"Báo cáo Pipeline đã xuất ra Desktop:\n{res['md']}")
 
     def _export_kanban_report(self):
         tasks = self.board.list_all()
         if not tasks:
-            messagebox.showwarning("Thiếu dữ liệu", "Chưa có Task nào để xuất!"); return
+            self.show_toast("Chưa có Task nào để xuất!", "warning"); return
         res = self.exporter.export_kanban_report(tasks)
         messagebox.showinfo("Đã xuất báo cáo", f"Báo cáo Kanban đã xuất ra Desktop:\n- Markdown: {res['md']}\n- HTML: {res['html']}")
 

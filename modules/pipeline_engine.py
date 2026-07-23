@@ -99,65 +99,57 @@ class AgentPipeline:
                 # Prepare full prompt with accumulated context
                 full_prompt = f"{accumulated_context}\n\n=========================================\n📌 NHIỆM VỤ HIỆN TẠI ({step.role_name.upper()}):\n{step.prompt_template}\n========================================="
 
-                # Run Claude CLI
-                if matched_agent:
-                    result = self.cli.run_agent(matched_agent, full_prompt, on_log=self.on_log)
-                    self.registry.update_status(matched_agent.agent_id, "idle", tasks_done_delta=1 if result.success else 0)
+                import time
+                max_retries = 3
+                retry_delay = 2
+                result = None
+                
+                for attempt in range(max_retries + 1):
+                    # Run Claude CLI
+                    if matched_agent:
+                        result = self.cli.run_agent(matched_agent, full_prompt, on_log=self.on_log)
+                        self.registry.update_status(matched_agent.agent_id, "idle", tasks_done_delta=1 if result.success else 0)
+                    else:
+                        result = self.cli.run_once(full_prompt, model="claude-opus-4-8", on_log=self.on_log)
+
+                    if result.success:
+                        step.status = "completed"
+                        step.output = result.output
+                        self.on_log(f"✅ PIPELINE Step {idx+1} ({step.role_name}) hoàn thành ({result.duration_s:.1f}s)", "SUCCESS")
+
+                        # Record SQLite memory
+                        self.memory.add(MemoryItem(
+                            agent_id=matched_agent.agent_id if matched_agent else "pipeline",
+                            role="assistant", content=f"[Pipeline Step {idx+1}: {step.role_name}]\n{result.output}"
+                        ))
+                        
+                        if self.on_agent_communicate and matched_agent and idx + 1 < len(steps):
+                            next_step = steps[idx + 1]
+                            next_agent = self._find_agent_for_role(next_step.role_name, agents)
+                            if next_agent:
+                                self.on_agent_communicate(matched_agent.name, next_agent.name, "Chuyển giao tài liệu...")
+
+                        # Accumulate output into context for NEXT agent step!
+                        accumulated_context += f"\n\n=========================================\n📄 KẾT QUẢ BƯỚC {idx+1} ({step.role_name.upper()}):\n{result.output}\n=========================================\n"
+                        break
+                    else:
+                        if "api_error_status" in result.error or "429" in result.error or "400" in result.error:
+                            if self.on_engine_fallback:
+                                agent_name = matched_agent.name if matched_agent else "System Pipeline"
+                                new_model = self.on_engine_fallback(agent_name, result.error)
+                                if new_model:
+                                    self.on_log(f"⚠️ Đổi model sang {new_model} và thử lại Bước {idx+1}...", "WARN")
+                                    if matched_agent:
+                                        matched_agent.model = new_model
+                                        self.registry.update(matched_agent)
+                                    continue # retry loop immediately
+
+                        if attempt < max_retries:
+                            self.on_log(f"⏳ Retry {attempt+1}/{max_retries} sau {retry_delay}s do lỗi CLI: {result.error[:60]}", "WARN")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
                 else:
-                    result = self.cli.run_once(full_prompt, model="claude-opus-4-8", on_log=self.on_log)
-
-                if result.success:
-                    step.status = "completed"
-                    step.output = result.output
-                    self.on_log(f"✅ PIPELINE Step {idx+1} ({step.role_name}) hoàn thành ({result.duration_s:.1f}s)", "SUCCESS")
-
-                    # Record SQLite memory
-                    self.memory.add(MemoryItem(
-                        agent_id=matched_agent.agent_id if matched_agent else "pipeline",
-                        role="assistant", content=f"[Pipeline Step {idx+1}: {step.role_name}]\n{result.output}"
-                    ))
-                    
-                    if self.on_agent_communicate and matched_agent and idx + 1 < len(steps):
-                        next_step = steps[idx + 1]
-                        next_agent = self._find_agent_for_role(next_step.role_name, agents)
-                        if next_agent:
-                            self.on_agent_communicate(matched_agent.name, next_agent.name, "Chuyển giao tài liệu...")
-
-                    # Accumulate output into context for NEXT agent step!
-                    accumulated_context += f"\n\n=========================================\n📄 KẾT QUẢ BƯỚC {idx+1} ({step.role_name.upper()}):\n{result.output}\n=========================================\n"
-                else:
-                    if "api_error_status" in result.error or "429" in result.error or "400" in result.error:
-                        if self.on_engine_fallback:
-                            agent_name = matched_agent.name if matched_agent else "System Pipeline"
-                            new_model = self.on_engine_fallback(agent_name, result.error)
-                            if new_model:
-                                self.on_log(f"⚠️ Đổi model sang {new_model} và thử lại Bước {idx+1}...", "WARN")
-                                if matched_agent:
-                                    matched_agent.model = new_model
-                                    self.registry.update(matched_agent)
-                                    result = self.cli.run_agent(matched_agent, full_prompt, on_log=self.on_log)
-                                else:
-                                    result = self.cli.run_once(full_prompt, model=new_model, on_log=self.on_log)
-                                    
-                                if result.success:
-                                    step.status = "completed"
-                                    step.output = result.output
-                                    self.on_log(f"✅ PIPELINE Step {idx+1} ({step.role_name}) hoàn thành ({result.duration_s:.1f}s) sau khi chuyển Engine.", "SUCCESS")
-                                    self.memory.add(MemoryItem(
-                                        agent_id=matched_agent.agent_id if matched_agent else "pipeline",
-                                        role="assistant", content=f"[Pipeline Step {idx+1}: {step.role_name}]\n{result.output}"
-                                    ))
-                                    if self.on_agent_communicate and matched_agent and idx + 1 < len(steps):
-                                        next_step = steps[idx + 1]
-                                        next_agent = self._find_agent_for_role(next_step.role_name, agents)
-                                        if next_agent:
-                                            self.on_agent_communicate(matched_agent.name, next_agent.name, "Chuyển giao tài liệu (sau Fallback)...")
-                                    accumulated_context += f"\n\n=========================================\n📄 KẾT QUẢ BƯỚC {idx+1} ({step.role_name.upper()}):\n{result.output}\n=========================================\n"
-                                    
-                                    if on_step_change:
-                                        on_step_change(idx, step)
-                                    continue # proceed to next step
-                                    
+                    # After all retries exhausted
                     step.status = "failed"
                     step.output = f"Lỗi: {result.error}"
                     self.on_log(f"❌ PIPELINE Step {idx+1} ({step.role_name}) thất bại: {result.error[:80]}", "ERROR")

@@ -40,7 +40,13 @@ class TaskBoard:
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
+        self._cached_list_all: Optional[List[Task]] = None
+        self._cached_counts: Optional[dict] = None
         self._init_db()
+
+    def _invalidate_cache(self):
+        self._cached_list_all = None
+        self._cached_counts = None
 
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -78,6 +84,7 @@ class TaskBoard:
                   task.result, task.session_id, task.parent_id,
                   task.created_at, task.started_at, task.finished_at))
             conn.commit()
+        self._invalidate_cache()
         return task
 
     def get(self, task_id: str) -> Optional[Task]:
@@ -102,12 +109,16 @@ class TaskBoard:
         return [Task(**dict(r)) for r in rows]
 
     def list_all(self) -> List[Task]:
+        if self._cached_list_all is not None:
+            return self._cached_list_all
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 "SELECT * FROM tasks ORDER BY created_at DESC"
             ).fetchall()
-        return [Task(**dict(r)) for r in rows]
+        self._cached_list_all = [Task(**dict(r)) for r in rows]
+        return self._cached_list_all
 
     def list_subtasks(self, parent_id: str) -> List[Task]:
         with sqlite3.connect(self.db_path) as conn:
@@ -139,6 +150,7 @@ class TaskBoard:
                     "UPDATE tasks SET status=? WHERE task_id=?",
                     (status, task_id))
             conn.commit()
+        self._invalidate_cache()
 
     def increment_retry(self, task_id: str) -> int:
         with sqlite3.connect(self.db_path) as conn:
@@ -150,6 +162,7 @@ class TaskBoard:
                 "SELECT retry_count FROM tasks WHERE task_id=?",
                 (task_id,)
             ).fetchone()
+        self._invalidate_cache()
         return row[0] if row else 0
 
     def assign(self, task_id: str, agent_id: str):
@@ -158,16 +171,19 @@ class TaskBoard:
                 "UPDATE tasks SET assigned_to=?, status='queued' WHERE task_id=?",
                 (agent_id, task_id))
             conn.commit()
+        self._invalidate_cache()
 
     def delete(self, task_id: str):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM tasks WHERE task_id=?", (task_id,))
             conn.commit()
+        self._invalidate_cache()
 
     def delete_all(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM tasks")
             conn.commit()
+        self._invalidate_cache()
 
     # ── Dependencies ──────────────────────────────────────────────────────
 
@@ -187,8 +203,12 @@ class TaskBoard:
     # ── Stats ─────────────────────────────────────────────────────────────
 
     def counts(self) -> dict:
+        if self._cached_counts is not None:
+            return self._cached_counts
+
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(
                 "SELECT status, COUNT(*) FROM tasks GROUP BY status"
             ).fetchall()
-        return {r[0]: r[1] for r in rows}
+        self._cached_counts = {r[0]: r[1] for r in rows}
+        return self._cached_counts
