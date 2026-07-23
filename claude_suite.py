@@ -1330,6 +1330,7 @@ class ClaudeSuiteApp(ctk.CTk):
         self.registry.reset_to_defaults()
         self._agent_current_page = 0
         self._refresh_agents(force=True)
+        self._refresh_agent_combobox()
         messagebox.showinfo("✅ Hoàn tất", "Đã reset về 7 Enterprise Corporate Roles mặc định.", parent=self)
 
     def _clear_all_agents(self):
@@ -1345,6 +1346,7 @@ class ClaudeSuiteApp(ctk.CTk):
         self.registry.delete_all()
         self._agent_current_page = 0
         self._refresh_agents(force=True)
+        self._refresh_agent_combobox()
         messagebox.showinfo("✅ Hoàn tất", "Đã xóa toàn bộ Agents. Trạng thái hiện tại: Blanket Empty.", parent=self)
 
     def _show_agent_detail_modal(self, agent: Agent):
