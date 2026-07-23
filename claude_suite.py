@@ -2008,9 +2008,9 @@ class ClaudeSuiteApp(ctk.CTk):
         menu.add_command(label="💬 Floating Prompt Widget", command=self._open_floating_prompt)
         menu.add_command(label="🪄 Prompt Architect Modal", command=self._open_prompt_architect_modal)
         menu.add_separator()
-        menu.add_command(label=f"🌗 Switch Theme ({'Light' if current_theme=='dark' else 'Dark'})", command=self._toggle_theme)
+        menu.add_command(label=f"🌗 Switch Theme ({'Light' if self.current_theme=='dark' else 'Dark'})", command=self._toggle_theme)
         menu.add_command(label=f"▶ Toggle Orchestrator ({'Stop' if self.orchestr._running else 'Start'})", command=self._toggle_orchestrator)
-        menu.add_command(label=f"🌐 Toggle Webhook ({'Stop' if self.webhook_srv.running else 'Start'})", command=self._toggle_webhook)
+        menu.add_command(label=f"🌐 Toggle Webhook ({'Stop' if self.webhook_srv._running else 'Start'})", command=self._toggle_webhook)
 
         try:
             x = self.btn_menu_window.winfo_rootx()
