@@ -32,5 +32,5 @@ Thumbs.db
 
 # Tự động sinh ra (Reports)
 ClaudeSuite_Kanban_Report_*
-*.html
-*.md
+ClaudeSuite_Kanban_Report_*.html
+ClaudeSuite_Kanban_Report_*.md
