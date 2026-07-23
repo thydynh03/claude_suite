@@ -112,8 +112,33 @@ class AntigravityCLI:
                     if clean and on_log:
                         on_log(f"🚀 [Antigravity] {clean}", "THINKING")
 
+            def _read_stderr():
+                for line in iter(proc.stderr.readline, ''):
+                    if not line:
+                        break
+                    stderr_lines.append(line)
+                    clean = line.strip()
+                    if clean and on_log:
+                        on_log(f"🚀 [Antigravity WARN] {clean}", "WARN")
+
             t_out = threading.Thread(target=_read_stdout, daemon=True)
+            t_err = threading.Thread(target=_read_stderr, daemon=True)
             t_out.start()
+            t_err.start()
+            
+            try:
+                proc.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                if on_log:
+                    on_log(f"⏰ Antigravity CLI timeout sau {self.timeout}s", "ERROR")
+                return AntigravityRunResult(
+                    success=False, output="", error=f"Timeout sau {self.timeout}s", duration_s=time.time()-t0
+                )
+            
+            t_out.join(timeout=2)
+            t_err.join(timeout=2)
+
             output_text = "".join(stdout_lines).strip()
             err_text    = "".join(stderr_lines).strip()
             duration    = round(time.time() - t0, 2)
@@ -140,13 +165,7 @@ class AntigravityCLI:
                     success=False, output=output_text, error=err_text, duration_s=duration, tokens_used=tokens_count
                 )
 
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            if on_log:
-                on_log(f"⏰ Antigravity CLI timeout sau {self.timeout}s", "ERROR")
-            return AntigravityRunResult(
-                success=False, output="", error=f"Timeout sau {self.timeout}s"
-            )
+
         except Exception as ex:
             if on_log:
                 on_log(f"❌ Antigravity CLI ngoại lệ: {ex}", "ERROR")

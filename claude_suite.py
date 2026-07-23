@@ -136,6 +136,18 @@ class ClaudeSuiteApp(ctk.CTk):
         except Exception:
             pass
 
+    def _run_safe_thread(self, target, on_error_ui_reset=None):
+        def _wrapper():
+            try:
+                target()
+            except Exception as e:
+                import traceback
+                err_msg = traceback.format_exc()
+                self._global_log(f"💥 Bị lỗi ngầm: {str(e)}\n{err_msg}", "ERROR")
+                if on_error_ui_reset:
+                    self.after(0, on_error_ui_reset)
+        threading.Thread(target=_wrapper, daemon=True).start()
+
     # ── Build UI ───────────────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -724,6 +736,21 @@ class ClaudeSuiteApp(ctk.CTk):
                 )
 
         all_tasks = self.board.list_all()
+        
+        # --- Empty State UI ---
+        if not hasattr(self, "_kanban_empty_lbl"):
+            self._kanban_empty_lbl = ctk.CTkLabel(
+                self.kanban_frame, 
+                text="📭 Chưa có nhiệm vụ nào.\nHãy sang tab 'AI Planning' để lập kế hoạch hoặc bấm '+ Add Task' nhé!", 
+                font=ctk.CTkFont(size=14, weight="bold"), 
+                text_color=("gray50", "gray40")
+            )
+        
+        if not all_tasks:
+            self._kanban_empty_lbl.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self._kanban_empty_lbl.place_forget()
+        # ----------------------
 
         # Group tasks by status & apply lazy loading limits per column
         tasks_by_status = {s: [] for s in STATUSES}
@@ -1914,7 +1941,11 @@ class ClaudeSuiteApp(ctk.CTk):
                 project, on_log=self._global_log)
             self.after(0, lambda: self._show_plan(tasks))
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _on_err():
+            self.btn_decompose.configure(state="normal", text="🗺  AI Decompose (Opus 4.8)")
+            self.plan_status.configure(text="Lỗi ngầm khi tạo kế hoạch!", text_color="red")
+            
+        self._run_safe_thread(_worker, on_error_ui_reset=_on_err)
 
     def _simple_split(self):
         project = self.plan_input.get("1.0", "end").strip()
@@ -2254,7 +2285,11 @@ class ClaudeSuiteApp(ctk.CTk):
 
             self.after(0, _done)
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _on_err():
+            self.btn_run.configure(state="normal", text="▶  Chạy CLI Trực Tiếp")
+            self.run_result.insert("1.0", "Lỗi Python ngầm, xem log.")
+
+        self._run_safe_thread(_worker, on_error_ui_reset=_on_err)
 
     def _prompt_engine_fallback(self, agent_name: str, error_msg: str) -> str:
         """Hiển thị popup hỏi người dùng đổi Engine khi có lỗi API. Chạy trong UI thread."""

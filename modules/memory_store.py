@@ -32,7 +32,8 @@ class MemoryStore:
         self._init_db()
 
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS agent_memory (
                     memory_id   TEXT PRIMARY KEY,
@@ -48,7 +49,7 @@ class MemoryStore:
             conn.commit()
 
     def add(self, item: MemoryItem) -> MemoryItem:
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
             conn.execute("""
                 INSERT INTO agent_memory VALUES (?,?,?,?,?,?,?,?)
             """, (item.memory_id, item.agent_id, item.task_id, item.session_id,
@@ -57,7 +58,7 @@ class MemoryStore:
         return item
 
     def get_agent_memory(self, agent_id: str, limit: int = 50) -> List[MemoryItem]:
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT * FROM agent_memory WHERE agent_id = ? ORDER BY timestamp DESC LIMIT ?
@@ -65,7 +66,7 @@ class MemoryStore:
             return [MemoryItem(**dict(r)) for r in rows]
 
     def get_task_memory(self, task_id: str) -> List[MemoryItem]:
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT * FROM agent_memory WHERE task_id = ? ORDER BY timestamp ASC
@@ -73,6 +74,6 @@ class MemoryStore:
             return [MemoryItem(**dict(r)) for r in rows]
 
     def clear_agent_memory(self, agent_id: str):
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
             conn.execute("DELETE FROM agent_memory WHERE agent_id = ?", (agent_id,))
             conn.commit()
