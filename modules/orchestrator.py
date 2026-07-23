@@ -137,14 +137,48 @@ class Orchestrator:
 
         # Approval Checkpoint (Human-in-the-loop)
         if getattr(task, "require_approval", False) or "architect" in agent.name.lower() or "ba" in agent.name.lower():
-            import tkinter.messagebox as messagebox
             self.log(f"[{agent.name}] Đang chờ duyệt kế hoạch từ người dùng...", "WARN")
-            # We pause here by showing a blocking messagebox.
-            # In a real async UI this might be handled via a callback, but this simple modal blocks this daemon thread until user answers.
-            approved = messagebox.askyesno(
-                "Approval Checkpoint", 
-                f"Agent '{agent.name}' chuẩn bị thực thi hoặc vừa hoàn thành một bước quan trọng (Lên kế hoạch / BA).\nBạn có muốn cho phép tiếp tục không?"
-            )
+            import tkinter as tk
+            import customtkinter as ctk
+            import threading
+            
+            root = tk._default_root
+            if not root:
+                # Fallback if no root is found, though unlikely
+                approved = True
+            else:
+                approved_event = threading.Event()
+                approved_result = [False]
+                
+                def show_dialog():
+                    dialog = ctk.CTkToplevel(root)
+                    dialog.title("Approval Checkpoint")
+                    dialog.geometry("450x200")
+                    dialog.attributes("-topmost", True)
+                    dialog.grab_set()
+                    
+                    def on_yes():
+                        approved_result[0] = True
+                        approved_event.set()
+                        dialog.destroy()
+                        
+                    def on_no():
+                        approved_result[0] = False
+                        approved_event.set()
+                        dialog.destroy()
+                        
+                    lbl = ctk.CTkLabel(dialog, text=f"Agent '{agent.name}' chuẩn bị thực thi hoặc vừa hoàn thành một bước quan trọng (Lên kế hoạch / BA).\nBạn có muốn cho phép tiếp tục không?", wraplength=400, font=("Arial", 14))
+                    lbl.pack(pady=30, padx=20)
+                    
+                    btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+                    btn_frame.pack(fill="x", pady=10)
+                    
+                    ctk.CTkButton(btn_frame, text="✅ Cho phép (Yes)", command=on_yes, width=120, fg_color="#10b981", hover_color="#059669").pack(side="left", padx=40)
+                    ctk.CTkButton(btn_frame, text="❌ Dừng lại (No)", command=on_no, width=120, fg_color="#ef4444", hover_color="#dc2626").pack(side="right", padx=40)
+                
+                root.after(0, show_dialog)
+                approved_event.wait()
+                approved = approved_result[0]
             if not approved:
                 self.log(f"[{agent.name}] Bị từ chối bởi người dùng.", "ERROR")
                 self.board.update_status(task.task_id, "failed")

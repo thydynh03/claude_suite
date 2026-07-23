@@ -142,7 +142,8 @@ class MemoryItem:
     session_id:  Optional[str] = None
     role:        str = "user"    # user | assistant | system
     content:     str = ""
-    created_at:  str = ""
+    timestamp:   str = ""
+    tokens_used: int = 0
 
 
 @dataclass
