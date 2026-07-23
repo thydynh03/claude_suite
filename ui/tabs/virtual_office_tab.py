@@ -49,16 +49,17 @@ class VirtualOfficeTabFrame(ctk.CTkFrame):
         # Default fallback positions
         idx = 0
         
-        from modules.agent_registry import BUILTIN_TEMPLATES
-        for tmpl in BUILTIN_TEMPLATES:
-            name = tmpl["name"]
+        current_agents = self.app.registry.list_all()
+        
+        for agent_obj in current_agents:
+            name = agent_obj.name
             if name in desk_positions:
                 x, y = desk_positions[name]
             else:
                 x, y = (100 + (idx % 4) * 200, 250 + (idx // 4) * 200)
                 idx += 1
                 
-            self.desks[name] = {"x": x, "y": y, "name": name}
+            self.desks[name] = {"x": x, "y": y, "name": name, "desk_id": None, "laptop_id": None}
             self._draw_desk(x, y, name)
             
             # Spawn Agent
@@ -89,15 +90,34 @@ class VirtualOfficeTabFrame(ctk.CTkFrame):
             
     def _draw_desk(self, x, y, name):
         # Draw desk
-        self.canvas.create_rectangle(x - 40, y - 20, x + 40, y + 20, fill="#334155", outline="#475569", width=2)
+        d_id = self.canvas.create_rectangle(x - 40, y - 20, x + 40, y + 20, fill="#334155", outline="#475569", width=2)
         # Draw laptop
-        self.canvas.create_rectangle(x - 15, y - 10, x + 15, y + 5, fill="#94a3b8")
+        l_id = self.canvas.create_rectangle(x - 15, y - 10, x + 15, y + 5, fill="#94a3b8")
+        self.desks[name]["desk_id"] = d_id
+        self.desks[name]["laptop_id"] = l_id
+        
+    def refresh_office(self):
+        self.canvas.delete("all")
+        self.desks.clear()
+        self.agents.clear()
+        self.bubbles.clear()
+        self._setup_office()
         
     def _animate(self):
         if not self.running:
             return
             
         now = time.time()
+        
+        # Poll for agent registry changes
+        if int(now) % 2 == 0:  # Check roughly every 2 seconds (using an attribute for throttling would be better, but this is simple)
+            current_agents = self.app.registry.list_all()
+            if len(current_agents) != len(self.agents) or any(a.name not in self.agents for a in current_agents):
+                self.refresh_office()
+                self.after(33, self._animate)
+                return
+                
+        dt = now - self._last_time
         dt = now - self._last_time
         self._last_time = now
         
@@ -215,19 +235,27 @@ class VirtualOfficeTabFrame(ctk.CTkFrame):
         
     def _run_demo(self):
         # Fake animation sequence
-        self.assign_task("Chief Architect & Tech Lead", "Thiết kế System Architecture")
+        if not self.agents:
+            return
+            
+        agent_names = list(self.agents.keys())
+        a1 = agent_names[0]
+        a2 = agent_names[1 % len(agent_names)]
+        a3 = agent_names[2 % len(agent_names)]
         
-        self.after(2000, lambda: self.trigger_communication("Chief Architect & Tech Lead", "Senior Fullstack Developer", "Bản vẽ xong rồi, code đi em!"))
+        self.assign_task(a1, "Thiết kế System Architecture")
         
-        self.after(5000, lambda: self.assign_task("Senior Fullstack Developer", "Code REST API..."))
+        self.after(2000, lambda: self.trigger_communication(a1, a2, "Bản vẽ xong rồi, code đi em!"))
         
-        self.after(8000, lambda: self.trigger_communication("Senior Fullstack Developer", "Senior Code Reviewer & Security Auditor", "Review giúp đoạn auth nha"))
+        self.after(5000, lambda: self.assign_task(a2, "Code REST API..."))
         
-        self.after(11000, lambda: self.assign_task("Lead QA & Test Automation Specialist", "Viết Cypress E2E test"))
+        self.after(8000, lambda: self.trigger_communication(a2, a3, "Review giúp đoạn auth nha"))
         
-        self.after(14000, lambda: self.trigger_communication("Lead QA & Test Automation Specialist", "Technical Project Manager (PM)", "Test pass hết rồi sếp!"))
+        self.after(11000, lambda: self.assign_task(a3, "Viết Cypress E2E test"))
         
-        self.after(17000, lambda: self.complete_task("Technical Project Manager (PM)"))
+        self.after(14000, lambda: self.trigger_communication(a3, a1, "Test pass hết rồi sếp!"))
+        
+        self.after(17000, lambda: self.complete_task(a1))
 
     def destroy(self):
         self.running = False
