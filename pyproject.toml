@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-suite"
+version = "2.0.0"
+description = "Enterprise Multi-Agent Control Center for Claude & Antigravity AI"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Claude Suite Development Team"}
+]
+dependencies = [
+    "customtkinter>=5.2.0",
+    "pillow>=10.0.0"
+]
+
+[project.scripts]
+claude-suite = "main:main"
