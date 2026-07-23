@@ -124,7 +124,8 @@ class AntigravityCLI:
             if tok_match:
                 tokens_count = int(tok_match.group(1))
             else:
-                tokens_count = max(1, (len(full_prompt) + len(output_text)) // 4)
+                cmd_str = " ".join(cmd)
+                tokens_count = max(1, (len(cmd_str) + len(output_text)) // 4)
 
             if proc.returncode == 0:
                 if on_log:
