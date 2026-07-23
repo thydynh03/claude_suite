@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox, scrolledtext, simpledialog
+from tkinter import messagebox, scrolledtext, simpledialog, filedialog
 import threading
 import datetime
 import time
