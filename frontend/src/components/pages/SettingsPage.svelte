@@ -359,8 +359,14 @@
 
         <textarea
           bind:value={quickPrompt}
+          on:keydown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleRunQuickCLI();
+            }
+          }}
           class="w-full bg-surface-container-low/30 h-32 rounded-xl p-4 font-mono text-xs text-on-surface border border-outline-variant focus:ring-2 focus:ring-primary outline-none resize-none"
-          placeholder="Nhập prompt chạy thử CLI trực tiếp..."
+          placeholder="Nhập prompt chạy thử CLI trực tiếp... (Nhấn Enter để gửi, Shift+Enter xuống dòng)"
         ></textarea>
 
         <button on:click={handleRunQuickCLI} disabled={isQuickRunning} class="bg-primary text-on-primary px-6 py-2 rounded-xl text-xs font-bold disabled:opacity-50">

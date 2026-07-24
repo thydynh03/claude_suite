@@ -190,8 +190,14 @@
         <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden shadow-sm h-[420px]">
           <textarea
             bind:value={requirementText}
+            on:keydown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleDecompose();
+              }
+            }}
             class="flex-1 bg-transparent text-on-surface text-sm p-4 outline-none resize-none placeholder:text-outline-variant border-none"
-            placeholder="Xây dựng hệ thống Quản lý Task với REST API, Dashboard UI và Unit Tests..."
+            placeholder="Xây dựng hệ thống Quản lý Task với REST API, Dashboard UI và Unit Tests... (Nhấn Enter để gửi, Shift+Enter xuống dòng)"
           ></textarea>
           <div class="p-3 bg-surface-container flex flex-col gap-2 border-t border-outline-variant">
             <div class="flex items-center gap-2">
