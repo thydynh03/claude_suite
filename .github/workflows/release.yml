@@ -18,27 +18,27 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Setup Go
+      uses: actions/setup-go@v5
       with:
-        python-version: '3.12'
-        cache: 'pip'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+        go-version: '1.22'
 
-    - name: Build with PyInstaller
-      run: |
-        pyinstaller ClaudeSuite.spec
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
-    - name: Upload Build Artifact (for testing)
+    - name: Install Wails CLI
+      run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+    - name: Build Wails App
+      run: wails build -platform windows/amd64
+
+    - name: Upload Build Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ClaudeSuite-Windows
-        path: dist/ClaudeSuite.exe
+        path: build/bin/ClaudeSuite.exe
         retention-days: 5
 
   release:

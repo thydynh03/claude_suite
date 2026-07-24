@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary: #004ac6;
+    --primary-container: #2563eb;
+    --on-primary: #ffffff;
+    --on-primary-container: #eeefff;
+    --secondary: #515f74;
+    --secondary-container: #d5e3fc;
+    --on-secondary-container: #57657a;
+    --tertiary: #943700;
+    --tertiary-container: #ffdbcd;
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+    --surface: #f7f9fb;
+    --surface-container-lowest: #ffffff;
+    --surface-container-low: #f2f4f6;
+    --surface-container: #eceef0;
+    --surface-container-high: #e6e8ea;
+    --surface-container-highest: #e0e3e5;
+    --outline: #737686;
+    --outline-variant: #c3c6d7;
+    --on-surface: #191c1e;
+    --on-surface-variant: #434655;
+    --background: #f7f9fb;
+  }
+
+  .dark {
+    --primary: #b4c5ff;
+    --primary-container: #003ea8;
+    --on-primary: #00174b;
+    --on-primary-container: #dbe1ff;
+    --secondary: #b9c7df;
+    --secondary-container: #3a485b;
+    --on-secondary-container: #d5e3fc;
+    --tertiary: #ffb596;
+    --tertiary-container: #7d2d00;
+    --error: #ffb4ab;
+    --error-container: #93000a;
+    --on-error-container: #ffdad6;
+    --surface: #191c1e;
+    --surface-container-lowest: #0e1113;
+    --surface-container-low: #1d2022;
+    --surface-container: #212527;
+    --surface-container-high: #2b2f31;
+    --surface-container-highest: #363a3c;
+    --outline: #8d919e;
+    --outline-variant: #434653;
+    --on-surface: #e0e3e5;
+    --on-surface-variant: #c3c6d7;
+    --background: #111416;
+  }
+}
+
+body {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--background);
+  color: var(--on-surface);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--outline);
+}
+
+.font-code {
+  font-family: 'JetBrains Mono', monospace;
+}
