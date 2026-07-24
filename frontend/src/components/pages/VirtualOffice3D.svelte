@@ -2,7 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import { logs } from '../../lib/stores/appState';
+  import { logs, agentsStore } from '../../lib/stores/appState';
+  import * as AppBindings from '../../../wailsjs/go/main/App';
 
   let container: HTMLDivElement;
   let scene: THREE.Scene;
@@ -17,79 +18,93 @@
   let agents3D: { mesh: THREE.Group; name: string; targetX: number; targetZ: number; bubbleText: string; parts?: any }[] = [];
   let uiAgents: { id: number; name: string; text: string; x: number; y: number; visible: boolean }[] = [];
 
+  // Track desk objects so we can clear and rebuild when agents change
+  let deskObjects: THREE.Object3D[] = [];
+  // Store-driven agent list
+  let currentAgentList: any[] = [];
+
+  // Subscribe to global agentsStore — reactive to orchestrator changes
+  const unsubscribeAgents = agentsStore.subscribe((list) => {
+    currentAgentList = list || [];
+    // If scene is ready, rebuild desks
+    if (scene) {
+      rebuildDesks();
+    }
+  });
+
   onMount(() => {
     init3D();
     window.addEventListener('resize', handleResize);
   });
 
   onDestroy(() => {
+    unsubscribeAgents();
     if (animId) cancelAnimationFrame(animId);
     window.removeEventListener('resize', handleResize);
   });
 
   async function handleTestRun() {
-    if (isSimulating) return;
+    if (isSimulating || agents3D.length < 2) return;
     isSimulating = true;
 
-    const chief = agents3D[0];
-    const arch = agents3D[1];
-    const coder = agents3D[2];
+    // Use real agents from store — pick first 3 available
+    const ag0 = agents3D[0];
+    const ag1 = agents3D[1 % agents3D.length];
+    const ag2 = agents3D[2 % agents3D.length];
 
-    const chiefStart = { x: chief.targetX, z: chief.targetZ };
-    const archStart = { x: arch.targetX, z: arch.targetZ };
-    const coderStart = { x: coder.targetX, z: coder.targetZ };
-    
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: 'Initiated 3D Simulation Test Run' }];
-    
-    globalBubble = 'Architect: Planning database schema...';
-    arch.bubbleText = 'Planning schema...';
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: 'Architect agent is planning database schema...' }];
-    await new Promise(r => setTimeout(r, 2000));
-    
-    // Move Arch to Coder
-    arch.targetX = coderStart.x - 1.5;
-    arch.targetZ = coderStart.z;
-    globalBubble = 'Architect: Handing off spec to Coder...';
-    arch.bubbleText = 'Hey Coder, here are the specs!';
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: 'Architect -> Coder: Handoff specs' }];
-    await new Promise(r => setTimeout(r, 2000));
-    
-    // Arch returns
-    arch.targetX = archStart.x;
-    arch.targetZ = archStart.z;
-    arch.bubbleText = '';
+    const start0 = { x: ag0.targetX, z: ag0.targetZ };
+    const start1 = { x: ag1.targetX, z: ag1.targetZ };
+    const start2 = { x: ag2.targetX, z: ag2.targetZ };
 
-    globalBubble = 'Coder: Writing boilerplate code...';
-    coder.bubbleText = 'Writing boilerplate code...';
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'DEV', message: 'Lead Coder agent is generating boilerplate code...' }];
-    await new Promise(r => setTimeout(r, 2000));
-    
-    // Move Coder to Chief
-    coder.targetX = chiefStart.x + 1.5;
-    coder.targetZ = chiefStart.z;
-    globalBubble = 'Coder: Handing off code for review...';
-    coder.bubbleText = 'Code ready for review, Chief!';
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'DEV', message: 'Coder -> Chief AI: Code Review Request' }];
-    await new Promise(r => setTimeout(r, 2000));
-    
-    // Coder returns
-    coder.targetX = coderStart.x;
-    coder.targetZ = coderStart.z;
-    coder.bubbleText = '';
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: `Initiated 3D Simulation: ${agents3D.length} agents in office` }];
 
-    globalBubble = 'QA: Running unit tests...';
-    chief.bubbleText = 'Running unit tests...';
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'QA', message: 'Chief AI is running unit tests...' }];
+    globalBubble = `${ag1.name}: Planning architecture...`;
+    ag1.bubbleText = 'Planning schema...';
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: `${ag1.name} is planning architecture...` }];
     await new Promise(r => setTimeout(r, 2000));
-    
-    globalBubble = 'DONE: Simulation finished!';
-    chief.bubbleText = 'All tests passed!';
+
+    // Move ag1 toward ag2
+    ag1.targetX = start2.x - 1.5;
+    ag1.targetZ = start2.z;
+    globalBubble = `${ag1.name}: Handing off spec to ${ag2.name}...`;
+    ag1.bubbleText = `Hey ${ag2.name}, specs ready!`;
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: `${ag1.name} -> ${ag2.name}: Handoff specs` }];
+    await new Promise(r => setTimeout(r, 2000));
+
+    ag1.targetX = start1.x;
+    ag1.targetZ = start1.z;
+    ag1.bubbleText = '';
+
+    globalBubble = `${ag2.name}: Writing code...`;
+    ag2.bubbleText = 'Writing implementation...';
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'DEV', message: `${ag2.name} is generating code...` }];
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Move ag2 toward ag0
+    ag2.targetX = start0.x + 1.5;
+    ag2.targetZ = start0.z;
+    globalBubble = `${ag2.name}: Code ready for review!`;
+    ag2.bubbleText = `Code ready, ${ag0.name}!`;
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'DEV', message: `${ag2.name} -> ${ag0.name}: Code Review Request` }];
+    await new Promise(r => setTimeout(r, 2000));
+
+    ag2.targetX = start2.x;
+    ag2.targetZ = start2.z;
+    ag2.bubbleText = '';
+
+    globalBubble = `${ag0.name}: Running tests...`;
+    ag0.bubbleText = 'Running unit tests...';
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'QA', message: `${ag0.name} is running tests...` }];
+    await new Promise(r => setTimeout(r, 2000));
+
+    globalBubble = 'DONE: All tests passed!';
+    ag0.bubbleText = 'All tests passed! ✅';
     $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SUCCESS', message: 'Simulation finished successfully.' }];
-    
+
     setTimeout(() => {
       isSimulating = false;
       globalBubble = 'THINKING: Analyzing repo architecture...';
-      chief.bubbleText = '';
+      ag0.bubbleText = '';
     }, 3000);
   }
 
@@ -232,8 +247,8 @@
     }
     scene.add(rackGroup);
 
-    // Create IT Desks dynamically based on active agents
-    loadDynamicDesks();
+    // Create IT Desks dynamically based on active agents (from global agentsStore)
+    rebuildDesks();
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -247,25 +262,22 @@
     animate();
   }
 
-  async function loadDynamicDesks() {
-    let agentList: any[] = [];
-    try {
-      if ((window as any)?.go?.main?.App) {
-        agentList = await AppBindings.GetAgents();
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  function rebuildDesks() {
+    // Remove previously created desk objects from scene
+    deskObjects.forEach(obj => scene.remove(obj));
+    deskObjects = [];
+    agents3D = [];
+    uiAgents = [];
 
-    if (!agentList || agentList.length === 0) {
-      agentList = [
-        { name: 'Chief AI' },
-        { name: 'Senior Arch' },
-        { name: 'Lead Coder' }
-      ];
-    }
+    let agentList = currentAgentList && currentAgentList.length > 0
+      ? currentAgentList
+      : [
+          { name: 'Tech Lead & Architect', icon: '🏗️' },
+          { name: 'Back-end Developer', icon: '⚙️' },
+          { name: 'QA/QC Specialist', icon: '🧪' }
+        ];
 
-    const colors = [0x3b82f6, 0x8b5cf6, 0xf59e0b, 0x10b981, 0xef4444, 0xec4899, 0x6366f1];
+    const colors = [0x3b82f6, 0x8b5cf6, 0xf59e0b, 0x10b981, 0xef4444, 0xec4899, 0x6366f1, 0x14b8a6];
     const positions = [
       { x: -7, z: -5 },
       { x: 0, z: -5 },
@@ -277,8 +289,8 @@
       { x: 3.5, z: 9 }
     ];
 
-    agentList.forEach((ag, idx) => {
-      const pos = positions[idx % positions.length];
+    agentList.slice(0, positions.length).forEach((ag, idx) => {
+      const pos = positions[idx];
       const color = colors[idx % colors.length];
       createDesk(pos.x, pos.z, ag.name || `Agent ${idx + 1}`, color);
     });
@@ -389,6 +401,7 @@
     deskGroup.add(chairGroup);
 
     scene.add(deskGroup);
+    deskObjects.push(deskGroup); // track for rebuild
 
     // Place Agent slightly outside the desk
     createAgentAvatar(role, color, x, z + 1.2);
@@ -472,6 +485,7 @@
     group.add(rightArmGroup);
 
     scene.add(group);
+    deskObjects.push(group); // track for rebuild
 
     agents3D.push({ 
       mesh: group, 
