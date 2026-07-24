@@ -59,6 +59,15 @@
       <span class="material-symbols-outlined mr-3 text-secondary">apartment</span>
       VIRTUAL OFFICE
     </button>
+
+    <button
+      on:click={() => activeTab.set('scheduler')}
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider
+      {$activeTab === 'scheduler' ? 'bg-secondary-container text-on-secondary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+    >
+      <span class="material-symbols-outlined mr-3 text-secondary">schedule</span>
+      SCHEDULER
+    </button>
   </nav>
 
   <!-- Bottom Execution Button & Links -->

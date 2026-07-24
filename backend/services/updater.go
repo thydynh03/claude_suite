@@ -128,11 +128,19 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 
 	batPath := filepath.Join(exeDir, "updater.bat")
 	batContent := fmt.Sprintf(`@echo off
-timeout /t 2 /nobreak > NUL
-move /y "%s" "%s"
-start "" "%s"
+set "NEW_EXE=%s"
+set "OLD_EXE=%s"
+
+:RETRY
+timeout /t 1 /nobreak > NUL
+move /y "%%NEW_EXE%%" "%%OLD_EXE%%" > NUL 2>&1
+if errorlevel 1 (
+    goto RETRY
+)
+
+start "" "%%OLD_EXE%%"
 del "%%~f0"
-`, newExePath, exePath, exePath)
+`, newExePath, exePath)
 
 	if err := os.WriteFile(batPath, []byte(batContent), 0755); err != nil {
 		return err

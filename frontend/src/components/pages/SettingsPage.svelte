@@ -10,6 +10,7 @@
 
   // Quick CLI state
   let quickPrompt = '';
+  let selectedAgentType = 'claude';
   let selectedModel = 'claude-opus-4-8';
   let quickOutput = '';
   let isQuickRunning = false;
@@ -20,10 +21,20 @@
   // Integrations state
   let webhookUrl = '';
   let mcpConnectionString = '';
+  let currentAppVersion = '';
   let isIntegrationsSaving = false;
+  let isCheckingUpdate = false;
+  let isUpdating = false;
+  let updateStatusMessage = '';
+  let updateStatusType: 'info' | 'success' | 'error' = 'info';
 
   onMount(async () => {
     await loadAgents();
+    try {
+      if ((AppBindings as any).GetAppVersion) {
+        currentAppVersion = await (AppBindings as any).GetAppVersion();
+      }
+    } catch (e) {}
   });
 
   async function loadAgents() {
@@ -74,10 +85,59 @@
   }
 
   async function handleCheckUpdate() {
+    isCheckingUpdate = true;
+    updateStatusMessage = 'Đang kiểm tra bản cập nhật mới nhất từ GitHub...';
+    updateStatusType = 'info';
     try {
       updateInfo = await AppBindings.CheckForUpdates();
-    } catch (e) {
-      console.error(e);
+      if (updateInfo) {
+        if (!updateInfo.has_update) {
+          updateStatusMessage = 'Bạn đang sử dụng phiên bản mới nhất!';
+          updateStatusType = 'success';
+        } else {
+          updateStatusMessage = '';
+        }
+      }
+    } catch (e: any) {
+      updateStatusMessage = 'Lỗi kiểm tra cập nhật: ' + (e?.message || e);
+      updateStatusType = 'error';
+    } finally {
+      isCheckingUpdate = false;
+    }
+  }
+
+  async function handleAutoUpdate() {
+    if (!updateInfo) return;
+    if (!updateInfo.download_url) {
+      updateStatusMessage = 'Không tìm thấy file .exe trong bản release mới nhất trên GitHub (v' + updateInfo.version + '). Vui lòng tải thủ công!';
+      updateStatusType = 'error';
+      addLog('Không tìm thấy file .exe trong release mới nhất của GitHub.', 'ERROR');
+      return;
+    }
+
+    isUpdating = true;
+    updateStatusMessage = 'Đang tải bản cập nhật .exe từ GitHub và chuẩn bị cài đặt...';
+    updateStatusType = 'info';
+    addLog('Downloading update from ' + updateInfo.download_url, 'INFO');
+
+    try {
+      const res = await (AppBindings as any).DownloadAndUpdate(updateInfo.download_url);
+      if (res && res.success) {
+        currentAppVersion = updateInfo.version;
+        updateStatusMessage = '🎉 Cài đặt thành công! Đang tự động khởi động lại ứng dụng...';
+        updateStatusType = 'success';
+        addLog('Update installed successfully! Restarting...', 'SUCCESS');
+      } else {
+        updateStatusMessage = '❌ Cập nhật thất bại: ' + (res?.error || 'Không xác định');
+        updateStatusType = 'error';
+        addLog('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
+      }
+    } catch (e: any) {
+      updateStatusMessage = '❌ Lỗi hệ thống khi cập nhật: ' + (e?.message || e);
+      updateStatusType = 'error';
+      addLog('Update error: ' + e, 'ERROR');
+    } finally {
+      isUpdating = false;
     }
   }
 </script>
@@ -214,17 +274,30 @@
     <div class="space-y-4">
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-4 shadow-sm">
         <div class="flex items-center gap-4">
-          <label class="text-xs font-bold text-on-surface whitespace-nowrap">Model Target:</label>
-          <div class="w-48">
-            <Dropdown
-              options={[
-                { value: 'claude-opus-4-8', label: 'claude-opus-4-8' },
-                { value: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
-                { value: 'gemini-3.6-flash-high', label: 'gemini-3.6-flash-high' },
-                { value: 'gemini-3.1-pro-high', label: 'gemini-3.1-pro-high' }
-              ]}
-              bind:value={selectedModel}
-            />
+          <label class="text-xs font-bold text-on-surface whitespace-nowrap">Agent & Model:</label>
+          <div class="flex gap-2 w-full max-w-sm">
+            <select bind:value={selectedAgentType} 
+              on:change={() => selectedModel = selectedAgentType === 'claude' ? 'claude-opus-4-8' : 'gemini-3.1-pro-high'}
+              class="w-1/2 bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary">
+              <option value="claude">Claude</option>
+              <option value="antigravity">Antigravity</option>
+            </select>
+            <select bind:value={selectedModel} 
+              class="w-1/2 bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary">
+              {#if selectedAgentType === 'claude'}
+                <option value="claude-opus-4-8">Opus 4.8</option>
+                <option value="claude-sonnet-4-5">Sonnet 4.5</option>
+                <option value="claude-haiku-4-5">Haiku 4.5</option>
+                <option value="fable-5">Fable 5</option>
+              {:else}
+                <option value="gemini-3.6-flash-high">Gemini 3.6 Flash (High)</option>
+                <option value="gemini-3.6-flash-medium">Gemini 3.6 Flash (Medium)</option>
+                <option value="gemini-3.6-flash-low">Gemini 3.6 Flash (Low)</option>
+                <option value="gemini-3.5-flash-high">Gemini 3.5 Flash (High)</option>
+                <option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High)</option>
+                <option value="gpt-oss-120b">GPT-OSS 120B (Medium)</option>
+              {/if}
+            </select>
           </div>
         </div>
 
@@ -265,21 +338,58 @@
         <span class="material-symbols-outlined text-2xl">system_update</span>
       </div>
       <h3 class="font-bold text-lg text-on-surface">Claude Suite Control Center</h3>
-      <p class="text-xs text-on-surface-variant">Phiên bản hiện tại: <strong>v2.0.0 (Go + Wails + Svelte)</strong></p>
+      <p class="text-xs text-on-surface-variant">Phiên bản hiện tại: <strong>{currentAppVersion} (Go + Wails + Svelte)</strong></p>
 
-      <button on:click={handleCheckUpdate} class="bg-primary text-on-primary px-6 py-2 rounded-xl text-xs font-bold">
-        🔄 Kiểm tra bản cập nhật
+      <button 
+        on:click={handleCheckUpdate} 
+        disabled={isCheckingUpdate || isUpdating}
+        class="bg-primary text-on-primary px-6 py-2 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2 mx-auto transition-all"
+      >
+        {#if isCheckingUpdate}
+          <span class="material-symbols-outlined text-sm animate-spin">refresh</span>
+          Đang kiểm tra...
+        {:else}
+          🔄 Kiểm tra bản cập nhật
+        {/if}
       </button>
 
+      {#if updateStatusMessage}
+        <div class="p-3 rounded-xl text-xs font-semibold text-center transition-all
+          {updateStatusType === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
+           updateStatusType === 'success' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
+           'bg-blue-500/10 text-blue-500 border border-blue-500/20'}"
+        >
+          {updateStatusMessage}
+        </div>
+      {/if}
+
+      {#if isUpdating}
+        <div class="space-y-2 pt-2">
+          <div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+            <div class="bg-primary h-full animate-pulse w-full"></div>
+          </div>
+          <p class="text-[11px] text-on-surface-variant animate-pulse">Vui lòng không tắt ứng dụng trong quá trình cài đặt...</p>
+        </div>
+      {/if}
+
       {#if updateInfo}
-        <div class="p-4 bg-surface-container-low rounded-xl text-xs text-left">
+        <div class="p-4 bg-surface-container-low rounded-xl text-xs text-left space-y-3">
           {#if updateInfo.has_update}
             <p class="text-emerald-600 font-bold mb-1">Có phiên bản mới: {updateInfo.version}</p>
             <p class="text-on-surface-variant mb-3">{updateInfo.body}</p>
-            <button on:click={handleAutoUpdate} class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl text-xs font-bold">
-              🚀 Tự động cập nhật ngay
+            <button 
+              on:click={handleAutoUpdate} 
+              disabled={isUpdating}
+              class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"
+            >
+              {#if isUpdating}
+                <span class="material-symbols-outlined text-sm animate-spin">sync</span>
+                Đang tải & cài đặt...
+              {:else}
+                🚀 Tự động cập nhật ngay
+              {/if}
             </button>
-          {:else}
+          {:else if !updateStatusMessage}
             <p class="text-emerald-600 font-bold">Bạn đang sử dụng phiên bản mới nhất!</p>
           {/if}
         </div>

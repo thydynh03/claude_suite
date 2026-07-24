@@ -13,6 +13,7 @@ import (
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
 	"claude_suite/backend/services"
+	"claude_suite/backend/version"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -59,7 +60,7 @@ func NewApp() *App {
 	planBuilder := pipeline.NewPlanBuilder(cliRunner)
 	pipelineEng := pipeline.NewPipelineEngine(agentRepo, cliRunner)
 
-	return &App{
+	app := &App{
 		agentRepo:       agentRepo,
 		taskRepo:        taskRepo,
 		memoryRepo:      memoryRepo,
@@ -74,6 +75,12 @@ func NewApp() *App {
 		planBuilder:     planBuilder,
 		pipelineEngine:  pipelineEng,
 	}
+
+	app.schedulerSvc.SetTriggerCallback(func(prompt string) {
+		app.RunQuickCLI(prompt, "claude-sonnet-4-5", "", nil)
+	})
+
+	return app
 }
 
 // startup is called when the app starts. The context is saved
@@ -82,6 +89,8 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.orchestrator.SetContext(ctx)
 	a.pipelineEngine.SetContext(ctx)
+	a.schedulerSvc.SetContext(ctx)
+	a.schedulerSvc.Start()
 
 	a.loadWorkspaceConfig()
 	if a.workspaceConfig.LastWorkspaceFolder != "" {
@@ -181,6 +190,10 @@ func (a *App) IsOrchestratorRunning() bool {
 	return a.orchestrator.IsRunning()
 }
 
+func (a *App) ResolveApproval(approved bool) {
+	a.orchestrator.ResolveApproval(approved)
+}
+
 func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles []string) (*cli.RunResult, error) {
 	ctxPrompt := ""
 	if len(localFiles) > 0 || a.workspaceConfig.LastWorkspaceFolder != "" {
@@ -234,8 +247,25 @@ func (a *App) IsWebhookRunning() bool {
 	return a.webhookService.IsRunning()
 }
 
+func (a *App) GetAppVersion() string {
+	return version.CurrentVersion
+}
+
 func (a *App) CheckForUpdates() (*services.UpdateInfo, error) {
 	return a.updaterService.CheckForUpdates()
+}
+
+type UpdateResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error"`
+}
+
+func (a *App) DownloadAndUpdate(downloadUrl string) UpdateResponse {
+	err := a.updaterService.DownloadAndInstall(downloadUrl, nil)
+	if err != nil {
+		return UpdateResponse{Success: false, Error: err.Error()}
+	}
+	return UpdateResponse{Success: true}
 }
 
 func (a *App) DownloadAndInstallUpdate(url string) error {
@@ -271,6 +301,20 @@ func (a *App) ExportKanbanReport() (string, error) {
 	}
 	md, _, err := a.exporterService.ExportKanbanReport(tasks, a.workspaceConfig.LastWorkspaceFolder)
 	return md, err
+}
+
+// ── Scheduler ──────────────────────────────────────────────────────────
+
+func (a *App) SchedulePrompt(prompt string, targetTimeStr string, repeat bool) (string, error) {
+	return a.schedulerSvc.SchedulePrompt(prompt, targetTimeStr, repeat)
+}
+
+func (a *App) CancelScheduledJob(id string) {
+	a.schedulerSvc.CancelJob(id)
+}
+
+func (a *App) GetScheduledJobs() []services.ScheduledJob {
+	return a.schedulerSvc.GetJobs()
 }
 
 // ── Config Persistence Helpers ─────────────────────────────────────────

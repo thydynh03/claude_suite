@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"claude_suite/backend/models"
@@ -76,6 +77,7 @@ func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCa
 	}
 
 	cmd := exec.Command(c.executablePath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}

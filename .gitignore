@@ -1,7 +1,14 @@
-build/bin
+build/
 node_modules
+frontend/node_modules
 frontend/dist
+dist/
 agent_manager.db*
 *.db
 *.db-wal
 *.db-shm
+*.log
+*.html
+*.syso
+__pycache__/
+workspace_config.json

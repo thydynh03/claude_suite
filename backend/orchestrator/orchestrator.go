@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,9 +27,10 @@ type Orchestrator struct {
 	fallback     *FallbackHandler
 	workspaceDir string
 
-	running bool
-	stopCh  chan struct{}
-	mu      sync.Mutex
+	running    bool
+	stopCh     chan struct{}
+	approvalCh chan bool
+	mu         sync.Mutex
 }
 
 func NewOrchestrator(
@@ -48,6 +50,7 @@ func NewOrchestrator(
 		gitService: gitSvc,
 		dispatcher: NewAgentDispatcher(),
 		fallback:   NewFallbackHandler(),
+		approvalCh: make(chan bool),
 	}
 }
 
@@ -94,6 +97,13 @@ func (o *Orchestrator) IsRunning() bool {
 	return o.running
 }
 
+func (o *Orchestrator) ResolveApproval(approved bool) {
+	select {
+	case o.approvalCh <- approved:
+	default:
+	}
+}
+
 func (o *Orchestrator) loop() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -124,11 +134,44 @@ func (o *Orchestrator) processNextTask() {
 		return
 	}
 
+	if agent.AgentID == "" {
+		_ = o.agentRepo.Create(agent)
+	}
+
 	// Mark task running
 	_ = o.taskRepo.UpdateStatus(task.TaskID, "running", "", "")
 	agent.Status = "running"
 	agent.LastTask = task.Title
 	_ = o.agentRepo.Update(agent)
+
+	// Approval Checkpoint
+	nameLower := strings.ToLower(agent.Name)
+	if strings.Contains(nameLower, "architect") || strings.Contains(nameLower, "ba") {
+		o.emitLog(fmt.Sprintf("[%s] Waiting for user approval...", agent.Name), "WARN")
+		if o.ctx != nil {
+			runtime.EventsEmit(o.ctx, "ask_approval", map[string]string{
+				"agentName": agent.Name,
+				"taskTitle": task.Title,
+			})
+		}
+
+		select {
+		case approved := <-o.approvalCh:
+			if !approved {
+				_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "Rejected by user", "")
+				o.emitLog(fmt.Sprintf("[%s] Task '%s' rejected by user.", agent.Name, task.Title), "ERROR")
+				agent.Status = "idle"
+				_ = o.agentRepo.Update(agent)
+				if o.ctx != nil {
+					runtime.EventsEmit(o.ctx, "board_updated", nil)
+				}
+				return
+			}
+			o.emitLog(fmt.Sprintf("[%s] Task '%s' approved.", agent.Name, task.Title), "SUCCESS")
+		case <-o.stopCh:
+			return
+		}
+	}
 
 	o.emitLog(fmt.Sprintf("[%s] Executing task: '%s'", agent.Name, task.Title), "SEND")
 

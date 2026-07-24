@@ -10,6 +10,8 @@
   let activeAgent = 'Claude-3.5-Sonnet';
   let thinkingPercent = 75;
 
+  let topTab = 'active'; // 'active' | 'history'
+
   onMount(async () => {
     try {
       if ((window as any)?.go?.main?.App) {
@@ -70,17 +72,22 @@
       <p class="text-on-surface-variant text-sm mt-1">Orchestrate agents, tasks, and code in a unified technical workspace.</p>
     </div>
     <div class="flex items-center gap-2 bg-surface-container-lowest p-1 rounded-full border border-outline-variant shadow-sm">
-      <button class="bg-secondary-container text-on-secondary-container px-4 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+      <button on:click={() => topTab = 'active'} 
+        class="px-4 py-1 rounded-full text-xs font-bold flex items-center gap-1 transition-colors
+        {topTab === 'active' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'}">
         <span class="material-symbols-outlined text-sm">bolt</span> ACTIVE
       </button>
-      <button class="text-on-surface-variant px-4 py-1 rounded-full text-xs font-bold hover:text-on-surface hover:bg-surface-container-low transition-colors">
+      <button on:click={() => topTab = 'history'} 
+        class="px-4 py-1 rounded-full text-xs font-bold transition-colors
+        {topTab === 'history' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'}">
         HISTORY
       </button>
     </div>
   </div>
 
-  <!-- 3-Step Linear Workflow -->
-  <div class="space-y-6">
+  {#if topTab === 'active'}
+    <!-- 3-Step Linear Workflow -->
+    <div class="space-y-6">
 
     <!-- Step 1: Context -->
     <section class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm">
@@ -221,5 +228,12 @@
         </div>
       </div>
     </section>
-  </div>
+    </div>
+  {:else}
+    <!-- History View -->
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-8 text-center text-on-surface-variant italic">
+      <span class="material-symbols-outlined text-4xl mb-4 text-outline">history</span>
+      <p>Lịch sử hoạt động sẽ được hiển thị ở đây.</p>
+    </div>
+  {/if}
 </div>

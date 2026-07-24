@@ -25,6 +25,25 @@ export namespace cli {
 
 }
 
+export namespace main {
+	
+	export class UpdateResponse {
+	    success: boolean;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.error = source["error"];
+	    }
+	}
+
+}
+
 export namespace models {
 	
 	export class Agent {
@@ -201,6 +220,43 @@ export namespace models {
 
 export namespace services {
 	
+	export class ScheduledJob {
+	    id: string;
+	    prompt: string;
+	    // Go type: time
+	    target_time: any;
+	    repeat: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScheduledJob(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.prompt = source["prompt"];
+	        this.target_time = this.convertValues(source["target_time"], null);
+	        this.repeat = source["repeat"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class UpdateInfo {
 	    has_update: boolean;
 	    version: string;

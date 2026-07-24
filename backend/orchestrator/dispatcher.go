@@ -43,10 +43,21 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 	for role, keywords := range roleKeywords {
 		for _, kw := range keywords {
 			if strings.Contains(tagStr, kw) {
+				// Search for existing
 				for i, a := range agents {
 					if strings.Contains(a.Name, role) || strings.Contains(a.Role, role) {
 						return &agents[i]
 					}
+				}
+				// Auto-create based on role if missing
+				return &models.Agent{
+					Name:     "Lead " + role,
+					Role:     role + " Specialist",
+					Model:    "claude-sonnet-4-5",
+					Provider: "claude_cli",
+					Icon:     "🤖",
+					System:   "You are a " + role + " specialist.",
+					Status:   "idle",
 				}
 			}
 		}

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"claude_suite/backend/models"
@@ -58,6 +59,7 @@ func (a *AntigravityCLI) execute(model, prompt, system string, onLog LogCallback
 	args = append(args, "-p", prompt)
 
 	cmd := exec.Command(a.executablePath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}

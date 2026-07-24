@@ -1,68 +1,164 @@
 package services
 
 import (
+	"context"
 	"fmt"
-	"runtime"
-	"syscall"
-	"unsafe"
+	"sync"
+	"time"
 
-	"golang.org/x/sys/windows"
+	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type SchedulerService struct{}
+type ScheduledJob struct {
+	ID         string    `json:"id"`
+	Prompt     string    `json:"prompt"`
+	TargetTime time.Time `json:"target_time"`
+	Repeat     bool      `json:"repeat"`
+}
+
+type SchedulerService struct {
+	ctx       context.Context
+	jobs      map[string]*ScheduledJob
+	mu        sync.Mutex
+	running   bool
+	stopCh    chan struct{}
+	onTrigger func(prompt string)
+}
 
 func NewSchedulerService() *SchedulerService {
-	return &SchedulerService{}
+	return &SchedulerService{
+		jobs: make(map[string]*ScheduledJob),
+	}
 }
 
-// SetCursorPos wraps Windows API SetCursorPos
-func (s *SchedulerService) SetCursorPos(x, y int32) error {
-	if runtime.GOOS != "windows" {
-		return fmt.Errorf("only supported on windows")
-	}
-	user32 := windows.NewLazySystemDLL("user32.dll")
-	setCursorPos := user32.NewProc("SetCursorPos")
-	r1, _, err := setCursorPos.Call(uintptr(x), uintptr(y))
-	if r1 == 0 {
-		return err
-	}
-	return nil
+func (s *SchedulerService) SetContext(ctx context.Context) {
+	s.ctx = ctx
 }
 
-// ClickAt moves cursor and triggers left click
-func (s *SchedulerService) ClickAt(x, y int32) error {
-	if err := s.SetCursorPos(x, y); err != nil {
-		return err
-	}
-
-	user32 := windows.NewLazySystemDLL("user32.dll")
-	mouseEvent := user32.NewProc("mouse_event")
-
-	const mouseEventFLeftDown = 0x0002
-	const mouseEventFLeftUp = 0x0004
-
-	mouseEvent.Call(uintptr(mouseEventFLeftDown), 0, 0, 0, 0)
-	mouseEvent.Call(uintptr(mouseEventFLeftUp), 0, 0, 0, 0)
-
-	return nil
+func (s *SchedulerService) SetTriggerCallback(cb func(prompt string)) {
+	s.onTrigger = cb
 }
 
-// FindWindowByTitle returns HWND of target window
-func (s *SchedulerService) FindWindowByTitle(title string) (uintptr, error) {
-	if runtime.GOOS != "windows" {
-		return 0, fmt.Errorf("only supported on windows")
+func (s *SchedulerService) Start() {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return
 	}
-	user32 := windows.NewLazySystemDLL("user32.dll")
-	findWindow := user32.NewProc("FindWindowW")
+	s.running = true
+	s.stopCh = make(chan struct{})
+	s.mu.Unlock()
 
-	tPtr, err := syscall.UTF16PtrFromString(title)
+	go s.loop()
+}
+
+func (s *SchedulerService) Stop() {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return
+	}
+	s.running = false
+	close(s.stopCh)
+	s.mu.Unlock()
+}
+
+func (s *SchedulerService) loop() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.checkJobs()
+		}
+	}
+}
+
+func (s *SchedulerService) checkJobs() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	for id, job := range s.jobs {
+		if now.After(job.TargetTime) {
+			// Trigger
+			if s.onTrigger != nil {
+				go s.onTrigger(job.Prompt)
+			}
+			
+			// Handle repeat or delete
+			if job.Repeat {
+				job.TargetTime = job.TargetTime.Add(24 * time.Hour)
+				if s.ctx != nil {
+					runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
+						"msg": fmt.Sprintf("Repeating job %s scheduled for %s", id, job.TargetTime.Format("15:04:05")),
+						"level": "INFO",
+					})
+				}
+			} else {
+				delete(s.jobs, id)
+			}
+
+			if s.ctx != nil {
+				runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
+			}
+		}
+	}
+}
+
+func (s *SchedulerService) SchedulePrompt(prompt string, targetTimeStr string, repeat bool) (string, error) {
+	targetTime, err := time.Parse(time.RFC3339, targetTimeStr)
 	if err != nil {
-		return 0, err
+		return "", fmt.Errorf("invalid time format: %v", err)
 	}
 
-	hwnd, _, _ := findWindow.Call(0, uintptr(unsafe.Pointer(tPtr)))
-	if hwnd == 0 {
-		return 0, fmt.Errorf("window '%s' not found", title)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := uuid.New().String()
+	s.jobs[id] = &ScheduledJob{
+		ID:         id,
+		Prompt:     prompt,
+		TargetTime: targetTime,
+		Repeat:     repeat,
 	}
-	return hwnd, nil
+
+	if s.ctx != nil {
+		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
+		runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
+			"msg": fmt.Sprintf("Job scheduled for %s", targetTime.Format("15:04:05")),
+			"level": "SUCCESS",
+		})
+	}
+
+	return id, nil
+}
+
+func (s *SchedulerService) CancelJob(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.jobs, id)
+	
+	if s.ctx != nil {
+		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
+		runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
+			"msg": fmt.Sprintf("Job %s cancelled", id),
+			"level": "WARN",
+		})
+	}
+}
+
+func (s *SchedulerService) GetJobs() []ScheduledJob {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	var list []ScheduledJob
+	for _, j := range s.jobs {
+		list = append(list, *j)
+	}
+	return list
 }
