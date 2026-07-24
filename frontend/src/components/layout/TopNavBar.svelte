@@ -1,6 +1,6 @@
 <script lang="ts">
   import { theme, toggleTheme } from '../../lib/stores/theme';
-  import { activeTab, workspaceFolder, orchestratorRunning, isThinking } from '../../lib/stores/appState';
+  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   let openMenu: 'file' | 'view' | 'window' | null = null;
@@ -87,6 +87,101 @@
     } else {
       await AppBindings.StartOrchestrator();
       orchestratorRunning.set(true);
+    }
+  }
+
+  // Git Version Control Modal state
+  let showGitBranchModal = false;
+  let showGitCommitModal = false;
+  let gitStatus: any = null;
+  let gitBranchInfo: any = { current: 'master', branches: [] };
+  let gitCommits: any[] = [];
+  let newBranchName = '';
+  let commitMessage = '';
+  let isGitActionRunning = false;
+
+  async function openBranchModal() {
+    showGitBranchModal = true;
+    await loadGitData();
+  }
+
+  async function openCommitModal() {
+    showGitCommitModal = true;
+    await loadGitData();
+  }
+
+  async function loadGitData() {
+    try {
+      if ((AppBindings as any).GetGitStatus) {
+        gitStatus = await (AppBindings as any).GetGitStatus();
+      }
+      if ((AppBindings as any).GetGitBranches) {
+        gitBranchInfo = await (AppBindings as any).GetGitBranches();
+      }
+      if ((AppBindings as any).GetGitLog) {
+        gitCommits = await (AppBindings as any).GetGitLog(10);
+      }
+    } catch (e) {
+      console.error('Git error:', e);
+    }
+  }
+
+  async function handleCreateBranch() {
+    if (!newBranchName.trim()) return;
+    isGitActionRunning = true;
+    try {
+      await (AppBindings as any).CreateGitBranch(newBranchName.trim());
+      addLog(`Đã tạo và chuyển sang git branch mới: ${newBranchName}`, 'SUCCESS');
+      newBranchName = '';
+      await loadGitData();
+    } catch (e) {
+      addLog(`Lỗi tạo branch: ${e}`, 'ERROR');
+    } finally {
+      isGitActionRunning = false;
+    }
+  }
+
+  async function handleCheckoutBranch(name: string) {
+    isGitActionRunning = true;
+    try {
+      await (AppBindings as any).CheckoutGitBranch(name);
+      addLog(`Đã chuyển sang git branch: ${name}`, 'SUCCESS');
+      await loadGitData();
+    } catch (e) {
+      addLog(`Lỗi chuyển branch: ${e}`, 'ERROR');
+    } finally {
+      isGitActionRunning = false;
+    }
+  }
+
+  async function handleRevertCommit(hash: string) {
+    if (confirm(`Bạn có chắc muốn Revert commit ${hash}?`)) {
+      isGitActionRunning = true;
+      try {
+        await (AppBindings as any).RevertGitCommit(hash);
+        addLog(`Đã revert commit ${hash} thành công`, 'SUCCESS');
+        await loadGitData();
+      } catch (e) {
+        addLog(`Lỗi Revert commit: ${e}`, 'ERROR');
+      } finally {
+        isGitActionRunning = false;
+      }
+    }
+  }
+
+  async function handleCreateCommit() {
+    if (!commitMessage.trim()) return;
+    isGitActionRunning = true;
+    try {
+      await (AppBindings as any).CreateGitCommit(commitMessage.trim());
+      addLog(`Đã commit thay đổi thành công: ${commitMessage}`, 'SUCCESS');
+      commitMessage = '';
+      showGitCommitModal = false;
+      await loadGitData();
+    } catch (e) {
+      addLog(`Lỗi Commit: ${e}`, 'ERROR');
+    } finally {
+      isGitActionRunning = false;
     }
   }
 </script>
@@ -212,11 +307,21 @@
 
     <!-- Toolbar Icons -->
     <div class="flex items-center gap-2">
-      <button class="text-on-surface-variant hover:text-primary transition-colors p-1" title="Tree Explorer">
+      <button
+        type="button"
+        on:click|preventDefault={openBranchModal}
+        class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-lg hover:bg-surface-container-high cursor-pointer"
+        title="Git Branch Manager, Log & Revert"
+      >
         <span class="material-symbols-outlined text-xl">account_tree</span>
       </button>
-      <button class="text-on-surface-variant hover:text-primary transition-colors p-1" title="Network Topology">
-        <span class="material-symbols-outlined text-xl">lan</span>
+      <button
+        type="button"
+        on:click|preventDefault={openCommitModal}
+        class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-lg hover:bg-surface-container-high cursor-pointer"
+        title="Git Commit, Review & Staging"
+      >
+        <span class="material-symbols-outlined text-xl">schema</span>
       </button>
 
       <!-- Theme Switcher -->
@@ -232,3 +337,151 @@
     </button>
   </div>
 </header>
+
+<!-- Modal 1: Git Branch Manager & Revert History -->
+{#if showGitBranchModal}
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
+  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[560px] space-y-4 max-h-[85vh] flex flex-col">
+    <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
+      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">account_tree</span>
+        Git Branch Manager & Commit Log
+      </h3>
+      <button type="button" on:click={() => showGitBranchModal = false} class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+
+    <!-- Active Branch & Switcher -->
+    <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 space-y-2 text-xs">
+      <div class="flex items-center justify-between">
+        <span class="font-bold text-on-surface flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm text-secondary">call_split</span>
+          Current Branch: <strong class="text-primary font-mono text-sm ml-1">{gitBranchInfo?.current || 'master'}</strong>
+        </span>
+        <span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">
+          {gitStatus?.changed_files || 0} modified file(s)
+        </span>
+      </div>
+
+      <!-- Create New Branch -->
+      <div class="flex items-center gap-2 pt-2 border-t border-outline-variant/40">
+        <input 
+          type="text" 
+          bind:value={newBranchName} 
+          placeholder="Tên branch mới (ví dụ: feature/login)..." 
+          class="flex-1 bg-surface-container-lowest border border-outline-variant px-3 py-1.5 rounded-lg text-xs outline-none focus:border-primary text-on-surface"
+        />
+        <button 
+          type="button" 
+          on:click={handleCreateBranch} 
+          disabled={isGitActionRunning}
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1"
+        >
+          <span class="material-symbols-outlined text-sm">add_link</span> Tạo Branch
+        </button>
+      </div>
+
+      <!-- Available Branches -->
+      {#if gitBranchInfo?.branches?.length > 0}
+        <div class="pt-2">
+          <span class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Danh sách Branch:</span>
+          <div class="flex flex-wrap gap-1.5">
+            {#each gitBranchInfo.branches as b}
+              <button 
+                type="button"
+                on:click={() => handleCheckoutBranch(b)}
+                class="px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer flex items-center gap-1
+                {b === gitBranchInfo.current ? 'bg-primary text-on-primary border-primary font-bold shadow-sm' : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container'}"
+              >
+                <span class="material-symbols-outlined text-xs">commit</span> {b}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Commit History & Revert -->
+    <div class="flex-1 overflow-y-auto space-y-2 pr-1">
+      <span class="text-xs font-bold text-on-surface uppercase block">Lịch sử Commit (Nhấn Revert để khôi phục):</span>
+      {#each gitCommits as c}
+        <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-3 flex items-center justify-between text-xs hover:border-primary transition-all">
+          <div class="space-y-0.5 max-w-[380px]">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-primary font-bold text-[11px] bg-primary/10 px-1.5 py-0.5 rounded">{c.hash}</span>
+              <span class="font-semibold text-on-surface truncate">{c.message}</span>
+            </div>
+            <p class="text-[10px] text-on-surface-variant">{c.author} · {c.date}</p>
+          </div>
+          <button 
+            type="button" 
+            on:click={() => handleRevertCommit(c.hash)}
+            disabled={isGitActionRunning}
+            class="px-2.5 py-1 bg-rose-500/10 text-rose-600 border border-rose-500/30 rounded-lg text-[10px] font-bold hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1"
+          >
+            <span class="material-symbols-outlined text-xs">undo</span> Revert
+          </button>
+        </div>
+      {:else}
+        <p class="text-center text-xs text-on-surface-variant py-4 italic">Chưa có lịch sử commit.</p>
+      {/each}
+    </div>
+  </div>
+</div>
+{/if}
+
+<!-- Modal 2: Git Commit & Code Review -->
+{#if showGitCommitModal}
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
+  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[480px] space-y-4">
+    <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
+      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-secondary">schema</span>
+        Git Commit & Code Review
+      </h3>
+      <button type="button" on:click={() => showGitCommitModal = false} class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+
+    <div class="space-y-3 text-xs">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 flex justify-between items-center">
+        <div>
+          <span class="font-bold text-on-surface">Trạng thái Workspace:</span>
+          <p class="text-on-surface-variant">{gitStatus?.changed_files || 0} file(s) đã sửa đổi</p>
+        </div>
+        <span class="px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase {gitStatus?.clean ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}">
+          {gitStatus?.clean ? 'Clean' : 'Modified'}
+        </span>
+      </div>
+
+      <div>
+        <label for="git-commit-msg" class="font-bold text-on-surface block mb-1">Nội dung Commit (Message):</label>
+        <textarea 
+          id="git-commit-msg"
+          bind:value={commitMessage}
+          placeholder="Ví dụ: feat: hoàn thiện giao diện Git Version Control..."
+          class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-2.5 h-24 outline-none focus:border-primary text-on-surface resize-none font-sans"
+        ></textarea>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-3 border-t border-outline-variant">
+      <button 
+        type="button" 
+        on:click={() => showGitCommitModal = false} 
+        class="px-4 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs rounded-xl hover:bg-surface-container-highest transition-all cursor-pointer">
+        Hủy bỏ
+      </button>
+      <button 
+        type="button" 
+        on:click={handleCreateCommit} 
+        disabled={isGitActionRunning || !commitMessage.trim()}
+        class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">check_circle</span> Commit Changes
+      </button>
+    </div>
+  </div>
+</div>
+{/if}

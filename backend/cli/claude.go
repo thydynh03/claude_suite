@@ -64,6 +64,14 @@ func (c *ClaudeCLI) RunOnce(prompt string, model string, system string, onLog Lo
 	return c.execute(model, prompt, system, "", onLog, cwd)
 }
 
+func (c *ClaudeCLI) RunSession(prompt string, model string, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
+	modelLower := strings.ToLower(model)
+	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+		return c.antigravity.RunSession(prompt, model, system, sessionID, onLog, cwd)
+	}
+	return c.execute(model, prompt, system, sessionID, onLog, cwd)
+}
+
 func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 

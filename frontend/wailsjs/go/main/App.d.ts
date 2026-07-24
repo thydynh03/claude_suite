@@ -11,7 +11,15 @@ export function CancelScheduledJob(arg1:string):Promise<void>;
 
 export function CheckForUpdates():Promise<services.UpdateInfo>;
 
+export function CheckoutGitBranch(arg1:string):Promise<void>;
+
+export function ClearActiveSession(arg1:string):Promise<void>;
+
 export function ClearAllTasks():Promise<void>;
+
+export function CreateGitBranch(arg1:string):Promise<void>;
+
+export function CreateGitCommit(arg1:string):Promise<void>;
 
 export function CreateTask(arg1:models.Task):Promise<void>;
 
@@ -31,9 +39,17 @@ export function DownloadAndUpdate(arg1:string):Promise<main.UpdateResponse>;
 
 export function ExportKanbanReport():Promise<string>;
 
+export function GetActiveSession(arg1:string):Promise<string>;
+
 export function GetAgents():Promise<Array<models.Agent>>;
 
 export function GetAppVersion():Promise<string>;
+
+export function GetGitBranches():Promise<services.GitBranchInfo>;
+
+export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
+
+export function GetGitStatus():Promise<Record<string, any>>;
 
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
 
@@ -54,6 +70,8 @@ export function PerformAutoUpdate():Promise<cli.RunResult>;
 export function ResetAgentsToDefaults():Promise<void>;
 
 export function ResolveApproval(arg1:boolean):Promise<void>;
+
+export function RevertGitCommit(arg1:string):Promise<void>;
 
 export function RunPipeline(arg1:Array<models.PipelineStep>):Promise<Array<models.PipelineStep>>;
 

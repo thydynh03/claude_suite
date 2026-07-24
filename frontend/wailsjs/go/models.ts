@@ -220,6 +220,38 @@ export namespace models {
 
 export namespace services {
 	
+	export class GitBranchInfo {
+	    current: string;
+	    branches: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GitBranchInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.current = source["current"];
+	        this.branches = source["branches"];
+	    }
+	}
+	export class GitCommitInfo {
+	    hash: string;
+	    message: string;
+	    author: string;
+	    date: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitCommitInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.message = source["message"];
+	        this.author = source["author"];
+	        this.date = source["date"];
+	    }
+	}
 	export class ScheduledJob {
 	    id: string;
 	    prompt: string;

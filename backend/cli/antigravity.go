@@ -42,19 +42,30 @@ func findAntigravityPath() string {
 }
 
 func (a *AntigravityCLI) RunAgent(agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {
-	return a.execute(agent.Model, prompt, agent.System, onLog, cwd)
+	return a.execute(agent.Model, prompt, agent.System, agent.SessionID, onLog, cwd)
 }
 
 func (a *AntigravityCLI) RunOnce(prompt string, model string, system string, onLog LogCallback, cwd string) *RunResult {
-	return a.execute(model, prompt, system, onLog, cwd)
+	return a.execute(model, prompt, system, "", onLog, cwd)
 }
 
-func (a *AntigravityCLI) execute(model, prompt, system string, onLog LogCallback, cwd string) *RunResult {
+func (a *AntigravityCLI) RunSession(prompt string, model string, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
+	return a.execute(model, prompt, system, sessionID, onLog, cwd)
+}
+
+func (a *AntigravityCLI) execute(model, prompt, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
 	args := []string{"--print", prompt, "--dangerously-skip-permissions"}
 	if model != "" {
 		args = append(args, "--model", model)
+	}
+	if sessionID != "" {
+		if sessionID == "continue" || sessionID == "latest" {
+			args = append(args, "--continue")
+		} else {
+			args = append(args, "--conversation", sessionID)
+		}
 	}
 
 	var cmd *exec.Cmd

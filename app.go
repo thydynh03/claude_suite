@@ -221,14 +221,35 @@ func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles
 
 	var runner cli.CLIRunner
 	modelLower := strings.ToLower(model)
+	providerKey := "claude"
 	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
 		runner = cli.NewAntigravityCLI()
+		providerKey = "anti"
 	} else {
 		runner = a.cliRunner
 	}
 
-	result := runner.RunOnce(fullPrompt, model, system, nil, a.workspaceConfig.LastWorkspaceFolder)
+	sessionID := cli.GetGlobalSession(providerKey)
+	var result *cli.RunResult
+	if sessionID != "" {
+		result = runner.RunSession(fullPrompt, model, system, sessionID, nil, a.workspaceConfig.LastWorkspaceFolder)
+	} else {
+		result = runner.RunOnce(fullPrompt, model, system, nil, a.workspaceConfig.LastWorkspaceFolder)
+	}
+
+	if result != nil && result.SessionID != "" {
+		cli.SetGlobalSession(providerKey, result.SessionID)
+	}
 	return result, nil
+}
+
+func (a *App) GetActiveSession(provider string) string {
+	return cli.GetGlobalSession(provider)
+}
+
+func (a *App) ClearActiveSession(provider string) error {
+	cli.ClearGlobalSession(provider)
+	return nil
 }
 
 // ── Plan Decomposer & Pipeline ─────────────────────────────────────────
@@ -350,6 +371,36 @@ func (a *App) CancelScheduledJob(id string) {
 
 func (a *App) GetScheduledJobs() []services.ScheduledJob {
 	return a.schedulerSvc.GetJobs()
+}
+
+// ── Git Version Control ───────────────────────────────────────────────
+
+func (a *App) GetGitStatus() (map[string]interface{}, error) {
+	return a.gitService.GetStatus(a.workspaceConfig.LastWorkspaceFolder)
+}
+
+func (a *App) GetGitBranches() (*services.GitBranchInfo, error) {
+	return a.gitService.GetBranches(a.workspaceConfig.LastWorkspaceFolder)
+}
+
+func (a *App) GetGitLog(limit int) ([]services.GitCommitInfo, error) {
+	return a.gitService.GetLog(a.workspaceConfig.LastWorkspaceFolder, limit)
+}
+
+func (a *App) CreateGitBranch(name string) error {
+	return a.gitService.CreateBranch(a.workspaceConfig.LastWorkspaceFolder, name)
+}
+
+func (a *App) CheckoutGitBranch(name string) error {
+	return a.gitService.CheckoutBranch(a.workspaceConfig.LastWorkspaceFolder, name)
+}
+
+func (a *App) CreateGitCommit(message string) error {
+	return a.gitService.CreateCommit(a.workspaceConfig.LastWorkspaceFolder, message)
+}
+
+func (a *App) RevertGitCommit(hash string) error {
+	return a.gitService.RevertCommit(a.workspaceConfig.LastWorkspaceFolder, hash)
 }
 
 // ── Config Persistence Helpers ─────────────────────────────────────────

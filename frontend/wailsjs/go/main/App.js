@@ -14,8 +14,24 @@ export function CheckForUpdates() {
   return window['go']['main']['App']['CheckForUpdates']();
 }
 
+export function CheckoutGitBranch(arg1) {
+  return window['go']['main']['App']['CheckoutGitBranch'](arg1);
+}
+
+export function ClearActiveSession(arg1) {
+  return window['go']['main']['App']['ClearActiveSession'](arg1);
+}
+
 export function ClearAllTasks() {
   return window['go']['main']['App']['ClearAllTasks']();
+}
+
+export function CreateGitBranch(arg1) {
+  return window['go']['main']['App']['CreateGitBranch'](arg1);
+}
+
+export function CreateGitCommit(arg1) {
+  return window['go']['main']['App']['CreateGitCommit'](arg1);
 }
 
 export function CreateTask(arg1) {
@@ -54,12 +70,28 @@ export function ExportKanbanReport() {
   return window['go']['main']['App']['ExportKanbanReport']();
 }
 
+export function GetActiveSession(arg1) {
+  return window['go']['main']['App']['GetActiveSession'](arg1);
+}
+
 export function GetAgents() {
   return window['go']['main']['App']['GetAgents']();
 }
 
 export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
+}
+
+export function GetGitBranches() {
+  return window['go']['main']['App']['GetGitBranches']();
+}
+
+export function GetGitLog(arg1) {
+  return window['go']['main']['App']['GetGitLog'](arg1);
+}
+
+export function GetGitStatus() {
+  return window['go']['main']['App']['GetGitStatus']();
 }
 
 export function GetPipelineSteps() {
@@ -100,6 +132,10 @@ export function ResetAgentsToDefaults() {
 
 export function ResolveApproval(arg1) {
   return window['go']['main']['App']['ResolveApproval'](arg1);
+}
+
+export function RevertGitCommit(arg1) {
+  return window['go']['main']['App']['RevertGitCommit'](arg1);
 }
 
 export function RunPipeline(arg1) {

@@ -19,4 +19,5 @@ type LogCallback func(msg string, level string)
 type CLIRunner interface {
 	RunAgent(agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult
 	RunOnce(prompt string, model string, system string, onLog LogCallback, cwd string) *RunResult
+	RunSession(prompt string, model string, system string, sessionID string, onLog LogCallback, cwd string) *RunResult
 }
