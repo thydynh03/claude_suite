@@ -175,28 +175,58 @@ func (a *App) GetTasks() ([]models.Task, error) {
 	return a.taskRepo.GetAll()
 }
 
+func (a *App) emitBoardUpdated() {
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "board_updated", nil)
+	}
+}
+
 func (a *App) CreateTask(task models.Task) error {
-	return a.taskRepo.Create(&task)
+	err := a.taskRepo.Create(&task)
+	if err == nil {
+		a.emitBoardUpdated()
+	}
+	return err
 }
 
 func (a *App) UpdateTaskStatus(taskID string, status string) error {
-	return a.taskRepo.UpdateStatus(taskID, status, "", "")
+	err := a.taskRepo.UpdateStatus(taskID, status, "", "")
+	if err == nil {
+		a.emitBoardUpdated()
+	}
+	return err
 }
 
 func (a *App) AssignTask(taskID string, assignedTo string) error {
-	return a.taskRepo.AssignTask(taskID, assignedTo)
+	err := a.taskRepo.AssignTask(taskID, assignedTo)
+	if err == nil {
+		a.emitBoardUpdated()
+	}
+	return err
 }
 
 func (a *App) DeleteTask(taskID string) error {
-	return a.taskRepo.Delete(taskID)
+	err := a.taskRepo.Delete(taskID)
+	if err == nil {
+		a.emitBoardUpdated()
+	}
+	return err
 }
 
 func (a *App) DeleteDoneTasks() error {
-	return a.taskRepo.DeleteDone()
+	err := a.taskRepo.DeleteDone()
+	if err == nil {
+		a.emitBoardUpdated()
+	}
+	return err
 }
 
 func (a *App) ClearAllTasks() error {
-	return a.taskRepo.DeleteAll()
+	err := a.taskRepo.DeleteAll()
+	if err == nil {
+		a.emitBoardUpdated()
+	}
+	return err
 }
 
 // ── Orchestrator & Execution ───────────────────────────────────────────

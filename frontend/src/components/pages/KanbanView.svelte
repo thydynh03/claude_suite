@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, tasksStore } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
   export let tasks: Task[] = [];
@@ -148,8 +148,10 @@
   async function handleClearAll() {
     if (confirm('Bạn có chắc chắn muốn xóa toàn bộ Tasks không?')) {
       await AppBindings.ClearAllTasks();
+      tasks = [];
+      tasksStore.set([]);
       selectedTaskIDs = [];
-      onRefresh();
+      if (onRefresh) onRefresh();
       addLog('Đã xóa toàn bộ tasks.', 'INFO');
     }
   }
@@ -160,8 +162,10 @@
       for (const id of selectedTaskIDs) {
         await AppBindings.DeleteTask(id);
       }
+      tasks = tasks.filter(t => !selectedTaskIDs.includes(t.task_id));
+      tasksStore.set(tasks);
       selectedTaskIDs = [];
-      onRefresh();
+      if (onRefresh) onRefresh();
       addLog(`Đã xóa ${selectedTaskIDs.length} tasks đã chọn.`, 'INFO');
     }
   }
@@ -173,10 +177,9 @@
         addLog('Không có task nào ở trạng thái Done để xóa.', 'WARN');
         return;
       }
-      for (const t of doneTasks) {
-        await AppBindings.DeleteTask(t.task_id);
-      }
+      await (AppBindings as any).DeleteDoneTasks();
       tasks = tasks.filter(t => t.status !== 'done');
+      tasksStore.set(tasks);
       addLog(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
       if (onRefresh) onRefresh();
     } catch (e) {
