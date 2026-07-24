@@ -34,15 +34,11 @@ jobs:
       run: |
         pyinstaller ClaudeSuite.spec
 
-    - name: Zip Build Folder
-      run: |
-        Compress-Archive -Path dist/ClaudeSuite -DestinationPath dist/ClaudeSuite-Windows.zip
-
     - name: Upload Build Artifact (for testing)
       uses: actions/upload-artifact@v4
       with:
         name: ClaudeSuite-Windows
-        path: dist/ClaudeSuite-Windows.zip
+        path: dist/ClaudeSuite.exe
         retention-days: 5
 
   release:
@@ -61,7 +57,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: ClaudeSuite-Windows.zip
+        files: ClaudeSuite.exe
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
