@@ -128,8 +128,12 @@ func (o *Orchestrator) processNextTask() {
 
 	agents, err := o.agentRepo.GetAll()
 	if err != nil || len(agents) == 0 {
-		o.emitLog("⚠️ Không tìm thấy Agent danh sách trong Database.", "WARN")
-		return
+		o.emitLog("⚠️ Không tìm thấy Agent trong Database. Đang tự động tạo 8 vị trí Agent mặc định...", "WARN")
+		_ = o.agentRepo.ResetToDefaults()
+		agents, _ = o.agentRepo.GetAll()
+		if len(agents) > 0 {
+			o.emitLog("✨ Đã tạo 8 danh mục Agent thành công!", "SUCCESS")
+		}
 	}
 
 	agent := o.dispatcher.FindMatchingAgent(task, agents)

@@ -15,12 +15,8 @@ func NewAgentDispatcher() *AgentDispatcher {
 
 // FindMatchingAgent finds or selects an agent based on task tags/title
 func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.Agent) *models.Agent {
-	if len(agents) == 0 {
-		return nil
-	}
-
 	// 1. If task has explicit assignment, match by ID or Name
-	if task.AssignedTo != "" {
+	if task.AssignedTo != "" && len(agents) > 0 {
 		for i, a := range agents {
 			if a.AgentID == task.AssignedTo || strings.EqualFold(a.Name, task.AssignedTo) {
 				return &agents[i]
@@ -82,11 +78,23 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 		}
 	}
 
-	for i, a := range agents {
-		if strings.Contains(a.Name, "Architect") || strings.Contains(a.Name, "Chief") {
-			return &agents[i]
+	if len(agents) > 0 {
+		for i, a := range agents {
+			if strings.Contains(a.Name, "Architect") || strings.Contains(a.Name, "Chief") {
+				return &agents[i]
+			}
 		}
+		return &agents[0]
 	}
 
-	return &agents[0]
+	// Dynamic fallback if no agents exist in database
+	return &models.Agent{
+		Name:     "Tech Lead & Architect",
+		Role:     "Technical Leadership & System Architecture",
+		Model:    model,
+		Provider: provider,
+		Icon:     "🏗️",
+		System:   "You are a Tech Lead & Principal Systems Architect.",
+		Status:   "idle",
+	}
 }
