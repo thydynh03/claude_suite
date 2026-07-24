@@ -32,15 +32,25 @@
     }
   });
 
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      if (animId) cancelAnimationFrame(animId);
+    } else {
+      animate();
+    }
+  }
+
   onMount(() => {
     init3D();
     window.addEventListener('resize', handleResize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   });
 
   onDestroy(() => {
     unsubscribeAgents();
     if (animId) cancelAnimationFrame(animId);
     window.removeEventListener('resize', handleResize);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   async function handleTestRun() {

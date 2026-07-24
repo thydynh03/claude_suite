@@ -20,6 +20,7 @@ var TextExtensions = map[string]bool{
 var IgnoredDirs = map[string]bool{
 	"node_modules": true, ".git": true, "__pycache__": true, ".venv": true,
 	"venv": true, "dist": true, "build": true, ".wails": true, ".idea": true, ".vscode": true,
+	"bin": true, "target": true, "out": true, ".next": true, "coverage": true, "vendor": true,
 }
 
 type ContextManager struct{}

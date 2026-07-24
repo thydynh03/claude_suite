@@ -263,8 +263,10 @@ func (o *Orchestrator) processNextTask() {
 	} else {
 		task.RetryCount++
 		if task.RetryCount < task.MaxRetries {
+			backoffSec := time.Duration(1<<uint(task.RetryCount)) * time.Second
 			_ = o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", "")
-			o.emitLog(fmt.Sprintf("[%s] Failed '%s', retrying (%d/%d)", agent.Name, task.Title, task.RetryCount, task.MaxRetries), "WARN")
+			o.emitLog(fmt.Sprintf("[%s] Failed '%s', retrying in %v (%d/%d)...", agent.Name, task.Title, backoffSec, task.RetryCount, task.MaxRetries), "WARN")
+			time.Sleep(backoffSec)
 		} else {
 			_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", result.Error, "")
 			o.emitLog(fmt.Sprintf("[%s] FAILED '%s' after max retries", agent.Name, task.Title), "ERROR")

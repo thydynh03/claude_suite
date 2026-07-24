@@ -44,6 +44,13 @@ func InitDB() (*sql.DB, error) {
 		// Enable WAL mode, busy timeout & foreign keys for high-concurrency access
 		_, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;`)
 
+		// Run SQLite Integrity Check
+		var checkRes string
+		_ = db.QueryRow(`PRAGMA quick_check;`).Scan(&checkRes)
+		if checkRes != "ok" && checkRes != "" {
+			fmt.Printf("SQLite Integrity Check Notice: %s\n", checkRes)
+		}
+
 		if err := migrateSchema(db); err != nil {
 			initErr = fmt.Errorf("failed to run migrations: %w", err)
 			return
@@ -114,5 +121,11 @@ func migrateSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_agent_memory_agent_id ON agent_memory(agent_id);
 	`
 	_, err := db.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Auto-migrate schema columns for legacy SQLite database files
+	_, _ = db.Exec(`ALTER TABLE agents ADD COLUMN role TEXT NOT NULL DEFAULT '';`)
+	return nil
 }

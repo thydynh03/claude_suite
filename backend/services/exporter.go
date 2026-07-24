@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -73,4 +74,35 @@ h1 { color: #2563eb; }
 	_ = os.WriteFile(htmlFile, []byte(htmlContent), 0644)
 
 	return mdFile, htmlFile, nil
+}
+
+type ProjectSnapshot struct {
+	Version   string        `json:"version"`
+	ExportedAt string       `json:"exported_at"`
+	Tasks     []models.Task `json:"tasks"`
+}
+
+func (e *ExporterService) ExportProjectSnapshotJSON(tasks []models.Task, outDir string) (string, error) {
+	ts := time.Now().Format("20060102_150405")
+	if outDir == "" {
+		outDir = "."
+	}
+
+	snap := ProjectSnapshot{
+		Version:    "v2.2.0",
+		ExportedAt: time.Now().Format(time.RFC3339),
+		Tasks:      tasks,
+	}
+
+	jsonBytes, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	filePath := filepath.Join(outDir, fmt.Sprintf("ClaudeSuite_Backup_%s.json", ts))
+	if err := os.WriteFile(filePath, jsonBytes, 0644); err != nil {
+		return "", err
+	}
+
+	return filePath, nil
 }
