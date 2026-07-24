@@ -110,6 +110,25 @@ Claude Suite features zero-hardcode dynamic versioning:
 
 ---
 
+## 🖥️ Terminal UI
+
+Claude Suite also ships a keyboard-native Bubble Tea frontend backed by the
+same Go repositories and orchestration services as the desktop application.
+
+```bash
+# Safe default: inspect an existing database without migrations or writes.
+go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db
+
+# Explicitly enable task mutations and orchestration.
+go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db --write
+```
+
+Use `Tab`/`Shift+Tab` to select a page, `Enter` to move into its content,
+`Esc` to return to navigation, `:` for Command Center, and `?` for contextual
+key bindings. Cockpit uses `Enter` for a new line and `Ctrl+Enter` to submit.
+
+---
+
 ## 📜 License & Contribution
 
 Distributed under the **MIT License**. See `LICENSE` for more information.

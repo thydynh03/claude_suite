@@ -33,6 +33,22 @@ type Orchestrator struct {
 	stopCh         chan struct{}
 	approvalCh     chan bool
 	mu             sync.Mutex
+	onLog          func(message, level string)
+	onApproval     func(agentName, taskTitle string)
+	onBoard        func()
+}
+
+// SetEventHandlers connects a frontend-neutral event sink. Wails runtime
+// events remain available; terminal and other frontends can subscribe without
+// importing Wails bindings.
+func (o *Orchestrator) SetEventHandlers(
+	onLog func(message, level string),
+	onApproval func(agentName, taskTitle string),
+	onBoard func(),
+) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.onLog, o.onApproval, o.onBoard = onLog, onApproval, onBoard
 }
 
 func NewOrchestrator(
@@ -215,6 +231,7 @@ func (o *Orchestrator) processNextTask() {
 				"taskTitle": task.Title,
 			})
 		}
+		o.emitApproval(agent.Name, task.Title)
 
 		select {
 		case approved := <-o.approvalCh:
@@ -223,9 +240,7 @@ func (o *Orchestrator) processNextTask() {
 				o.emitLog(fmt.Sprintf("[%s] Task '%s' rejected by user.", agent.Name, task.Title), "ERROR")
 				agent.Status = "idle"
 				_ = o.agentRepo.Update(agent)
-				if o.ctx != nil {
-					runtime.EventsEmit(o.ctx, "board_updated", nil)
-				}
+				o.emitBoardUpdated()
 				return
 			}
 			o.emitLog(fmt.Sprintf("[%s] Task '%s' approved.", agent.Name, task.Title), "SUCCESS")
@@ -306,17 +321,42 @@ func (o *Orchestrator) processNextTask() {
 	}
 
 	// Notify Wails frontend to refresh board
-	if o.ctx != nil {
-		runtime.EventsEmit(o.ctx, "board_updated", nil)
-	}
+	o.emitBoardUpdated()
 }
 
 func (o *Orchestrator) emitLog(msg, level string) {
+	o.mu.Lock()
+	onLog := o.onLog
+	o.mu.Unlock()
+	if onLog != nil {
+		onLog(msg, level)
+	}
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "log_entry", map[string]string{
 			"message": msg,
 			"level":   level,
 			"time":    time.Now().Format("15:04:05"),
 		})
+	}
+}
+
+func (o *Orchestrator) emitBoardUpdated() {
+	o.mu.Lock()
+	onBoard := o.onBoard
+	o.mu.Unlock()
+	if onBoard != nil {
+		onBoard()
+	}
+	if o.ctx != nil {
+		runtime.EventsEmit(o.ctx, "board_updated", nil)
+	}
+}
+
+func (o *Orchestrator) emitApproval(agentName, taskTitle string) {
+	o.mu.Lock()
+	onApproval := o.onApproval
+	o.mu.Unlock()
+	if onApproval != nil {
+		onApproval(agentName, taskTitle)
 	}
 }
