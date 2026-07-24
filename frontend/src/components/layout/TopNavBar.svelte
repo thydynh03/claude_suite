@@ -204,23 +204,23 @@
           File
         </button>
         {#if openMenu === 'file'}
-          <div class="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 text-xs font-sans text-slate-200 divide-y divide-slate-800">
+          <div class="absolute left-0 top-full mt-1 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
             <div class="py-1">
-              <button type="button" on:click={handleNewConversation} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-blue-400">chat</span> New Conversation</span>
-                <span class="text-[10px] text-slate-400 font-mono">Ctrl+Shift+O</span>
+              <button type="button" on:click={handleNewConversation} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-primary">chat</span> New Conversation</span>
+                <span class="text-[10px] text-outline font-mono">Ctrl+Shift+O</span>
               </button>
-              <button type="button" on:click={handleCreateProject} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-purple-400">create_new_folder</span> Create Project</span>
+              <button type="button" on:click={handleCreateProject} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">create_new_folder</span> Create Project</span>
               </button>
-              <button type="button" on:click={handleCommandPalette} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-emerald-400">terminal</span> Command Palette</span>
-                <span class="text-[10px] text-slate-400 font-mono">Ctrl+Shift+P</span>
+              <button type="button" on:click={handleCommandPalette} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-emerald-600">terminal</span> Command Palette</span>
+                <span class="text-[10px] text-outline font-mono">Ctrl+Shift+P</span>
               </button>
             </div>
             <div class="py-1">
-              <button type="button" on:click={handleSelectFolder} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-amber-400">folder_open</span> Open Workspace</span>
+              <button type="button" on:click={handleSelectFolder} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-amber-500">folder_open</span> Open Workspace</span>
               </button>
             </div>
           </div>
@@ -237,18 +237,18 @@
           View
         </button>
         {#if openMenu === 'view'}
-          <div class="absolute left-0 top-full mt-1 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 text-xs font-sans text-slate-200">
-            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+          <div class="absolute left-0 top-full mt-1 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface">
+            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
               <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_in</span> Zoom In</span>
-              <span class="text-[10px] text-slate-400 font-mono">Ctrl++</span>
+              <span class="text-[10px] text-outline font-mono">Ctrl++</span>
             </button>
-            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
               <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_out</span> Zoom Out</span>
-              <span class="text-[10px] text-slate-400 font-mono">Ctrl+-</span>
+              <span class="text-[10px] text-outline font-mono">Ctrl+-</span>
             </button>
-            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
               <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">restart_alt</span> Reset Zoom</span>
-              <span class="text-[10px] text-slate-400 font-mono">Ctrl+0</span>
+              <span class="text-[10px] text-outline font-mono">Ctrl+0</span>
             </button>
           </div>
         {/if}
@@ -264,16 +264,20 @@
           Window
         </button>
         {#if openMenu === 'window'}
-          <div class="absolute left-0 top-full mt-1 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 text-xs font-sans text-slate-200">
-            <button type="button" on:click={handleMinimize} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
-              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">minimize</span> Minimize</span>
-            </button>
-            <button type="button" on:click={handleMaximize} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
-              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">crop_square</span> Maximize</span>
-            </button>
-            <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-slate-800 text-rose-400 flex justify-between items-center border-t border-slate-800 mt-1 pt-2">
-              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Close</span>
-            </button>
+          <div class="absolute left-0 top-full mt-1 w-44 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
+            <div class="py-1">
+              <button type="button" on:click={handleMinimize} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">minimize</span> Minimize</span>
+              </button>
+              <button type="button" on:click={handleMaximize} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">crop_square</span> Maximize</span>
+              </button>
+            </div>
+            <div class="py-1">
+              <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-rose-500/10 text-rose-600 transition-colors flex justify-between items-center font-bold">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Close</span>
+              </button>
+            </div>
           </div>
         {/if}
       </div>
