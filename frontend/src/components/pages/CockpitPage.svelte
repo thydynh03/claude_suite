@@ -12,7 +12,9 @@
 
   onMount(async () => {
     try {
-      workspaceFiles = await AppBindings.ScanWorkspaceFiles();
+      if ((window as any)?.go?.main?.App) {
+        workspaceFiles = await AppBindings.ScanWorkspaceFiles();
+      }
     } catch (e) {
       console.error(e);
     }

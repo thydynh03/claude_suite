@@ -22,7 +22,9 @@
 
   async function loadAgents() {
     try {
-      agents = await AppBindings.GetAgents();
+      if ((window as any)?.go?.main?.App) {
+        agents = await AppBindings.GetAgents();
+      }
     } catch (e) {
       console.error(e);
     }

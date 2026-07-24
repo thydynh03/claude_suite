@@ -16,7 +16,9 @@
 
   async function loadTasks() {
     try {
-      tasks = await AppBindings.GetTasks();
+      if ((window as any)?.go?.main?.App) {
+        tasks = await AppBindings.GetTasks();
+      }
     } catch (e) {
       console.error(e);
     }

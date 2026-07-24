@@ -12,21 +12,42 @@
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
   onMount(async () => {
+    // Wait until Wails IPC & Go bindings are fully injected by WebView2
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if ((window as any)?.go?.main?.App) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 50);
+      setTimeout(() => {
+        clearInterval(check);
+        resolve();
+      }, 3000);
+    });
+
     try {
-      const cfg = await AppBindings.GetWorkspaceConfig();
-      if (cfg && cfg.last_workspace_folder) {
-        workspaceFolder.set(cfg.last_workspace_folder);
+      if ((window as any)?.go?.main?.App) {
+        const cfg = await AppBindings.GetWorkspaceConfig();
+        if (cfg && cfg.last_workspace_folder) {
+          workspaceFolder.set(cfg.last_workspace_folder);
+        }
       }
     } catch (e) {
-      console.error(e);
+      console.warn('Wails config load error:', e);
     }
 
-    // Listen for backend Wails real-time events
-    EventsOn('log_entry', (data: any) => {
-      if (data && data.message) {
-        addLog(data.message, data.level || 'INFO', data.time || '');
+    try {
+      if ((window as any)?.runtime?.EventsOnMultiple) {
+        EventsOn('log_entry', (data: any) => {
+          if (data && data.message) {
+            addLog(data.message, data.level || 'INFO', data.time || '');
+          }
+        });
       }
-    });
+    } catch (e) {
+      console.warn('Wails events error:', e);
+    }
   });
 </script>
 

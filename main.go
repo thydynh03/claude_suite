@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,14 +14,14 @@ import (
 var assets embed.FS
 
 func main() {
-	// Create an instance of the app structure
+	fmt.Println("=== CLAUDE SUITE STARTING ===")
 	app := NewApp()
+	fmt.Println("=== APP CREATED SUCCESSFULLY ===")
 
-	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "Claude Suite — Agent Control Center",
-		Width:  1280,
-		Height: 800,
+		Title:     "Claude Suite — Agent Control Center",
+		Width:     1280,
+		Height:    800,
 		MinWidth:  1024,
 		MinHeight: 700,
 		AssetServer: &assetserver.Options{
@@ -33,6 +35,8 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		fmt.Println("Wails Run Error:", err.Error())
+		os.Exit(1)
 	}
+	fmt.Println("=== CLAUDE SUITE EXITING ===")
 }
