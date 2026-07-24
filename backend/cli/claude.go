@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -27,24 +26,9 @@ type ClaudeCLI struct {
 
 func NewClaudeCLI() *ClaudeCLI {
 	return &ClaudeCLI{
-		executablePath: findClaudePath(),
+		executablePath: ResolveClaudeCLI(),
 		antigravity:    NewAntigravityCLI(),
 	}
-}
-
-func findClaudePath() string {
-	// Check standard PATH first
-	if path, err := exec.LookPath("claude"); err == nil {
-		return path
-	}
-	// Check Windows user AppData path
-	if home, err := os.UserHomeDir(); err == nil {
-		winPath := filepath.Join(home, "AppData", "Local", "AnthropicClaude", "claude.exe")
-		if _, err := os.Stat(winPath); err == nil {
-			return winPath
-		}
-	}
-	return "claude"
 }
 
 func (c *ClaudeCLI) RunAgent(agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {

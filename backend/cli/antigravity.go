@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -22,24 +21,8 @@ type AntigravityCLI struct {
 
 func NewAntigravityCLI() *AntigravityCLI {
 	return &AntigravityCLI{
-		executablePath: findAntigravityPath(),
+		executablePath: ResolveAntigravityCLI(),
 	}
-}
-
-func findAntigravityPath() string {
-	if path, err := exec.LookPath("agy"); err == nil {
-		return path
-	}
-	if path, err := exec.LookPath("antigravity"); err == nil {
-		return path
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		winPath := filepath.Join(home, "AppData", "Local", "agy", "bin", "agy.exe")
-		if _, err := os.Stat(winPath); err == nil {
-			return winPath
-		}
-	}
-	return "agy"
 }
 
 func (a *AntigravityCLI) RunAgent(agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {
