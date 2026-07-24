@@ -1183,12 +1183,12 @@ class ClaudeSuiteApp(ctk.CTk):
         ctx_row.pack(fill="x", padx=16, pady=(0, 6))
 
         ctk.CTkLabel(
-            ctx_row, text="📁 WORKSPACE CONTEXT:",
+            ctx_row, text="📁 LOCAL CONTEXT (Bổ sung thêm):",
             font=ctk.CTkFont(size=11, weight="bold"), text_color=("gray30", "gray70")
         ).pack(side="left", padx=(0, 6))
 
         self.lbl_ctx_badge = ctk.CTkLabel(
-            ctx_row, text="Chưa chọn file/folder",
+            ctx_row, text="Chưa đính kèm file phụ",
             font=ctk.CTkFont(size=11), text_color="gray50"
         )
         self.lbl_ctx_badge.pack(side="left", padx=(0, 10))
