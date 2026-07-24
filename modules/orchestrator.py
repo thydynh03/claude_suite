@@ -235,24 +235,20 @@ class Orchestrator:
         if getattr(result, "tokens_used", 0) > 0:
             self.registry.add_tokens(agent.agent_id, result.tokens_used)
 
-        # Check for Token Quota Exhaustion -> Smart Fallback to Antigravity CLI / Lower tier model
+        # Check for Token Quota Exhaustion -> Smart Fallback to the other provider
         fresh_agent = self.registry.get(agent.agent_id) or agent
         if not result.success and ("api_error_status" in result.error or "429" in result.error or "400" in result.error):
-            # Tự động tính toán Model thay thế
+            # Tự động tính toán Model thay thế dựa theo Provider
             fallback_map = {
-                "claude-opus-4-8": "claude-sonnet-4-5",
-                "claude-opus-4.6-thinking": "claude-sonnet-4.6-thinking",
-                "claude-sonnet-4-5": "gemini-3.6-flash-high",
-                "claude-sonnet-4.6-thinking": "gemini-3.6-flash-high",
-                "gemini-3.6-flash-high": "gemini-3.5-flash-high",
-                "gemini-3.1-pro-high": "gemini-3.6-flash-high"
+                "claude_cli": "gemini-3.6-flash-high",
+                "anti_cli": "claude-sonnet-4-5"
             }
             
-            new_model = fallback_map.get(fresh_agent.model, "gemini-3.6-flash-low")
+            new_model = fallback_map.get(fresh_agent.provider, "gemini-3.6-flash-low")
             
             fresh_agent.model = new_model
             self.registry.update(fresh_agent)
-            self.log(f"⚠️ Tự động Fallback: Chuyển Agent '{fresh_agent.name}' sang {new_model} do quá tải API.", "WARN")
+            self.log(f"⚠️ Tự động Fallback ({fresh_agent.provider}): Chuyển Agent '{fresh_agent.name}' sang {new_model} do quá tải API.", "WARN")
             
             # Retry immediately with new model
             result = self.cli.run_agent(

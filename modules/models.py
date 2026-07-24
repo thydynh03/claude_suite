@@ -56,6 +56,14 @@ class Agent:
         return m.split("-")[1] if "-" in m else m
 
     @property
+    def provider(self) -> str:
+        """Trả về provider dựa trên model name"""
+        m = self.model.lower()
+        if any(k in m for k in ["gemini", "thinking", "antigravity", "agy"]):
+            return "anti_cli"
+        return "claude_cli"
+
+    @property
     def token_limit_max(self) -> int:
         return MODEL_TOKEN_LIMITS.get(self.model, self.token_limit or 200000)
 
@@ -125,17 +133,20 @@ class Task:
         if matches:
             found.extend(matches)
             
-        # Nội suy
-        if any(w in t for w in ["plan", "lên kế hoạch", "brainstorm", "architect", "thiết kế"]):
-            found.append("plan")
-        if any(w in t for w in ["code", "dev", "lập trình", "implement", "viết"]):
-            found.append("code")
-        if any(w in t for w in ["test", "kiểm thử", "qa"]):
-            found.append("test")
-        if any(w in t for w in ["review", "đánh giá", "kiểm tra"]):
-            found.append("review")
-        if any(w in t for w in ["research", "nghiên cứu", "tìm hiểu"]):
-            found.append("research")
+        # Nội suy thông minh hơn với nhiều từ khóa mở rộng
+        keyword_map = {
+            "plan": ["plan", "lên kế hoạch", "brainstorm", "architect", "thiết kế", "kiến trúc", "schema", "database", "wbs"],
+            "code": ["code", "dev", "lập trình", "implement", "viết", "xây dựng", "tạo", "build", "tích hợp", "fix bug"],
+            "test": ["test", "kiểm thử", "qa", "unit test", "e2e", "integration test", "chạy thử"],
+            "review": ["review", "đánh giá", "kiểm tra", "audit", "security", "bảo mật", "refactor", "tối ưu"],
+            "research": ["research", "nghiên cứu", "tìm hiểu", "đọc", "phân tích", "so sánh", "khảo sát"],
+            "doc": ["doc", "tài liệu", "readme", "hướng dẫn", "ghi chú", "báo cáo"],
+            "deploy": ["deploy", "triển khai", "release", "publish", "build production", "docker", "ci/cd"]
+        }
+        
+        for tag, keywords in keyword_map.items():
+            if any(w in t for w in keywords):
+                found.append(tag)
             
         # De-duplicate
         return list(dict.fromkeys(found))
