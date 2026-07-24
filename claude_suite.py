@@ -906,7 +906,30 @@ class ClaudeSuiteApp(ctk.CTk):
             text_color=("gray10", "gray95"),
             wraplength=170, justify="left"
         )
-        lbl_title.pack(anchor="w", padx=10, pady=(2, 6))
+        lbl_title.pack(anchor="w", padx=10, pady=(2, 2))
+
+        # Tags Frame
+        tags_frame = ctk.CTkFrame(card, fg_color="transparent")
+        tags_frame.pack(fill="x", padx=10, pady=(0, 6))
+        
+        # Determine provider tag
+        provider_name = "Anti" if getattr(task, "provider", "claude_cli") == "anti_cli" else "Claude"
+        provider_color = "#10b981" if provider_name == "Anti" else "#8b5cf6" # Green for Anti, Purple for Claude
+        
+        provider_lbl = ctk.CTkLabel(tags_frame, text=f" {provider_name} ", fg_color=provider_color, text_color="white", corner_radius=4, font=ctk.CTkFont(size=9, weight="bold"))
+        provider_lbl.pack(side="left", padx=(0, 4))
+        
+        # Display other tags
+        if getattr(task, "tags", []):
+            for tag in task.tags:
+                tag_bg = "#475569" # Default dark
+                if tag in ["plan", "architect"]: tag_bg = "#8b5cf6" # purple
+                elif tag == "code": tag_bg = "#3b82f6" # blue
+                elif tag == "test": tag_bg = "#10b981" # green
+                elif tag == "review": tag_bg = "#f59e0b" # amber
+                
+                tag_lbl = ctk.CTkLabel(tags_frame, text=f" {tag} ", fg_color=tag_bg, text_color="white", corner_radius=4, font=ctk.CTkFont(size=9, weight="bold"))
+                tag_lbl.pack(side="left", padx=(0, 4))
 
         # Bottom Footer Row: Assigned Agent & Move Buttons
         footer = ctk.CTkFrame(card, fg_color="transparent")
@@ -1985,10 +2008,19 @@ class ClaudeSuiteApp(ctk.CTk):
         self.plan_list.delete("1.0", "end")
         for i, pt in enumerate(plan_tasks):
             dep_str = f" [Phụ thuộc: Task {','.join(pt.depends_on)}]" if pt.depends_on else ""
+            
+            # Formatting Tags
+            tags_str = ""
+            if getattr(pt, "tags", []):
+                tags_str = " ".join([f"[{t.upper()}]" for t in pt.tags])
+            
+            provider_str = "[ANTI]" if getattr(pt, "provider", "claude_cli") == "anti_cli" else "[CLAUDE]"
+            
             self.plan_list.insert("end",
                 f"[{i+1}] {pt.title}{dep_str}\n"
-                f"     Model: {pt.model_hint}  Priority: {pt.priority}\n"
-                f"     Prompt: {pt.prompt[:80]}...\n\n")
+                f"     🏷 Tags: {provider_str} {tags_str}\n"
+                f"     🤖 Model: {pt.model_hint}  ⚡ Priority: {pt.priority}\n"
+                f"     📝 Prompt: {pt.prompt[:80]}...\n\n")
         self.btn_execute_plan.configure(state="normal")
         self.plan_status.configure(
             text=f"Đã tạo {len(plan_tasks)} tasks. Nhấn 'Execute Plan' để chạy.",

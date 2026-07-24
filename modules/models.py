@@ -202,3 +202,34 @@ class PlanTask:
     priority:    str = "normal"
     depends_on:  List[str] = field(default_factory=list)
     model_hint:  str = "claude-opus-4-8"
+
+    @property
+    def tags(self) -> List[str]:
+        import re
+        t = (self.title + " " + self.description + " " + self.prompt).lower()
+        
+        found = []
+        matches = re.findall(r"\[([a-z0-9_]+)\]", t)
+        if matches: found.extend(matches)
+            
+        keyword_map = {
+            "plan": ["plan", "lên kế hoạch", "brainstorm", "architect", "thiết kế", "kiến trúc", "schema", "database", "wbs"],
+            "code": ["code", "dev", "lập trình", "implement", "viết", "xây dựng", "tạo", "build", "tích hợp", "fix bug"],
+            "test": ["test", "kiểm thử", "qa", "unit test", "e2e", "integration test", "chạy thử"],
+            "review": ["review", "đánh giá", "kiểm tra", "audit", "security", "bảo mật", "refactor", "tối ưu"],
+            "research": ["research", "nghiên cứu", "tìm hiểu", "đọc", "phân tích", "so sánh", "khảo sát"],
+            "doc": ["doc", "tài liệu", "readme", "hướng dẫn", "ghi chú", "báo cáo"],
+            "deploy": ["deploy", "triển khai", "release", "publish", "build production", "docker", "ci/cd"]
+        }
+        
+        for tag, keywords in keyword_map.items():
+            if any(w in t for w in keywords): found.append(tag)
+            
+        return list(dict.fromkeys(found))
+
+    @property
+    def provider(self) -> str:
+        m = self.model_hint.lower()
+        if any(k in m for k in ["gemini", "thinking", "antigravity", "agy"]):
+            return "anti_cli"
+        return "claude_cli"
