@@ -76,7 +76,9 @@ class AntigravityCLI:
     ) -> AntigravityRunResult:
         full_prompt = f"[System Context: {system}]\n\n{prompt}" if system else prompt
         
-        cmd = [ANTIGRAVITY_EXE, "-p", full_prompt, "--model", model]
+        # Lấy tên hiển thị chính xác của model (agy.exe yêu cầu tên này)
+        actual_model_name = ANTIGRAVITY_MODELS.get(model, model)
+        cmd = [ANTIGRAVITY_EXE, "-p", full_prompt, "--model", actual_model_name]
         return self._execute(cmd, on_log, cwd=cwd)
 
     def _execute(self, cmd: list, on_log: Optional[Callable], cwd: Optional[str] = None) -> AntigravityRunResult:
