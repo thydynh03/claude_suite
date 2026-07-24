@@ -41,27 +41,64 @@
     dirLight.position.set(15, 25, 15);
     scene.add(dirLight);
 
-    // Floor
-    const floorGeo = new THREE.PlaneGeometry(16, 16);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0xeeceef0, side: THREE.DoubleSide });
+    // Floor (Darker for modern IT feel)
+    const floorGeo = new THREE.PlaneGeometry(24, 24);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, side: THREE.DoubleSide });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
+    // Walls
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x374151 }); // Dark Slate
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.25 });
+    
+    // Back Wall
+    const backWallGeo = new THREE.BoxGeometry(24, 8, 0.5);
+    const backWall = new THREE.Mesh(backWallGeo, wallMat);
+    backWall.position.set(0, 4, -12);
+    scene.add(backWall);
+
+    // Glass Wall (Front)
+    const glassWallGeo = new THREE.BoxGeometry(24, 8, 0.2);
+    const glassWall = new THREE.Mesh(glassWallGeo, glassMat);
+    glassWall.position.set(0, 4, 12);
+    scene.add(glassWall);
+
+    // Whiteboard on back wall
+    const wbGeo = new THREE.BoxGeometry(10, 4, 0.2);
+    const wbMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc });
+    const wb = new THREE.Mesh(wbGeo, wbMat);
+    wb.position.set(0, 4.5, -11.7);
+    scene.add(wb);
+
+    // Rug
+    const rugGeo = new THREE.PlaneGeometry(16, 12);
+    const rugMat = new THREE.MeshStandardMaterial({ color: 0x475569 });
+    const rug = new THREE.Mesh(rugGeo, rugMat);
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.y = 0.02;
+    scene.add(rug);
+
     // Grid Helper
-    const gridHelper = new THREE.GridHelper(16, 16, 0xc3c6d7, 0xe0e3e5);
-    gridHelper.position.y = 0.01;
+    const gridHelper = new THREE.GridHelper(24, 24, 0x475569, 0x334155);
+    gridHelper.position.y = 0.05;
     scene.add(gridHelper);
 
-    // Create Desks
-    createDesk(-4, -2);
-    createDesk(0, 2);
-    createDesk(4, -2);
+    // Plant 1
+    const potGeo = new THREE.CylinderGeometry(0.5, 0.3, 0.8, 16);
+    const potMat = new THREE.MeshStandardMaterial({ color: 0xd4d4d8 });
+    const pot = new THREE.Mesh(potGeo, potMat);
+    pot.position.set(-10, 0.4, -10);
+    const plantGeo = new THREE.SphereGeometry(0.8, 16, 16);
+    const plantMat = new THREE.MeshStandardMaterial({ color: 0x22c55e });
+    const plant = new THREE.Mesh(plantGeo, plantMat);
+    plant.position.set(-10, 1.4, -10);
+    scene.add(pot, plant);
 
-    // Create Agent Avatars
-    createAgentAvatar('Chief', 0x004ac6, -4, -2);
-    createAgentAvatar('Senior Architect', 0x515f74, 0, 2);
-    createAgentAvatar('Lead Coder', 0x943700, 4, -2);
+    // Create IT Desks with Avatars
+    createDesk(-6, -4, 'Chief AI', 0x3b82f6);
+    createDesk(0, 2, 'Senior Arch', 0x8b5cf6);
+    createDesk(6, -4, 'Lead Coder', 0xf59e0b);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -71,25 +108,53 @@
     animate();
   }
 
-  function createDesk(x: number, z: number) {
+  function createDesk(x: number, z: number, role: string, color: number) {
     const deskGroup = new THREE.Group();
     deskGroup.position.set(x, 0, z);
 
     // Table top
-    const topGeo = new THREE.BoxGeometry(2.5, 0.2, 1.5);
-    const topMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const topGeo = new THREE.BoxGeometry(3.5, 0.1, 1.6);
+    const topMat = new THREE.MeshStandardMaterial({ color: 0x0f172a }); // Dark blue wood
     const top = new THREE.Mesh(topGeo, topMat);
-    top.position.y = 1.2;
+    top.position.y = 1.3;
     deskGroup.add(top);
 
-    // Laptop
-    const laptopGeo = new THREE.BoxGeometry(0.6, 0.05, 0.4);
-    const laptopMat = new THREE.MeshStandardMaterial({ color: 0x2563eb });
-    const laptop = new THREE.Mesh(laptopGeo, laptopMat);
-    laptop.position.set(0, 1.3, 0);
-    deskGroup.add(laptop);
+    // Desk Legs
+    const legGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.3);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
+    const offsets = [
+      [-1.6, -0.6], [1.6, -0.6], [-1.6, 0.6], [1.6, 0.6]
+    ];
+    offsets.forEach(pos => {
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(pos[0], 0.65, pos[1]);
+      deskGroup.add(leg);
+    });
 
+    // Dual Monitors
+    const monitorGeo = new THREE.BoxGeometry(1.2, 0.8, 0.05);
+    const monitorMat = new THREE.MeshStandardMaterial({ color: 0x000000 }); // Screen
+    const standGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.3);
+    
+    // Monitor 1 (Left)
+    const monitor1 = new THREE.Mesh(monitorGeo, monitorMat);
+    monitor1.position.set(-0.65, 1.8, -0.4);
+    monitor1.rotation.y = Math.PI / 8;
+    const stand1 = new THREE.Mesh(standGeo, legMat);
+    stand1.position.set(-0.65, 1.5, -0.4);
+    
+    // Monitor 2 (Right)
+    const monitor2 = new THREE.Mesh(monitorGeo, monitorMat);
+    monitor2.position.set(0.65, 1.8, -0.4);
+    monitor2.rotation.y = -Math.PI / 8;
+    const stand2 = new THREE.Mesh(standGeo, legMat);
+    stand2.position.set(0.65, 1.5, -0.4);
+
+    deskGroup.add(monitor1, stand1, monitor2, stand2);
     scene.add(deskGroup);
+
+    // Place Agent
+    createAgentAvatar(role, color, x, z + 0.7);
   }
 
   function createAgentAvatar(name: string, color: number, x: number, z: number) {
@@ -103,12 +168,19 @@
     body.position.y = 0.6;
     group.add(body);
 
-    // Head
-    const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbcd });
+    // Head (Monitor/Robot style)
+    const headGeo = new THREE.BoxGeometry(0.7, 0.6, 0.6);
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0 });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 1.5;
-    group.add(head);
+    
+    // Visor (Screen)
+    const visorGeo = new THREE.PlaneGeometry(0.5, 0.2);
+    const visorMat = new THREE.MeshStandardMaterial({ color: 0x10b981 });
+    const visor = new THREE.Mesh(visorGeo, visorMat);
+    visor.position.set(0, 1.5, 0.31);
+    
+    group.add(head, visor);
 
     scene.add(group);
 
@@ -147,6 +219,19 @@
   <!-- Speech Bubble Overlay -->
   <div class="absolute top-12 left-1/2 -translate-x-1/2 bg-surface-container-lowest border border-outline-variant px-4 py-2 rounded-xl text-xs font-semibold shadow-md animate-bounce">
     <span class="text-primary font-bold">THINKING:</span> Analyzing repo architecture...
+  </div>
+
+  <!-- Control Panel -->
+  <div class="absolute top-6 right-6 bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-xl shadow-md space-y-3 w-64">
+    <h3 class="text-xs font-bold text-on-surface uppercase tracking-wider">Simulation Controls</h3>
+    <p class="text-[10px] text-on-surface-variant leading-tight">Run a test to simulate agent collaboration and log activities.</p>
+    <button on:click={() => { 
+        alert('Test Run Initiated! Simulating 3D behaviors...'); 
+        $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: 'Initiated 3D Simulation Test Run' }];
+      }} 
+      class="w-full bg-primary text-on-primary px-3 py-2 rounded-lg text-xs font-bold hover:brightness-110 flex items-center justify-center gap-2 transition-all">
+      <span class="material-symbols-outlined text-sm">play_arrow</span> TEST RUN
+    </button>
   </div>
 
   <!-- Bottom Real-time Console Log Overlay -->

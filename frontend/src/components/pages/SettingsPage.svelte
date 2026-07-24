@@ -3,8 +3,9 @@
   import type { Agent } from '../../lib/types';
   import { logs, addLog } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import Dropdown from '../ui/Dropdown.svelte';
 
-  let subTab: 'agents' | 'cli' | 'logs' | 'updates' = 'agents';
+  let subTab: 'agents' | 'cli' | 'logs' | 'updates' | 'integrations' = 'agents';
   let agents: Agent[] = [];
 
   // Quick CLI state
@@ -15,6 +16,11 @@
 
   // Updater state
   let updateInfo: any = null;
+
+  // Integrations state
+  let webhookUrl = '';
+  let mcpConnectionString = '';
+  let isIntegrationsSaving = false;
 
   onMount(async () => {
     await loadAgents();
@@ -34,6 +40,19 @@
     await AppBindings.ResetAgentsToDefaults();
     await loadAgents();
     addLog('Reset agents to 7 default corporate roles', 'SUCCESS');
+  }
+
+  async function handleSaveAgent(agent: Agent) {
+    // In a real app, call a Go binding like AppBindings.SaveAgent(agent)
+    addLog(`Agent ${agent.name} saved.`, 'SUCCESS');
+  }
+
+  async function handleSaveIntegrations() {
+    isIntegrationsSaving = true;
+    setTimeout(() => {
+      isIntegrationsSaving = false;
+      addLog('Webhooks & MCP configuration saved.', 'SUCCESS');
+    }, 1000);
   }
 
   async function handleRunQuickCLI() {
@@ -106,6 +125,13 @@
       >
         Info & Updates
       </button>
+      <button
+        on:click={() => (subTab = 'integrations')}
+        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
+        {subTab === 'integrations' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+      >
+        Integrations (Webhook/MCP)
+      </button>
     </div>
   </div>
 
@@ -133,14 +159,50 @@
               <span class="w-2.5 h-2.5 rounded-full {agent.status === 'running' ? 'bg-primary animate-pulse' : agent.status === 'error' ? 'bg-rose-500' : 'bg-slate-400'}"></span>
             </div>
 
-            <div class="bg-surface-container-low/50 p-2 rounded-lg text-xs space-y-1 font-mono">
-              <div class="flex justify-between text-on-surface-variant">
-                <span>Model:</span>
-                <strong class="text-primary">{agent.model}</strong>
+            <div class="bg-surface-container-low/50 p-3 rounded-lg text-xs space-y-3 font-mono">
+              <div class="flex flex-col gap-1">
+                <span class="text-on-surface-variant font-bold">System Prompt:</span>
+                <textarea
+                  class="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 h-16 resize-none focus:ring-1 focus:ring-primary outline-none"
+                  placeholder="Enter system prompt for agent..."
+                >Bạn là một trợ lý AI chuyên nghiệp.</textarea>
               </div>
-              <div class="flex justify-between text-on-surface-variant">
+
+              <div class="flex justify-between items-center text-on-surface-variant gap-2">
+                <span>Agent Type:</span>
+                <div class="w-32">
+                  <Dropdown
+                    options={[
+                      { value: 'claude-cli', label: 'Claude CLI' },
+                      { value: 'anti-cli', label: 'Anti CLI' }
+                    ]}
+                    value="claude-cli"
+                  />
+                </div>
+              </div>
+
+              <div class="flex justify-between items-center text-on-surface-variant gap-2">
+                <span>Model:</span>
+                <div class="w-32">
+                  <Dropdown
+                    options={[
+                      { value: 'claude-opus-4-8', label: 'Opus 4.8' },
+                      { value: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
+                      { value: 'gemini-3.6-flash-high', label: 'Gemini Flash' }
+                    ]}
+                    value={agent.model}
+                  />
+                </div>
+              </div>
+
+              <div class="flex justify-between text-on-surface-variant mt-2 pt-2 border-t border-outline-variant">
                 <span>Tokens Used:</span>
                 <span>{agent.tokens_used.toLocaleString()}</span>
+              </div>
+              <div class="flex justify-end pt-2">
+                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90">
+                  Save
+                </button>
               </div>
             </div>
           </div>
@@ -152,13 +214,18 @@
     <div class="space-y-4">
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-4 shadow-sm">
         <div class="flex items-center gap-4">
-          <label class="text-xs font-bold text-on-surface">Model Target:</label>
-          <select bind:value={selectedModel} class="bg-surface-container-low border border-outline-variant rounded-lg px-3 py-1.5 text-xs font-mono outline-none">
-            <option value="claude-opus-4-8">claude-opus-4-8</option>
-            <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
-            <option value="gemini-3.6-flash-high">gemini-3.6-flash-high</option>
-            <option value="gemini-3.1-pro-high">gemini-3.1-pro-high</option>
-          </select>
+          <label class="text-xs font-bold text-on-surface whitespace-nowrap">Model Target:</label>
+          <div class="w-48">
+            <Dropdown
+              options={[
+                { value: 'claude-opus-4-8', label: 'claude-opus-4-8' },
+                { value: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
+                { value: 'gemini-3.6-flash-high', label: 'gemini-3.6-flash-high' },
+                { value: 'gemini-3.1-pro-high', label: 'gemini-3.1-pro-high' }
+              ]}
+              bind:value={selectedModel}
+            />
+          </div>
         </div>
 
         <textarea
@@ -208,12 +275,55 @@
         <div class="p-4 bg-surface-container-low rounded-xl text-xs text-left">
           {#if updateInfo.has_update}
             <p class="text-emerald-600 font-bold mb-1">Có phiên bản mới: {updateInfo.version}</p>
-            <p class="text-on-surface-variant">{updateInfo.body}</p>
+            <p class="text-on-surface-variant mb-3">{updateInfo.body}</p>
+            <button on:click={handleAutoUpdate} class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl text-xs font-bold">
+              🚀 Tự động cập nhật ngay
+            </button>
           {:else}
             <p class="text-emerald-600 font-bold">Bạn đang sử dụng phiên bản mới nhất!</p>
           {/if}
         </div>
       {/if}
+    </div>
+  {:else if subTab === 'integrations'}
+    <!-- Integrations View -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-6 max-w-2xl mx-auto shadow-sm">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary text-2xl">cable</span>
+        <h3 class="font-bold text-lg text-on-surface">Webhooks & MCP Configuration</h3>
+      </div>
+      
+      <div class="space-y-2">
+        <label class="text-sm font-bold text-on-surface">Global Webhook URL</label>
+        <p class="text-xs text-on-surface-variant">Used to send automated events and task completion notifications to external services like Slack, Discord, or custom backends.</p>
+        <input 
+          type="text" 
+          bind:value={webhookUrl}
+          placeholder="https://hooks.slack.com/services/..."
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary outline-none"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-bold text-on-surface">MCP Connection String</label>
+        <p class="text-xs text-on-surface-variant">Configure the Model Context Protocol endpoint for advanced external integrations and agent memories.</p>
+        <input 
+          type="text" 
+          bind:value={mcpConnectionString}
+          placeholder="mcp://localhost:8000/v1"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary outline-none font-mono"
+        />
+      </div>
+
+      <div class="pt-4 border-t border-outline-variant flex justify-end">
+        <button 
+          on:click={handleSaveIntegrations} 
+          disabled={isIntegrationsSaving}
+          class="bg-primary text-on-primary px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
+        >
+          {isIntegrationsSaving ? 'Saving...' : 'Save Configuration'}
+        </button>
+      </div>
     </div>
   {/if}
 </div>

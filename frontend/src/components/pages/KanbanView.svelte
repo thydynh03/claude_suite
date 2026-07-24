@@ -2,6 +2,7 @@
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog } from '../../lib/stores/appState';
+  import Dropdown from '../ui/Dropdown.svelte';
 
   export let tasks: Task[] = [];
   export let onRefresh: () => void;
@@ -100,17 +101,19 @@
                 <span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-mono font-bold uppercase">{task.priority}</span>
 
                 <!-- Quick status switcher -->
-                <select
-                  value={task.status}
-                  on:change={(e) => handleMoveStatus(task.task_id, e.currentTarget.value)}
-                  class="bg-surface-container-low border border-outline-variant rounded px-1 text-[10px] outline-none"
-                >
-                  <option value="backlog">Backlog</option>
-                  <option value="queued">Queued</option>
-                  <option value="running">Running</option>
-                  <option value="done">Done</option>
-                  <option value="failed">Failed</option>
-                </select>
+                <div class="w-24">
+                  <Dropdown
+                    options={[
+                      { value: 'backlog', label: 'Backlog' },
+                      { value: 'queued', label: 'Queued' },
+                      { value: 'running', label: 'Running' },
+                      { value: 'done', label: 'Done' },
+                      { value: 'failed', label: 'Failed' }
+                    ]}
+                    value={task.status}
+                    on:change={(e) => handleMoveStatus(task.task_id, e.detail)}
+                  />
+                </div>
               </div>
             </div>
           {:else}

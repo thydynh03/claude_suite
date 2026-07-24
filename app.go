@@ -249,6 +249,21 @@ func (a *App) DownloadAndInstallUpdate(url string) error {
 	})
 }
 
+func (a *App) PerformAutoUpdate() (*cli.RunResult, error) {
+	info, err := a.updaterService.CheckForUpdates()
+	if err != nil {
+		return &cli.RunResult{Success: false, Error: err.Error()}, nil
+	}
+	if !info.HasUpdate {
+		return &cli.RunResult{Success: true, Output: "Already up to date."}, nil
+	}
+	err = a.DownloadAndInstallUpdate(info.DownloadURL)
+	if err != nil {
+		return &cli.RunResult{Success: false, Error: err.Error()}, nil
+	}
+	return &cli.RunResult{Success: true, Output: "Updated successfully."}, nil
+}
+
 func (a *App) ExportKanbanReport() (string, error) {
 	tasks, err := a.taskRepo.GetAll()
 	if err != nil {
