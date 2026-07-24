@@ -241,11 +241,20 @@
 
             <div class="bg-surface-container-low/50 p-3 rounded-lg text-xs space-y-3 font-mono">
               <div class="flex flex-col gap-1">
-                <span class="text-on-surface-variant font-bold">System Prompt:</span>
+                <div class="flex items-center justify-between">
+                  <span class="text-on-surface-variant font-bold">System Prompt / Persona:</span>
+                  <button 
+                    type="button"
+                    on:click={() => handleSaveAgent(agent)}
+                    class="text-[10px] bg-primary text-on-primary px-2 py-0.5 rounded font-bold hover:opacity-90 transition-all cursor-pointer">
+                    Lưu Agent
+                  </button>
+                </div>
                 <textarea
-                  class="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 h-16 resize-none focus:ring-1 focus:ring-primary outline-none"
+                  bind:value={agent.system}
+                  class="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 h-16 resize-none focus:ring-1 focus:ring-primary outline-none text-on-surface text-[11px]"
                   placeholder="Enter system prompt for agent..."
-                >Bạn là một trợ lý AI chuyên nghiệp.</textarea>
+                ></textarea>
               </div>
 
               <div class="flex justify-between items-center text-on-surface-variant gap-2">

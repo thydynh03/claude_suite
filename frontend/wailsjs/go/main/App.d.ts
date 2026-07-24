@@ -69,6 +69,8 @@ export function IsWebhookRunning():Promise<boolean>;
 
 export function PerformAutoUpdate():Promise<cli.RunResult>;
 
+export function Ping():Promise<boolean>;
+
 export function ResetAgentsToDefaults():Promise<void>;
 
 export function ResolveApproval(arg1:boolean):Promise<void>;

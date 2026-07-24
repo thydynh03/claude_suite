@@ -130,6 +130,10 @@ export function PerformAutoUpdate() {
   return window['go']['main']['App']['PerformAutoUpdate']();
 }
 
+export function Ping() {
+  return window['go']['main']['App']['Ping']();
+}
+
 export function ResetAgentsToDefaults() {
   return window['go']['main']['App']['ResetAgentsToDefaults']();
 }

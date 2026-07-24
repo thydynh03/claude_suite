@@ -195,6 +195,10 @@ func (a *App) IsOrchestratorRunning() bool {
 	return a.orchestrator.IsRunning()
 }
 
+func (a *App) Ping() bool {
+	return true
+}
+
 func (a *App) ResolveApproval(approved bool) {
 	a.orchestrator.ResolveApproval(approved)
 }

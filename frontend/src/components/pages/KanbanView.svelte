@@ -8,6 +8,10 @@
   export let onRefresh: () => void;
 
   let showAddModal = false;
+  let detailTask: Task | null = null;
+  let searchQuery = '';
+  let filterPriority = 'all';
+
   let newTaskTitle = '';
   let newTaskDescription = '';
   let newTaskPriority = 'normal';
@@ -22,7 +26,19 @@
   ];
 
   function getTasksByStatus(status: string): Task[] {
-    return (Array.isArray(tasks) ? tasks : []).filter((t) => t && t.status === status);
+    const list = Array.isArray(tasks) ? tasks : [];
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter((t) => {
+      if (!t || t.status !== status) return false;
+      if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+      if (q) {
+        const titleMatch = t.title?.toLowerCase().includes(q);
+        const promptMatch = t.prompt?.toLowerCase().includes(q);
+        const descMatch = t.description?.toLowerCase().includes(q);
+        return titleMatch || promptMatch || descMatch;
+      }
+      return true;
+    });
   }
 
   async function handleAddTask() {
@@ -170,15 +186,36 @@
 </script>
 
 <div class="space-y-4">
-  <!-- Actions Bar -->
+  <!-- Actions & Search Filter Bar -->
   <div class="flex flex-wrap items-center justify-between gap-4">
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-1 max-w-md">
       <button 
         type="button" 
         on:click|preventDefault={() => showAddModal = true} 
-        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all shadow-sm cursor-pointer">
+        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all shadow-sm cursor-pointer whitespace-nowrap">
         <span class="material-symbols-outlined text-sm font-bold">add</span> Add Task
       </button>
+
+      <!-- Search Input -->
+      <div class="relative flex-1">
+        <span class="material-symbols-outlined absolute left-3 top-2.5 text-sm text-outline">search</span>
+        <input 
+          type="text" 
+          bind:value={searchQuery}
+          placeholder="Tìm kiếm task..."
+          class="w-full bg-surface-container-low border border-outline-variant rounded-xl pl-8 pr-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary font-medium"
+        />
+      </div>
+
+      <!-- Priority Filter -->
+      <select 
+        bind:value={filterPriority}
+        class="bg-surface-container-low border border-outline-variant rounded-xl px-2.5 py-1.5 text-xs text-on-surface font-semibold outline-none cursor-pointer">
+        <option value="all">Tất cả Priority</option>
+        <option value="high">HIGH (Cao)</option>
+        <option value="normal">NORMAL (Bình thường)</option>
+        <option value="low">LOW (Thấp)</option>
+      </select>
     </div>
 
     <div class="flex items-center gap-2">
@@ -227,8 +264,13 @@
               on:dragstart={(e) => handleDragStart(e, task.task_id)}
               class="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-primary rounded-xl p-3 space-y-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative"
             >
-              <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 flex-1">
+              <div 
+                role="button" 
+                tabindex="0"
+                on:click={() => detailTask = task}
+                on:keydown={(e) => { if (e.key === 'Enter') detailTask = task; }}
+                class="flex items-center justify-between gap-2 cursor-pointer">
+                <div class="flex items-center gap-2 flex-1 cursor-pointer">
                   <input
                     type="checkbox"
                     value={task.task_id}
@@ -353,6 +395,62 @@
         on:click={handleAddTask} 
         class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer flex items-center gap-1">
         <span class="material-symbols-outlined text-sm">check</span> Tạo Task
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
+
+{#if detailTask}
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[600px] max-h-[80vh] flex flex-col space-y-4">
+    <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
+      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">analytics</span> Chi tiết Task & Kết quả AI
+      </h3>
+      <button type="button" on:click={() => detailTask = null} class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto space-y-3 text-xs">
+      <div>
+        <span class="font-bold text-on-surface block mb-1">Tiêu đề Task:</span>
+        <p class="font-bold text-sm text-primary">{detailTask.title}</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 bg-surface-container-low p-2.5 rounded-xl border border-outline-variant font-mono">
+        <div>Trạng thái: <strong class="uppercase text-on-surface">{detailTask.status}</strong></div>
+        <div>Độ ưu tiên: <strong class="uppercase text-primary">{detailTask.priority}</strong></div>
+        <div>Phân công: <strong>{detailTask.assigned_to || 'Unassigned'}</strong></div>
+        <div>Session ID: <strong class="truncate block">{detailTask.session_id || 'N/A'}</strong></div>
+      </div>
+
+      <div>
+        <span class="font-bold text-on-surface block mb-1">Prompt / Hướng dẫn:</span>
+        <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant font-mono text-on-surface-variant whitespace-pre-wrap">
+          {detailTask.prompt || detailTask.description || 'Không có mô tả'}
+        </div>
+      </div>
+
+      {#if detailTask.result}
+      <div>
+        <span class="font-bold text-emerald-600 block mb-1 flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">check_circle</span> Kết quả Thực thi AI:
+        </span>
+        <div class="bg-surface-container-lowest p-3 rounded-xl border border-emerald-500/30 font-mono text-on-surface max-h-60 overflow-y-auto whitespace-pre-wrap text-[11px]">
+          {detailTask.result}
+        </div>
+      </div>
+      {/if}
+    </div>
+
+    <div class="flex justify-end pt-2 border-t border-outline-variant">
+      <button 
+        type="button" 
+        on:click={() => detailTask = null} 
+        class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer">
+        Đóng
       </button>
     </div>
   </div>
