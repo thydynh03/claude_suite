@@ -207,7 +207,10 @@ class Orchestrator:
         
         # Thêm hướng dẫn bắt buộc Agent xuất file hoặc thao tác file nếu có thư mục làm việc
         file_directive = "\n\n[DIRECTIVE: BẠN PHẢI TẠO HOẶC SỬA FILE TRỰC TIẾP TRONG WORKSPACE THAY VÌ CHỈ IN RA MÃ NGUỒN]" if ws_folder else ""
-        full_prompt = f"{ws_ctx}{file_directive}\n\n{prompt}" if ws_ctx else prompt
+        
+        full_prompt = prompt
+        if ws_ctx or file_directive:
+            full_prompt = f"{ws_ctx}{file_directive}\n\n{prompt}"
 
         def _on_cli_log(m: str, lvl: str = "INFO"):
             self.log(f"  [{agent.name}] {m}", lvl)
