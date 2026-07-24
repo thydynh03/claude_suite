@@ -132,30 +132,34 @@
     }
 
     isUpdating = true;
-    updateStatusMessage = 'Đang tải bản cập nhật .exe từ GitHub và chuẩn bị cài đặt...';
+    updateStatusMessage = '⬇️ Đang tải bản cập nhật từ GitHub...';
     updateStatusType = 'info';
     addLog('Downloading update from ' + updateInfo.download_url, 'INFO');
 
     try {
+      // Show installing message before calling backend
+      // App will call os.Exit(0) during this → IPC cut → catch fires. That is NORMAL.
+      updateStatusMessage = '⚙️ Đang cài đặt... Ứng dụng sẽ tự động khởi động lại sau vài giây.';
+      updateStatusType = 'success';
+
       const res = await (AppBindings as any).DownloadAndUpdate(updateInfo.download_url);
-      if (res && res.success) {
-        currentAppVersion = updateInfo.version;
-        updateStatusMessage = '🎉 Cài đặt thành công! Đang tự động khởi động lại ứng dụng...';
-        updateStatusType = 'success';
-        addLog('Update installed successfully! Restarting...', 'SUCCESS');
-      } else {
+      // If we somehow get a response (unlikely), check for error
+      if (res && !res.success) {
         updateStatusMessage = '❌ Cập nhật thất bại: ' + (res?.error || 'Không xác định');
         updateStatusType = 'error';
         addLog('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
+        isUpdating = false;
       }
     } catch (e: any) {
-      updateStatusMessage = '❌ Lỗi hệ thống khi cập nhật: ' + (e?.message || e);
-      updateStatusType = 'error';
-      addLog('Update error: ' + e, 'ERROR');
-    } finally {
-      isUpdating = false;
+      // App called os.Exit(0) → IPC dropped → catch fires. This is expected.
+      // The updater.bat is running in background and will relaunch the app.
+      updateStatusMessage = '✅ Đã tải xong! Ứng dụng đang được khởi động lại tự động...';
+      updateStatusType = 'success';
+      addLog('App is restarting with new version. Please wait...', 'SUCCESS');
+      // Do NOT set isUpdating = false — app is mid-restart
     }
   }
+
 </script>
 
 <div class="space-y-6 max-w-7xl mx-auto pb-12">

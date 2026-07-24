@@ -125,19 +125,26 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 			return err
 		}
 	}
+	out.Close()
 
 	batPath := filepath.Join(exeDir, "updater.bat")
+	// Wait 3s for the old process to fully exit, then move new exe over old one,
+	// then start the updated app. /b flag keeps the bat's console hidden.
 	batContent := fmt.Sprintf(`@echo off
 set "NEW_EXE=%s"
 set "OLD_EXE=%s"
 
+rem Wait for the running process to fully exit
+timeout /t 3 /nobreak > NUL
+
 :RETRY
-timeout /t 1 /nobreak > NUL
 move /y "%%NEW_EXE%%" "%%OLD_EXE%%" > NUL 2>&1
 if errorlevel 1 (
+    timeout /t 1 /nobreak > NUL
     goto RETRY
 )
 
+rem Relaunch the updated app
 start "" "%%OLD_EXE%%"
 del "%%~f0"
 `, newExePath, exePath)
@@ -146,7 +153,9 @@ del "%%~f0"
 		return err
 	}
 
-	cmd := exec.Command("cmd.exe", "/c", batPath)
+	// Start the bat as a completely detached process so it survives this process exiting
+	cmd := exec.Command("cmd.exe", "/c", "start", "/b", "", batPath)
+	cmd.Dir = exeDir
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -154,3 +163,4 @@ del "%%~f0"
 	os.Exit(0)
 	return nil
 }
+
