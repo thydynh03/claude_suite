@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -68,16 +69,19 @@ func (a *AntigravityCLI) execute(model, prompt, system string, sessionID string,
 		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if ShowCLIConsole {
 		cmdArgs := append([]string{"/k", a.executablePath}, args...)
-		cmd = exec.Command("cmd.exe", cmdArgs...)
+		cmd = exec.CommandContext(ctx, "cmd.exe", cmdArgs...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    false,
 			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
 		}
 	} else {
-		cmd = exec.Command(a.executablePath, args...)
+		cmd = exec.CommandContext(ctx, a.executablePath, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    true,
 			CreationFlags: 0x08000000, // CREATE_NO_WINDOW

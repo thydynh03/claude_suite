@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -86,16 +87,19 @@ func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCa
 		args = append(args, "--resume", sessionID)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if ShowCLIConsole {
 		cmdArgs := append([]string{"/k", c.executablePath}, args...)
-		cmd = exec.Command("cmd.exe", cmdArgs...)
+		cmd = exec.CommandContext(ctx, "cmd.exe", cmdArgs...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    false,
 			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
 		}
 	} else {
-		cmd = exec.Command(c.executablePath, args...)
+		cmd = exec.CommandContext(ctx, c.executablePath, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    true,
 			CreationFlags: 0x08000000, // CREATE_NO_WINDOW

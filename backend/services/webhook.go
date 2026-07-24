@@ -41,9 +41,11 @@ func (w *WebhookService) Start(port int) error {
 			return
 		}
 
+		r.Body = http.MaxBytesReader(rw, r.Body, 1048576) // 1MB limit
+
 		var payload WebhookPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(rw, "Invalid JSON", http.StatusBadRequest)
+			http.Error(rw, "Invalid JSON or body size limit exceeded", http.StatusBadRequest)
 			return
 		}
 

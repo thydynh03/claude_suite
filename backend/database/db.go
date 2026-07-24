@@ -41,8 +41,8 @@ func InitDB() (*sql.DB, error) {
 			return
 		}
 
-		// Enable WAL mode & foreign keys
-		_, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`)
+		// Enable WAL mode, busy timeout & foreign keys for high-concurrency access
+		_, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;`)
 
 		if err := migrateSchema(db); err != nil {
 			initErr = fmt.Errorf("failed to run migrations: %w", err)
@@ -107,6 +107,11 @@ func migrateSchema(db *sql.DB) error {
 		tokens_used INTEGER NOT NULL DEFAULT 0,
 		FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
 	);
+
+	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+	CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+	CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
+	CREATE INDEX IF NOT EXISTS idx_agent_memory_agent_id ON agent_memory(agent_id);
 	`
 	_, err := db.Exec(schema)
 	return err

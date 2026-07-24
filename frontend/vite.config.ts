@@ -26,5 +26,14 @@ export default defineConfig({
   },
   build: {
     modulePreload: false,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three', 'three/addons/controls/OrbitControls.js'],
+          svelte: ['svelte']
+        }
+      }
+    }
   }
 })
