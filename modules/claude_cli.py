@@ -90,10 +90,11 @@ class ClaudeCLI:
         output_format: str = "json",
         extra_args: list = None,
         on_log: Optional[Callable] = None,
+        cwd: Optional[str] = None,
     ) -> RunResult:
         if any(k in model.lower() for k in ["gemini", "thinking", "antigravity", "agy"]):
             ag_cli = AntigravityCLI(timeout=self.timeout)
-            res = ag_cli.run_once(prompt=prompt, model=model, system=system, on_log=on_log)
+            res = ag_cli.run_once(prompt=prompt, model=model, system=system, on_log=on_log, cwd=cwd)
             return RunResult(success=res.success, output=res.output, duration_s=res.duration_s, error=res.error)
 
         full_prompt = f"[System Context: {system}]\n\n{prompt}" if system else prompt
@@ -103,7 +104,7 @@ class ClaudeCLI:
         if extra_args:
             cmd += extra_args
 
-        return self._execute(cmd, on_log)
+        return self._execute(cmd, on_log, cwd=cwd)
 
     # ── Resume session ────────────────────────────────────────────────────
 
@@ -114,6 +115,7 @@ class ClaudeCLI:
         model: str = "claude-opus-4-8",
         output_format: str = "json",
         on_log: Optional[Callable] = None,
+        cwd: Optional[str] = None,
     ) -> RunResult:
         """
         Tiếp tục conversation cũ bằng session_id.
@@ -123,7 +125,7 @@ class ClaudeCLI:
                "-p", prompt,
                "--model", model,
                "--output-format", output_format]
-        return self._execute(cmd, on_log)
+        return self._execute(cmd, on_log, cwd=cwd)
 
     # ── Agent helpers ─────────────────────────────────────────────────────
 
@@ -141,6 +143,7 @@ class ClaudeCLI:
         agent: AgentSession,
         prompt: str,
         on_log: Optional[Callable] = None,
+        cwd: Optional[str] = None,
     ) -> RunResult:
         """
         Gọi agent: nếu có session_id thì resume, không thì tạo mới.
@@ -150,10 +153,10 @@ class ClaudeCLI:
 
         if agent.session_id:
             result = self.resume(agent.session_id, prompt,
-                                 model=agent.model, on_log=on_log)
+                                 model=agent.model, on_log=on_log, cwd=cwd)
         else:
             result = self.run_once(prompt, model=agent.model,
-                                   system=agent.system, on_log=on_log)
+                                   system=agent.system, on_log=on_log, cwd=cwd)
 
         if result.success:
             agent.status = "done"
@@ -189,7 +192,7 @@ class ClaudeCLI:
 
     # ── Internal execute ──────────────────────────────────────────────────
 
-    def _execute(self, cmd: list, on_log: Optional[Callable]) -> RunResult:
+    def _execute(self, cmd: list, on_log: Optional[Callable], cwd: Optional[str] = None) -> RunResult:
         if on_log:
             on_log(f"CMD: {' '.join(cmd[:4])}...", "INFO")
 
@@ -207,6 +210,7 @@ class ClaudeCLI:
                 encoding="utf-8",
                 errors="replace",
                 stdin=subprocess.DEVNULL,  # avoid stdin warning
+                cwd=cwd,
                 **kwargs
             )
             if on_log:

@@ -69,17 +69,17 @@ class AntigravityCLI:
     def run_once(
         self,
         prompt: str,
-        model: str = "gemini-3-6-flash",
+        model: str = "gemini-3.6-flash-high",
         system: str = "",
         on_log: Optional[Callable] = None,
+        cwd: Optional[str] = None,
     ) -> AntigravityRunResult:
         full_prompt = f"[System Context: {system}]\n\n{prompt}" if system else prompt
         
-        # Truyền model flag
         cmd = [ANTIGRAVITY_EXE, "-p", full_prompt, "--model", model]
-        return self._execute(cmd, on_log)
+        return self._execute(cmd, on_log, cwd=cwd)
 
-    def _execute(self, cmd: list, on_log: Optional[Callable]) -> AntigravityRunResult:
+    def _execute(self, cmd: list, on_log: Optional[Callable], cwd: Optional[str] = None) -> AntigravityRunResult:
         if on_log:
             on_log(f"🧠 Antigravity CLI: {' '.join(cmd[:3])}...", "THINKING")
 
@@ -97,6 +97,7 @@ class AntigravityCLI:
                 encoding="utf-8",
                 errors="replace",
                 stdin=subprocess.DEVNULL,
+                cwd=cwd,
                 **kwargs
             )
 

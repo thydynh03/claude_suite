@@ -44,6 +44,7 @@ class Orchestrator:
 
         self._running  = False
         self._thread   = None
+        self._global_auto_approve = False
         self._lock     = threading.Lock()
         self._active_threads: dict = {}   # task_id → Thread
 
@@ -105,7 +106,7 @@ class Orchestrator:
             if task.task_id in self._active_threads:
                 continue  # đang chạy rồi
 
-            agent = self.registry.get_or_create_for_task(task.title, task.prompt)
+            agent = self.registry.get_or_create_for_task(task=task)
             if not agent:
                 self.log(f"Không thể khởi tạo Agent cho task [{task.task_id}].", "WARN")
                 break
@@ -139,48 +140,59 @@ class Orchestrator:
 
         # Approval Checkpoint (Human-in-the-loop)
         if getattr(task, "require_approval", False) or "architect" in agent.name.lower() or "ba" in agent.name.lower():
-            self.log(f"[{agent.name}] Đang chờ duyệt kế hoạch từ người dùng...", "WARN")
-            import tkinter as tk
-            import customtkinter as ctk
-            import threading
-            
-            root = tk._default_root
-            if not root:
-                # Fallback if no root is found, though unlikely
+            if getattr(self, "_global_auto_approve", False):
+                self.log(f"[{agent.name}] Auto-approved (Bypass).", "TIER1")
                 approved = True
             else:
-                approved_event = threading.Event()
-                approved_result = [False]
+                self.log(f"[{agent.name}] Đang chờ duyệt kế hoạch từ người dùng...", "WARN")
+                import tkinter as tk
+                import customtkinter as ctk
+                import threading
                 
-                def show_dialog():
-                    dialog = ctk.CTkToplevel(root)
-                    dialog.title("Approval Checkpoint")
-                    dialog.geometry("450x200")
-                    dialog.attributes("-topmost", True)
-                    dialog.grab_set()
+                root = tk._default_root
+                if not root:
+                    # Fallback if no root is found, though unlikely
+                    approved = True
+                else:
+                    approved_event = threading.Event()
+                    approved_result = [False]
                     
-                    def on_yes():
-                        approved_result[0] = True
-                        approved_event.set()
-                        dialog.destroy()
+                    def show_dialog():
+                        dialog = ctk.CTkToplevel(root)
+                        dialog.title("Approval Checkpoint")
+                        dialog.geometry("450x250")
+                        dialog.attributes("-topmost", True)
+                        dialog.grab_set()
                         
-                    def on_no():
-                        approved_result[0] = False
-                        approved_event.set()
-                        dialog.destroy()
+                        auto_var = tk.BooleanVar(value=False)
                         
-                    lbl = ctk.CTkLabel(dialog, text=f"Agent '{agent.name}' chuẩn bị thực thi hoặc vừa hoàn thành một bước quan trọng (Lên kế hoạch / BA).\nBạn có muốn cho phép tiếp tục không?", wraplength=400, font=("Arial", 14))
-                    lbl.pack(pady=30, padx=20)
+                        def on_yes():
+                            if auto_var.get():
+                                self._global_auto_approve = True
+                            approved_result[0] = True
+                            approved_event.set()
+                            dialog.destroy()
+                            
+                        def on_no():
+                            approved_result[0] = False
+                            approved_event.set()
+                            dialog.destroy()
+                            
+                        lbl = ctk.CTkLabel(dialog, text=f"Agent '{agent.name}' chuẩn bị thực thi hoặc vừa hoàn thành một bước quan trọng.\nBạn có muốn cho phép tiếp tục không?", wraplength=400, font=("Arial", 14))
+                        lbl.pack(pady=20, padx=20)
+                        
+                        chk = ctk.CTkCheckBox(dialog, text="Luôn cho phép (Bypass cho các lần sau)", variable=auto_var, fg_color="#3b82f6")
+                        chk.pack(pady=10)
+                        
+                        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+                        btn_frame.pack(fill="x", pady=10)
+                        
+                        ctk.CTkButton(btn_frame, text="✅ Cho phép (Yes)", command=on_yes, width=120, fg_color="#10b981", hover_color="#059669").pack(side="left", padx=40)
+                        ctk.CTkButton(btn_frame, text="❌ Dừng lại (No)", command=on_no, width=120, fg_color="#ef4444", hover_color="#dc2626").pack(side="right", padx=40)
                     
-                    btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
-                    btn_frame.pack(fill="x", pady=10)
-                    
-                    ctk.CTkButton(btn_frame, text="✅ Cho phép (Yes)", command=on_yes, width=120, fg_color="#10b981", hover_color="#059669").pack(side="left", padx=40)
-                    ctk.CTkButton(btn_frame, text="❌ Dừng lại (No)", command=on_no, width=120, fg_color="#ef4444", hover_color="#dc2626").pack(side="right", padx=40)
-                
-                root.after(0, show_dialog)
-                approved_event.wait()
-                approved = approved_result[0]
+                    root.after(0, show_dialog)
+                    approved_event.wait()
+                    approved = approved_result[0]
             if not approved:
                 self.log(f"[{agent.name}] Bị từ chối bởi người dùng.", "ERROR")
                 self.board.update_status(task.task_id, "failed")
@@ -190,8 +202,12 @@ class Orchestrator:
         self._auto_snapshot_git()
 
         # Automatically prepend Global Workspace Context (Folder + Attached Files)
+        ws_folder = self.get_workspace_fn() if self.get_workspace_fn else None
         ws_ctx = self.get_context_fn() if self.get_context_fn else ""
-        full_prompt = f"{ws_ctx}\n\n{prompt}" if ws_ctx else prompt
+        
+        # Thêm hướng dẫn bắt buộc Agent xuất file hoặc thao tác file nếu có thư mục làm việc
+        file_directive = "\n\n[DIRECTIVE: BẠN PHẢI TẠO HOẶC SỬA FILE TRỰC TIẾP TRONG WORKSPACE THAY VÌ CHỈ IN RA MÃ NGUỒN]" if ws_folder else ""
+        full_prompt = f"{ws_ctx}{file_directive}\n\n{prompt}" if ws_ctx else prompt
 
         def _on_cli_log(m: str, lvl: str = "INFO"):
             self.log(f"  [{agent.name}] {m}", lvl)
@@ -207,7 +223,8 @@ class Orchestrator:
 
         result = self.cli.run_agent(
             agent, full_prompt,
-            on_log=_on_cli_log
+            on_log=_on_cli_log,
+            cwd=ws_folder
         )
 
         self.memory.add(MemoryItem(
@@ -218,24 +235,34 @@ class Orchestrator:
         if getattr(result, "tokens_used", 0) > 0:
             self.registry.add_tokens(agent.agent_id, result.tokens_used)
 
-        # Check for Token Quota Exhaustion -> Smart Fallback to Antigravity CLI
+        # Check for Token Quota Exhaustion -> Smart Fallback to Antigravity CLI / Lower tier model
         fresh_agent = self.registry.get(agent.agent_id) or agent
         if not result.success and ("api_error_status" in result.error or "429" in result.error or "400" in result.error):
-            if self.on_engine_fallback:
-                new_model = self.on_engine_fallback(fresh_agent.name, result.error)
-                if new_model:
-                    fresh_agent.model = new_model
-                    self.registry.update(fresh_agent)
-                    self.log(f"⚠️ Chuyển Agent '{fresh_agent.name}' sang {new_model} do lỗi API.", "WARN")
-                    
-                    # Retry immediately
-                    result = self.cli.run_agent(
-                        fresh_agent, prompt,
-                        on_log=lambda m, lvl="INFO": self.log(f"  [{fresh_agent.name}] (Fallback) {m}", lvl)
-                    )
-                    if getattr(result, "tokens_used", 0) > 0:
-                        self.registry.add_tokens(fresh_agent.agent_id, result.tokens_used)
-            elif self._is_quota_exhausted(fresh_agent, result.error):
+            # Tự động tính toán Model thay thế
+            fallback_map = {
+                "claude-opus-4-8": "claude-sonnet-4-5",
+                "claude-opus-4.6-thinking": "claude-sonnet-4.6-thinking",
+                "claude-sonnet-4-5": "gemini-3.6-flash-high",
+                "claude-sonnet-4.6-thinking": "gemini-3.6-flash-high",
+                "gemini-3.6-flash-high": "gemini-3.5-flash-high",
+                "gemini-3.1-pro-high": "gemini-3.6-flash-high"
+            }
+            
+            new_model = fallback_map.get(fresh_agent.model, "gemini-3.6-flash-low")
+            
+            fresh_agent.model = new_model
+            self.registry.update(fresh_agent)
+            self.log(f"⚠️ Tự động Fallback: Chuyển Agent '{fresh_agent.name}' sang {new_model} do quá tải API.", "WARN")
+            
+            # Retry immediately with new model
+            result = self.cli.run_agent(
+                fresh_agent, full_prompt,
+                on_log=lambda m, lvl="INFO": self.log(f"  [{fresh_agent.name}] (Fallback) {m}", lvl),
+                cwd=ws_folder
+            )
+            if getattr(result, "tokens_used", 0) > 0:
+                self.registry.add_tokens(fresh_agent.agent_id, result.tokens_used)
+        elif not result.success and self._is_quota_exhausted(fresh_agent, result.error):
                 fresh_agent.fallback_to_antigravity()
                 self.registry.update(fresh_agent)
                 self.log(f"⚠️ [SMART FALLBACK] Hết Quota! Tự động chuyển Agent '{fresh_agent.name}' sang Antigravity CLI ({fresh_agent.model})", "WARN")

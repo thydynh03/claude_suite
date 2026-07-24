@@ -270,13 +270,17 @@ class AgentRegistry:
                     return a
         return idle[0] if idle else None
 
-    def get_or_create_for_task(self, title: str = "", prompt: str = "") -> Agent:
+    def get_or_create_for_task(self, task=None, title: str = "", prompt: str = "") -> Agent:
         """
-        Tự động tìm hoặc khởi tạo Agent phù hợp dựa trên yêu cầu công việc.
-        Nếu chưa có Agent idle phù hợp, hệ thống sẽ tự động sinh Agent từ Template chuẩn.
+        Tự động tìm hoặc khởi tạo Agent phù hợp dựa trên yêu cầu công việc và tag.
         """
-        # 1. Tìm trong danh sách idle sẵn có
-        idle_agents = self.list_idle()
+        text_lower = ""
+        tags = []
+        if task:
+            title = getattr(task, 'title', title)
+            prompt = getattr(task, 'prompt', prompt)
+            tags = getattr(task, 'tags', [])
+        
         text_lower = (title + " " + prompt).lower()
 
         # Keyword mapping to builtin roles
@@ -291,10 +295,24 @@ class AgentRegistry:
         ]
 
         target_template_name = "Senior Fullstack Developer"
-        for keywords, role_name in keyword_role_map:
-            if any(kw in text_lower for kw in keywords):
-                target_template_name = role_name
-                break
+        
+        # 1. Ánh xạ từ Tag (Ưu tiên cao nhất)
+        if "plan" in tags or "architect" in tags:
+            target_template_name = "Chief Architect & Tech Lead"
+        elif "code" in tags:
+            target_template_name = "Senior Fullstack Developer"
+        elif "test" in tags:
+            target_template_name = "Lead QA & Test Automation Specialist"
+        elif "review" in tags:
+            target_template_name = "Senior Code Reviewer & Security Auditor"
+        elif "research" in tags:
+            target_template_name = "Lead Business Analyst (BA)"
+        else:
+            # 2. Ánh xạ từ Keywords
+            for keywords, role_name in keyword_role_map:
+                if any(kw in text_lower for kw in keywords):
+                    target_template_name = role_name
+                    break
 
         # Check if an agent matching target_template_name is already in DB
         all_agents = self.list_all()

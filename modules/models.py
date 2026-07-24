@@ -114,6 +114,33 @@ class Task:
             return []
 
     @property
+    def tags(self) -> List[str]:
+        """Tự động nội suy tags từ title hoặc lấy trực tiếp tag [xxx]"""
+        import re
+        t = (self.title + " " + self.description + " " + self.prompt).lower()
+        
+        found = []
+        # Các tag tường minh [tag]
+        matches = re.findall(r"\[([a-z0-9_]+)\]", t)
+        if matches:
+            found.extend(matches)
+            
+        # Nội suy
+        if any(w in t for w in ["plan", "lên kế hoạch", "brainstorm", "architect", "thiết kế"]):
+            found.append("plan")
+        if any(w in t for w in ["code", "dev", "lập trình", "implement", "viết"]):
+            found.append("code")
+        if any(w in t for w in ["test", "kiểm thử", "qa"]):
+            found.append("test")
+        if any(w in t for w in ["review", "đánh giá", "kiểm tra"]):
+            found.append("review")
+        if any(w in t for w in ["research", "nghiên cứu", "tìm hiểu"]):
+            found.append("research")
+            
+        # De-duplicate
+        return list(dict.fromkeys(found))
+
+    @property
     def status_icon(self) -> str:
         return {"backlog": "📋", "queued": "⏳", "running": "⚡", "done": "✅", "failed": "❌"}.get(self.status, "❓")
 
