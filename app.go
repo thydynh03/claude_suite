@@ -128,6 +128,26 @@ func (a *App) ScanWorkspaceFiles() ([]string, error) {
 	return a.contextMgr.ScanWorkspace(a.workspaceConfig.LastWorkspaceFolder)
 }
 
+func (a *App) ReadFileContent(relPath string) (string, error) {
+	fullPath := relPath
+	if !filepath.IsAbs(relPath) && a.workspaceConfig.LastWorkspaceFolder != "" {
+		fullPath = filepath.Join(a.workspaceConfig.LastWorkspaceFolder, relPath)
+	}
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func (a *App) SaveFileContent(relPath string, content string) error {
+	fullPath := relPath
+	if !filepath.IsAbs(relPath) && a.workspaceConfig.LastWorkspaceFolder != "" {
+		fullPath = filepath.Join(a.workspaceConfig.LastWorkspaceFolder, relPath)
+	}
+	return os.WriteFile(fullPath, []byte(content), 0644)
+}
+
 // ── Agents CRUD ────────────────────────────────────────────────────────
 
 func (a *App) GetAgents() ([]models.Agent, error) {

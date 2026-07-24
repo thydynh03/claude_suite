@@ -71,6 +71,8 @@ export function PerformAutoUpdate():Promise<cli.RunResult>;
 
 export function Ping():Promise<boolean>;
 
+export function ReadFileContent(arg1:string):Promise<string>;
+
 export function ResetAgentsToDefaults():Promise<void>;
 
 export function ResolveApproval(arg1:boolean):Promise<void>;
@@ -82,6 +84,8 @@ export function RunPipeline(arg1:Array<models.PipelineStep>):Promise<Array<model
 export function RunQuickCLI(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<cli.RunResult>;
 
 export function SaveAgent(arg1:models.Agent):Promise<void>;
+
+export function SaveFileContent(arg1:string,arg2:string):Promise<void>;
 
 export function ScanWorkspaceFiles():Promise<Array<string>>;
 

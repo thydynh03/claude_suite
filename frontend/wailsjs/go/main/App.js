@@ -134,6 +134,10 @@ export function Ping() {
   return window['go']['main']['App']['Ping']();
 }
 
+export function ReadFileContent(arg1) {
+  return window['go']['main']['App']['ReadFileContent'](arg1);
+}
+
 export function ResetAgentsToDefaults() {
   return window['go']['main']['App']['ResetAgentsToDefaults']();
 }
@@ -156,6 +160,10 @@ export function RunQuickCLI(arg1, arg2, arg3, arg4) {
 
 export function SaveAgent(arg1) {
   return window['go']['main']['App']['SaveAgent'](arg1);
+}
+
+export function SaveFileContent(arg1, arg2) {
+  return window['go']['main']['App']['SaveFileContent'](arg1, arg2);
 }
 
 export function ScanWorkspaceFiles() {
