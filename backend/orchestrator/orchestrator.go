@@ -27,10 +27,11 @@ type Orchestrator struct {
 	fallback     *FallbackHandler
 	workspaceDir string
 
-	running    bool
-	stopCh     chan struct{}
-	approvalCh chan bool
-	mu         sync.Mutex
+	running        bool
+	autoApproveAll bool
+	stopCh         chan struct{}
+	approvalCh     chan bool
+	mu             sync.Mutex
 }
 
 func NewOrchestrator(
@@ -104,6 +105,21 @@ func (o *Orchestrator) ResolveApproval(approved bool) {
 	}
 }
 
+func (o *Orchestrator) SetAutoApproveAll(enabled bool) {
+	o.mu.Lock()
+	o.autoApproveAll = enabled
+	o.mu.Unlock()
+	if enabled {
+		o.emitLog("⚡ Đã bật chế độ 'Luôn Luôn Cho Phép' (Auto-Approve All Tasks).", "SUCCESS")
+	}
+}
+
+func (o *Orchestrator) GetAutoApproveAll() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.autoApproveAll
+}
+
 func (o *Orchestrator) loop() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -162,7 +178,7 @@ func (o *Orchestrator) processNextTask() {
 
 	// Approval Checkpoint
 	nameLower := strings.ToLower(agent.Name)
-	if strings.Contains(nameLower, "architect") || strings.Contains(nameLower, "ba") {
+	if !o.autoApproveAll && (strings.Contains(nameLower, "architect") || strings.Contains(nameLower, "ba")) {
 		o.emitLog(fmt.Sprintf("[%s] Waiting for user approval...", agent.Name), "WARN")
 		if o.ctx != nil {
 			runtime.EventsEmit(o.ctx, "ask_approval", map[string]string{

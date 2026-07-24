@@ -45,6 +45,8 @@ export function GetAgents():Promise<Array<models.Agent>>;
 
 export function GetAppVersion():Promise<string>;
 
+export function GetAutoApproveAll():Promise<boolean>;
+
 export function GetGitBranches():Promise<services.GitBranchInfo>;
 
 export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
@@ -84,6 +86,8 @@ export function ScanWorkspaceFiles():Promise<Array<string>>;
 export function SchedulePrompt(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
 export function SelectWorkspaceFolder():Promise<string>;
+
+export function SetAutoApproveAll(arg1:boolean):Promise<boolean>;
 
 export function SetShowCLIConsole(arg1:boolean):Promise<boolean>;
 

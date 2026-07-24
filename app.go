@@ -199,6 +199,15 @@ func (a *App) ResolveApproval(approved bool) {
 	a.orchestrator.ResolveApproval(approved)
 }
 
+func (a *App) SetAutoApproveAll(enabled bool) bool {
+	a.orchestrator.SetAutoApproveAll(enabled)
+	return enabled
+}
+
+func (a *App) GetAutoApproveAll() bool {
+	return a.orchestrator.GetAutoApproveAll()
+}
+
 func (a *App) SetShowCLIConsole(show bool) bool {
 	cli.ShowCLIConsole = show
 	return cli.ShowCLIConsole

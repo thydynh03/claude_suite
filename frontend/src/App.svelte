@@ -66,6 +66,16 @@
       (window as any).go.main.App.ResolveApproval(approved);
     }
   }
+
+  async function resolveApprovalAlways() {
+    showApprovalModal = false;
+    if ((window as any)?.go?.main?.App?.SetAutoApproveAll) {
+      await (window as any).go.main.App.SetAutoApproveAll(true);
+    }
+    if ((window as any)?.go?.main?.App?.ResolveApproval) {
+      (window as any).go.main.App.ResolveApproval(true);
+    }
+  }
 </script>
 
 <div class="flex flex-col h-screen font-body-md text-on-surface bg-background">
@@ -109,14 +119,22 @@
       <p class="font-mono text-sm text-on-surface">{approvalTask}</p>
     </div>
 
-    <div class="flex justify-end gap-3">
+    <div class="flex flex-wrap justify-end gap-2">
       <button 
-        class="px-5 py-2 rounded-lg font-bold text-sm bg-surface2 text-on-surface-muted hover:bg-border transition-colors"
+        type="button"
+        class="px-4 py-2 rounded-xl font-bold text-xs bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer"
         on:click={() => resolveApproval(false)}>
         Từ chối (Reject)
       </button>
       <button 
-        class="px-5 py-2 rounded-lg font-bold text-sm bg-primary hover:bg-primary-hover text-white transition-colors"
+        type="button"
+        class="px-4 py-2 rounded-xl font-bold text-xs bg-emerald-600/10 text-emerald-600 border border-emerald-600/30 hover:bg-emerald-600/20 transition-all cursor-pointer flex items-center gap-1"
+        on:click={resolveApprovalAlways}>
+        <span class="material-symbols-outlined text-sm">all_inclusive</span> Luôn luôn cho phép
+      </button>
+      <button 
+        type="button"
+        class="px-4 py-2 rounded-xl font-bold text-xs bg-primary text-on-primary hover:opacity-90 transition-all shadow-sm cursor-pointer"
         on:click={() => resolveApproval(true)}>
         Cho phép (Approve)
       </button>

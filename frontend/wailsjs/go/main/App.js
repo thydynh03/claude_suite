@@ -82,6 +82,10 @@ export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
 }
 
+export function GetAutoApproveAll() {
+  return window['go']['main']['App']['GetAutoApproveAll']();
+}
+
 export function GetGitBranches() {
   return window['go']['main']['App']['GetGitBranches']();
 }
@@ -160,6 +164,10 @@ export function SchedulePrompt(arg1, arg2, arg3) {
 
 export function SelectWorkspaceFolder() {
   return window['go']['main']['App']['SelectWorkspaceFolder']();
+}
+
+export function SetAutoApproveAll(arg1) {
+  return window['go']['main']['App']['SetAutoApproveAll'](arg1);
 }
 
 export function SetShowCLIConsole(arg1) {
