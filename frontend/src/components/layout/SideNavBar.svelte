@@ -114,14 +114,20 @@
 
     {#if !$sidebarCollapsed}
       <div class="space-y-1">
-        <a href="#docs" class="text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all">
-          <span class="material-symbols-outlined text-base mr-3">description</span>
+        <button 
+          type="button"
+          on:click|preventDefault={() => activeTab.set('docs')}
+          class="w-full text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all cursor-pointer text-left {$activeTab === 'docs' ? 'bg-secondary-container text-on-secondary-container font-bold' : ''}">
+          <span class="material-symbols-outlined text-base mr-3 text-primary">description</span>
           <span class="uppercase tracking-wider font-semibold">DOCS</span>
-        </a>
-        <a href="#support" class="text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all">
-          <span class="material-symbols-outlined text-base mr-3">help</span>
+        </button>
+        <button 
+          type="button"
+          on:click|preventDefault={() => activeTab.set('support')}
+          class="w-full text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all cursor-pointer text-left {$activeTab === 'support' ? 'bg-secondary-container text-on-secondary-container font-bold' : ''}">
+          <span class="material-symbols-outlined text-base mr-3 text-secondary">help</span>
           <span class="uppercase tracking-wider font-semibold">SUPPORT</span>
-        </a>
+        </button>
       </div>
     {/if}
   </div>

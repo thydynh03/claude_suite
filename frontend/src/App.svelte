@@ -7,6 +7,8 @@
   import SettingsPage from './components/pages/SettingsPage.svelte';
   import VirtualOffice3D from './components/pages/VirtualOffice3D.svelte';
   import SchedulerPage from './components/pages/SchedulerPage.svelte';
+  import DocsPage from './components/pages/DocsPage.svelte';
+  import SupportPage from './components/pages/SupportPage.svelte';
 
   import { activeTab, workspaceFolder, addLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
@@ -122,6 +124,10 @@
         <VirtualOffice3D />
       {:else if $activeTab === 'scheduler'}
         <SchedulerPage />
+      {:else if $activeTab === 'docs'}
+        <DocsPage />
+      {:else if $activeTab === 'support'}
+        <SupportPage />
       {/if}
     </main>
   </div>
