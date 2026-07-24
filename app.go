@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"claude_suite/backend/cli"
@@ -16,7 +17,7 @@ import (
 	"claude_suite/backend/services"
 	"claude_suite/backend/version"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -32,6 +33,7 @@ type App struct {
 	webhookService  *services.WebhookService
 	exporterService *services.ExporterService
 	schedulerSvc    *services.SchedulerService
+	browserService  *services.BrowserAgentService
 	orchestrator    *orchestrator.Orchestrator
 	planBuilder     *pipeline.PlanBuilder
 	pipelineEngine  *pipeline.PipelineEngine
@@ -56,8 +58,9 @@ func NewApp() *App {
 	webhookSvc := services.NewWebhookService(taskRepo)
 	exporterSvc := services.NewExporterService()
 	schedulerSvc := services.NewSchedulerService()
+	browserSvc := services.NewBrowserAgentService()
 
-	orch := orchestrator.NewOrchestrator(agentRepo, taskRepo, memoryRepo, cliRunner, contextMgr, gitSvc)
+	orch := orchestrator.NewOrchestrator(agentRepo, taskRepo, memoryRepo, cliRunner, contextMgr, gitSvc, browserSvc)
 	planBuilder := pipeline.NewPlanBuilder(cliRunner)
 	pipelineEng := pipeline.NewPipelineEngine(agentRepo, cliRunner)
 
@@ -72,6 +75,7 @@ func NewApp() *App {
 		webhookService:  webhookSvc,
 		exporterService: exporterSvc,
 		schedulerSvc:    schedulerSvc,
+		browserService:  browserSvc,
 		orchestrator:    orch,
 		planBuilder:     planBuilder,
 		pipelineEngine:  pipelineEng,
@@ -102,7 +106,7 @@ func (a *App) startup(ctx context.Context) {
 // ── Workspace ──────────────────────────────────────────────────────────
 
 func (a *App) SelectWorkspaceFolder() (string, error) {
-	folder, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+	folder, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "Chọn thư mục Workspace làm việc",
 	})
 	if err != nil || folder == "" {
@@ -177,7 +181,7 @@ func (a *App) GetTasks() ([]models.Task, error) {
 
 func (a *App) emitBoardUpdated() {
 	if a.ctx != nil {
-		runtime.EventsEmit(a.ctx, "board_updated", nil)
+		wailsRuntime.EventsEmit(a.ctx, "board_updated", nil)
 	}
 }
 
@@ -390,7 +394,7 @@ func (a *App) DownloadAndUpdate(downloadUrl string) UpdateResponse {
 func (a *App) DownloadAndInstallUpdate(url string) error {
 	return a.updaterService.DownloadAndInstall(url, func(downloaded, total int64) {
 		if a.ctx != nil {
-			runtime.EventsEmit(a.ctx, "update_progress", map[string]int64{
+			wailsRuntime.EventsEmit(a.ctx, "update_progress", map[string]int64{
 				"downloaded": downloaded,
 				"total":      total,
 			})
@@ -488,10 +492,65 @@ func (a *App) addRecentWorkspace(dir string) {
 	var newRecent []string
 	newRecent = append(newRecent, dir)
 
-	for _, r := range a.workspaceConfig.RecentWorkspaces {
-		if r != dir && len(newRecent) < 5 {
-			newRecent = append(newRecent, r)
-		}
-	}
 	a.workspaceConfig.RecentWorkspaces = newRecent
+}
+
+// ── Native Go Chrome CDP Browser Agent ─────────────────────────────────
+
+func (a *App) RunBrowserTask(targetURL string, takeScreenshot bool) (*services.BrowserActionResult, error) {
+	return a.browserService.RunBrowserTask(targetURL, takeScreenshot)
+}
+
+// ── Anti CLI Multi-Account / Key Pool ──────────────────────────────────
+
+func (a *App) GetAntiAccountKeys() []cli.AntiAccountKey {
+	return cli.GlobalAntiPool.GetKeys()
+}
+
+func (a *App) AddAntiAccountKey(name, apiKey string) {
+	cli.GlobalAntiPool.AddKey(name, apiKey)
+}
+
+func (a *App) AddAntiOAuthAccountKey(name, oauthToken string) {
+	cli.GlobalAntiPool.AddOAuthKey(name, oauthToken)
+}
+
+func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
+	clientID := customClientID
+	if clientID == "" {
+		clientID = "32555940559-fa7440q2viic87nvi8nk5w0y86z.apps.googleusercontent.com"
+	}
+	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email"
+	if a.ctx != nil {
+		wailsRuntime.BrowserOpenURL(a.ctx, authURL)
+	}
+	return authURL
+}
+
+func (a *App) OpenURLInBrowser(targetURL string) {
+	if a.ctx != nil {
+		wailsRuntime.BrowserOpenURL(a.ctx, targetURL)
+	}
+}
+
+type SystemMetrics struct {
+	AllocMemoryMB   uint64 `json:"alloc_memory_mb"`
+	SysMemoryMB     uint64 `json:"sys_memory_mb"`
+	NumGoroutine    int    `json:"num_goroutine"`
+	NumCPU          int    `json:"num_cpu"`
+	ActiveKeysCount int    `json:"active_keys_count"`
+}
+
+func (a *App) GetSystemMetrics() SystemMetrics {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	keys := cli.GlobalAntiPool.GetKeys()
+
+	return SystemMetrics{
+		AllocMemoryMB:   m.Alloc / 1024 / 1024,
+		SysMemoryMB:     m.Sys / 1024 / 1024,
+		NumGoroutine:    runtime.NumGoroutine(),
+		NumCPU:          runtime.NumCPU(),
+		ActiveKeysCount: len(keys),
+	}
 }

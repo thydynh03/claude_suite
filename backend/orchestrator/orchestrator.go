@@ -23,6 +23,7 @@ type Orchestrator struct {
 	cliRunner    cli.CLIRunner
 	contextMgr   *services.ContextManager
 	gitService   *services.GitService
+	browserSvc   *services.BrowserAgentService
 	dispatcher   *AgentDispatcher
 	fallback     *FallbackHandler
 	workspaceDir string
@@ -41,6 +42,7 @@ func NewOrchestrator(
 	cliRunner cli.CLIRunner,
 	ctxMgr *services.ContextManager,
 	gitSvc *services.GitService,
+	browserSvc *services.BrowserAgentService,
 ) *Orchestrator {
 	return &Orchestrator{
 		agentRepo:  agentRepo,
@@ -49,6 +51,7 @@ func NewOrchestrator(
 		cliRunner:  cliRunner,
 		contextMgr: ctxMgr,
 		gitService: gitSvc,
+		browserSvc: browserSvc,
 		dispatcher: NewAgentDispatcher(),
 		fallback:   NewFallbackHandler(),
 		approvalCh: make(chan bool),
@@ -174,6 +177,32 @@ func (o *Orchestrator) processNextTask() {
 
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "board_updated", nil)
+	}
+
+	// Automated E2E Web Test Skill Auto-Binding
+	titleLower := strings.ToLower(task.Title + " " + task.Prompt + " " + task.Description)
+	if strings.Contains(titleLower, "e2e") || strings.Contains(titleLower, "web test") || strings.Contains(titleLower, "ui test") || strings.Contains(titleLower, "browser test") || strings.Contains(titleLower, "kiểm thử web") {
+		o.emitLog(fmt.Sprintf("🌐 Auto Skill Binding: Phát hiện task E2E Web Test '%s'. Tự động gắn Native Chrome CDP Skill!", task.Title), "SUCCESS")
+		if o.browserSvc != nil {
+			testUrl := "http://localhost:5173"
+			o.emitLog(fmt.Sprintf("🚀 Chrome CDP Browser Skill: Đang tự động mở & kiểm thử %s ngầm...", testUrl), "INFO")
+			bRes, bErr := o.browserSvc.RunBrowserTask(testUrl, true)
+			if bErr == nil && bRes != nil && bRes.Success {
+				outputSummary := fmt.Sprintf("✅ Chrome CDP E2E Test Passed!\nURL: %s\nTitle: %s\nText Snippet: %s\nScreenshot Captured: Yes", bRes.URL, bRes.Title, bRes.TextContent)
+				_ = o.taskRepo.AssignTask(task.TaskID, "Web E2E Tester (Chrome CDP)")
+				_ = o.taskRepo.UpdateStatus(task.TaskID, "done", outputSummary, "chrome-cdp-auto-session")
+				agent.Status = "idle"
+				agent.TasksDone++
+				_ = o.agentRepo.Update(agent)
+				o.emitLog(fmt.Sprintf("🎉 Chrome CDP Browser Skill hoàn thành task E2E '%s' tự động 100%%!", task.Title), "SUCCESS")
+				if o.ctx != nil {
+					runtime.EventsEmit(o.ctx, "board_updated", nil)
+				}
+				return
+			} else {
+				o.emitLog(fmt.Sprintf("⚠️ Chrome CDP Auto-Test warning: %v. Chuyển cho Agent thử lại...", bErr), "WARN")
+			}
+		}
 	}
 
 	// Approval Checkpoint

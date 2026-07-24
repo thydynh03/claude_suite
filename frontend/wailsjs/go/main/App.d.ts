@@ -5,6 +5,10 @@ import {models} from '../models';
 import {main} from '../models';
 import {cli} from '../models';
 
+export function AddAntiAccountKey(arg1:string,arg2:string):Promise<void>;
+
+export function AddAntiOAuthAccountKey(arg1:string,arg2:string):Promise<void>;
+
 export function AssignTask(arg1:string,arg2:string):Promise<void>;
 
 export function CancelScheduledJob(arg1:string):Promise<void>;
@@ -43,6 +47,8 @@ export function GetActiveSession(arg1:string):Promise<string>;
 
 export function GetAgents():Promise<Array<models.Agent>>;
 
+export function GetAntiAccountKeys():Promise<Array<cli.AntiAccountKey>>;
+
 export function GetAppVersion():Promise<string>;
 
 export function GetAutoApproveAll():Promise<boolean>;
@@ -59,6 +65,8 @@ export function GetScheduledJobs():Promise<Array<services.ScheduledJob>>;
 
 export function GetShowCLIConsole():Promise<boolean>;
 
+export function GetSystemMetrics():Promise<main.SystemMetrics>;
+
 export function GetTasks():Promise<Array<models.Task>>;
 
 export function GetWorkspaceConfig():Promise<models.WorkspaceConfig>;
@@ -66,6 +74,10 @@ export function GetWorkspaceConfig():Promise<models.WorkspaceConfig>;
 export function IsOrchestratorRunning():Promise<boolean>;
 
 export function IsWebhookRunning():Promise<boolean>;
+
+export function OpenGoogleOAuthLogin(arg1:string):Promise<string>;
+
+export function OpenURLInBrowser(arg1:string):Promise<void>;
 
 export function PerformAutoUpdate():Promise<cli.RunResult>;
 
@@ -78,6 +90,8 @@ export function ResetAgentsToDefaults():Promise<void>;
 export function ResolveApproval(arg1:boolean):Promise<void>;
 
 export function RevertGitCommit(arg1:string):Promise<void>;
+
+export function RunBrowserTask(arg1:string,arg2:boolean):Promise<services.BrowserActionResult>;
 
 export function RunPipeline(arg1:Array<models.PipelineStep>):Promise<Array<models.PipelineStep>>;
 

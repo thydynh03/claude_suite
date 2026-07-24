@@ -8,12 +8,100 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"claude_suite/backend/models"
 )
+
+type AntiAccountKey struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"` // "api_key" or "oauth_token"
+	APIKey     string `json:"api_key"`
+	OAuthToken string `json:"oauth_token"`
+	Status     string `json:"status"` // "active", "rate_limited_429"
+}
+
+type AccountKeyPool struct {
+	mu      sync.Mutex
+	keys    []AntiAccountKey
+	current int
+}
+
+var GlobalAntiPool = &AccountKeyPool{
+	keys: []AntiAccountKey{
+		{ID: "key-1", Name: "Default Key (Environment)", Type: "api_key", APIKey: "", Status: "active"},
+	},
+}
+
+func (p *AccountKeyPool) GetKeys() []AntiAccountKey {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	keysCopy := make([]AntiAccountKey, len(p.keys))
+	copy(keysCopy, p.keys)
+	return keysCopy
+}
+
+func (p *AccountKeyPool) AddKey(name, apiKey string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.keys = append(p.keys, AntiAccountKey{
+		ID:     fmt.Sprintf("key-%d", len(p.keys)+1),
+		Name:   name,
+		Type:   "api_key",
+		APIKey: apiKey,
+		Status: "active",
+	})
+}
+
+func (p *AccountKeyPool) AddOAuthKey(name, oauthToken string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.keys = append(p.keys, AntiAccountKey{
+		ID:         fmt.Sprintf("key-%d", len(p.keys)+1),
+		Name:       name,
+		Type:       "oauth_token",
+		OAuthToken: oauthToken,
+		Status:     "active",
+	})
+}
+
+func (p *AccountKeyPool) GetCurrentAccount() *AntiAccountKey {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.keys) == 0 {
+		return nil
+	}
+	acc := p.keys[p.current%len(p.keys)]
+	return &acc
+}
+
+func (p *AccountKeyPool) GetCurrentKey() string {
+	acc := p.GetCurrentAccount()
+	if acc == nil {
+		return ""
+	}
+	if acc.Type == "oauth_token" {
+		return acc.OAuthToken
+	}
+	return acc.APIKey
+}
+
+func (p *AccountKeyPool) RotateNextKey() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.keys) <= 1 {
+		return ""
+	}
+	p.keys[p.current%len(p.keys)].Status = "rate_limited_429"
+	p.current = (p.current + 1) % len(p.keys)
+	nextKey := &p.keys[p.current]
+	nextKey.Status = "active"
+	return nextKey.Name
+}
 
 type AntigravityCLI struct {
 	executablePath string
@@ -26,15 +114,36 @@ func NewAntigravityCLI() *AntigravityCLI {
 }
 
 func (a *AntigravityCLI) RunAgent(agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {
-	return a.execute(agent.Model, prompt, agent.System, agent.SessionID, onLog, cwd)
+	return a.executeWithRotation(agent.Model, prompt, agent.System, agent.SessionID, onLog, cwd, 0)
 }
 
 func (a *AntigravityCLI) RunOnce(prompt string, model string, system string, onLog LogCallback, cwd string) *RunResult {
-	return a.execute(model, prompt, system, "", onLog, cwd)
+	return a.executeWithRotation(model, prompt, system, "", onLog, cwd, 0)
 }
 
 func (a *AntigravityCLI) RunSession(prompt string, model string, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
-	return a.execute(model, prompt, system, sessionID, onLog, cwd)
+	return a.executeWithRotation(model, prompt, system, sessionID, onLog, cwd, 0)
+}
+
+func (a *AntigravityCLI) executeWithRotation(model, prompt, system, sessionID string, onLog LogCallback, cwd string, attempt int) *RunResult {
+	res := a.execute(model, prompt, system, sessionID, onLog, cwd)
+
+	// Detect 429 Rate Limit / Quota Exhaustion for Auto-Rotation
+	if !res.Success && attempt < 3 {
+		errLower := strings.ToLower(res.Error)
+		if strings.Contains(errLower, "429") || strings.Contains(errLower, "quota") || strings.Contains(errLower, "limit") || strings.Contains(errLower, "exhausted") {
+			nextKeyName := GlobalAntiPool.RotateNextKey()
+			if nextKeyName != "" {
+				if onLog != nil {
+					onLog(fmt.Sprintf("⚠️ Anti CLI gặp lỗi 429 Rate Limit / Quota. Tự động xoay vòng sang %s và thử lại ngay lập tức...", nextKeyName), "WARN")
+				}
+				time.Sleep(1 * time.Second)
+				return a.executeWithRotation(model, prompt, system, sessionID, onLog, cwd, attempt+1)
+			}
+		}
+	}
+
+	return res
 }
 
 func (a *AntigravityCLI) execute(model, prompt, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
@@ -73,13 +182,32 @@ func (a *AntigravityCLI) execute(model, prompt, system string, sessionID string,
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}
-	cmd.Env = append(os.Environ(),
+
+	env := append(os.Environ(),
 		"CI=true",
 		"NONINTERACTIVE=1",
 		"ANTIGRAVITY_SKIP_PERMISSIONS=1",
 		"AGY_TRUST_ALL=1",
 		"CLAUDE_SKIP_PERMISSIONS=1",
 	)
+
+	acc := GlobalAntiPool.GetCurrentAccount()
+	if acc != nil {
+		if acc.Type == "oauth_token" && acc.OAuthToken != "" {
+			env = append(env,
+				"ANTIGRAVITY_OAUTH_TOKEN="+acc.OAuthToken,
+				"ANTIGRAVITY_AUTH_TYPE=oauth",
+				"GEMINI_OAUTH_TOKEN="+acc.OAuthToken,
+			)
+		} else if acc.APIKey != "" {
+			env = append(env,
+				"GEMINI_API_KEY="+acc.APIKey,
+				"ANTIGRAVITY_API_KEY="+acc.APIKey,
+				"ANTIGRAVITY_AUTH_TYPE=api_key",
+			)
+		}
+	}
+	cmd.Env = env
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { theme, toggleTheme } from '../../lib/stores/theme';
   import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog } from '../../lib/stores/appState';
+  import { currentLang } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   let openMenu: 'file' | 'view' | 'window' | null = null;
@@ -326,6 +327,15 @@
         title="Git Commit, Review & Staging"
       >
         <span class="material-symbols-outlined text-xl">schema</span>
+      </button>
+
+      <!-- Language Switcher -->
+      <button 
+        type="button"
+        on:click={() => currentLang.update(l => l === 'vi' ? 'en' : 'vi')} 
+        class="px-2 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-outline-variant" 
+        title="Switch Language (Chuyển ngôn ngữ)">
+        <span>{$currentLang === 'vi' ? '🇻🇳 VI' : '🇺🇸 EN'}</span>
       </button>
 
       <!-- Theme Switcher -->

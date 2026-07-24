@@ -1,11 +1,23 @@
 <script lang="ts">
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, tasksStore } from '../../lib/stores/appState';
+  import { addLog, tasksStore, agentsStore } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
   export let tasks: Task[] = [];
   export let onRefresh: () => void;
+
+  $: if ($tasksStore) {
+    tasks = $tasksStore;
+  }
+
+  $: agentOptions = [
+    { value: '', label: 'Unassigned (Auto Dispatch)' },
+    ...($agentsStore || []).map(a => ({
+      value: a.name,
+      label: `${a.name}`
+    }))
+  ];
 
   let showAddModal = false;
   let detailTask: Task | null = null;
@@ -69,17 +81,7 @@
     }
   }
 
-  let agentOptions = [
-    { value: '', label: '👤 Unassigned' },
-    { value: 'Tech Lead & Architect', label: '🏗️ Tech Lead & Architect' },
-    { value: 'Product Manager (PdM)', label: '🎯 Product Manager (PdM)' },
-    { value: 'Project Manager (PM)', label: '📊 Project Manager (PM)' },
-    { value: 'Business Analyst (BA)', label: '📋 Business Analyst (BA)' },
-    { value: 'Front-end Developer', label: '🎨 Front-end Developer' },
-    { value: 'Back-end Developer', label: '⚙️ Back-end Developer' },
-    { value: 'DevOps Engineer', label: '🚀 DevOps Engineer' },
-    { value: 'QA/QC Specialist', label: '🧪 QA/QC Specialist' }
-  ];
+
 
   async function handleMoveStatus(taskID: string, newStatus: string) {
     const list = Array.isArray(tasks) ? tasks : [];

@@ -68,6 +68,7 @@
       }
       const loaded = Array.isArray(res) ? res : [];
       tasksStore.set(loaded);
+      subTab = 'kanban';
       addLog(`Created ${loaded.length} tasks!`, 'SUCCESS');
     } catch (e: any) {
       const errStr = String(e || '');
@@ -176,9 +177,11 @@
     </div>
   </div>
 
-  {#if subTab === 'kanban'}
-    <KanbanView {tasks} onRefresh={loadTasks} />
-  {:else if subTab === 'builder'}
+  <div class={subTab === 'kanban' ? 'block' : 'hidden'}>
+    <KanbanView tasks={$tasksStore} onRefresh={loadTasks} />
+  </div>
+
+  {#if subTab === 'builder'}
     <!-- Bento Layout Grid -->
     <div class="grid grid-cols-12 gap-6">
       <!-- Left Panel: Project Description -->
@@ -217,10 +220,12 @@
               type="button"
               on:click|preventDefault={handleDecompose}
               disabled={isDecomposing}
-              class="w-full bg-secondary text-on-secondary flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
+              class="w-full bg-secondary text-on-secondary flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
             >
-              <span class="material-symbols-outlined text-sm">auto_mode</span>
-              {isDecomposing ? 'Đang phân rã kế hoạch...' : 'Tạo kế hoạch AI (Decompose Plan)'}
+              <span class="material-symbols-outlined text-sm {isDecomposing ? 'animate-spin' : ''}">
+                {isDecomposing ? 'sync' : 'auto_mode'}
+              </span>
+              {isDecomposing ? '🤖 AI đang tạo kế hoạch...' : 'Tạo kế hoạch AI (Decompose Plan)'}
             </button>
           </div>
         </div>

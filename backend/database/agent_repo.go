@@ -132,14 +132,15 @@ func (r *AgentRepository) ResetToDefaults() error {
 	_ = r.DeleteAll()
 
 	presets := []models.Agent{
-		{Name: "Tech Lead & Architect", Role: "Technical Leadership & System Architecture", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "🏗️", System: "You are a Tech Lead & Principal Systems Architect."},
-		{Name: "Product Manager (PdM)", Role: "Product Strategy & Feature Definition", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "🎯", System: "You are a Product Manager defining feature roadmap and product vision."},
-		{Name: "Project Manager (PM)", Role: "Agile Execution & Task Orchestration", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "📊", System: "You are a Technical Project Manager tracking project milestones."},
-		{Name: "Business Analyst (BA)", Role: "Requirements Specification & Domain Analysis", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "📋", System: "You are a Senior Business Analyst specifying acceptance criteria."},
-		{Name: "Front-end Developer", Role: "UI/UX & Frontend Web Engineering", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "🎨", System: "You are a Senior Frontend Developer specializing in Svelte, React, HTML5, CSS3."},
-		{Name: "Back-end Developer", Role: "Core Business Logic & API/Database Engineering", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "⚙️", System: "You are a Senior Backend Engineer specializing in Go, Node.js, and SQL databases."},
-		{Name: "DevOps Engineer", Role: "CI/CD, Build Systems & Deployment Automation", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "🚀", System: "You are a DevOps Specialist managing CI/CD pipelines and deployment scripts."},
-		{Name: "QA/QC Specialist", Role: "Quality Control & Automated Testing", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "🧪", System: "You are a QA/QC Engineer writing automated test suites and validating functionality."},
+		{Name: "Tech Lead & Architect", Role: "Technical Leadership & System Architecture", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "architecture", System: "You are a Tech Lead & Principal Systems Architect."},
+		{Name: "Product Manager (PdM)", Role: "Product Strategy & Feature Definition", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "adjust", System: "You are a Product Manager defining feature roadmap and product vision."},
+		{Name: "Project Manager (PM)", Role: "Agile Execution & Task Orchestration", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "bar_chart", System: "You are a Technical Project Manager tracking project milestones."},
+		{Name: "Business Analyst (BA)", Role: "Requirements Specification & Domain Analysis", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "assignment", System: "You are a Senior Business Analyst specifying acceptance criteria."},
+		{Name: "Front-end Developer", Role: "UI/UX & Frontend Web Engineering", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "palette", System: "You are a Senior Frontend Developer specializing in Svelte, React, HTML5, CSS3."},
+		{Name: "Back-end Developer", Role: "Core Business Logic & API/Database Engineering", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "settings", System: "You are a Senior Backend Engineer specializing in Go, Node.js, and SQL databases."},
+		{Name: "DevOps Engineer", Role: "CI/CD, Build Systems & Deployment Automation", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "rocket_launch", System: "You are a DevOps Specialist managing CI/CD pipelines and deployment scripts."},
+		{Name: "QA/QC Specialist", Role: "Quality Control & Automated Testing", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "science", System: "You are a QA/QC Engineer writing automated test suites and validating functionality."},
+		{Name: "Web E2E Tester (Chrome CDP)", Role: "Automated Web Testing & Screenshot Verification", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "language", System: "You are an Automated Web E2E Testing Agent controlling Chrome CDP to navigate web apps, extract DOM, and verify UI screenshot proofs."},
 	}
 
 	for _, p := range presets {

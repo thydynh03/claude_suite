@@ -1,5 +1,27 @@
 export namespace cli {
 	
+	export class AntiAccountKey {
+	    id: string;
+	    name: string;
+	    type: string;
+	    api_key: string;
+	    oauth_token: string;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AntiAccountKey(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.api_key = source["api_key"];
+	        this.oauth_token = source["oauth_token"];
+	        this.status = source["status"];
+	    }
+	}
 	export class RunResult {
 	    success: boolean;
 	    output: string;
@@ -27,6 +49,26 @@ export namespace cli {
 
 export namespace main {
 	
+	export class SystemMetrics {
+	    alloc_memory_mb: number;
+	    sys_memory_mb: number;
+	    num_goroutine: number;
+	    num_cpu: number;
+	    active_keys_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemMetrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.alloc_memory_mb = source["alloc_memory_mb"];
+	        this.sys_memory_mb = source["sys_memory_mb"];
+	        this.num_goroutine = source["num_goroutine"];
+	        this.num_cpu = source["num_cpu"];
+	        this.active_keys_count = source["active_keys_count"];
+	    }
+	}
 	export class UpdateResponse {
 	    success: boolean;
 	    error: string;
@@ -220,6 +262,32 @@ export namespace models {
 
 export namespace services {
 	
+	export class BrowserActionResult {
+	    url: string;
+	    title: string;
+	    html_snippet: string;
+	    text_content: string;
+	    screenshot_base64: string;
+	    logs: string[];
+	    success: boolean;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BrowserActionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.title = source["title"];
+	        this.html_snippet = source["html_snippet"];
+	        this.text_content = source["text_content"];
+	        this.screenshot_base64 = source["screenshot_base64"];
+	        this.logs = source["logs"];
+	        this.success = source["success"];
+	        this.error = source["error"];
+	    }
+	}
 	export class GitBranchInfo {
 	    current: string;
 	    branches: string[];

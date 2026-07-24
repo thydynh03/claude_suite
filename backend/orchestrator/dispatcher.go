@@ -50,8 +50,9 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 		{RoleName: "Business Analyst (BA)", RoleDesc: "Requirements Specification & Domain Analysis", Keywords: []string{"BA", "REQUIREMENT", "SPEC", "ANALYSIS"}, Icon: "📋", System: "You are a Senior Business Analyst specifying acceptance criteria."},
 		{RoleName: "Front-end Developer", RoleDesc: "UI/UX & Frontend Web Engineering", Keywords: []string{"FE", "FRONTEND", "UI", "UX", "HTML", "CSS", "SVELTE", "REACT"}, Icon: "🎨", System: "You are a Senior Frontend Developer specializing in UI/UX web applications."},
 		{RoleName: "Back-end Developer", RoleDesc: "Core Business Logic & API/Database Engineering", Keywords: []string{"BE", "BACKEND", "API", "DB", "DATABASE", "GO", "NODE", "SQL", "CODE"}, Icon: "⚙️", System: "You are a Senior Backend Engineer specializing in core logic, APIs, and databases."},
-		{RoleName: "DevOps Engineer", RoleDesc: "CI/CD, Build Systems & Deployment Automation", Keywords: []string{"DEVOPS", "DOCKER", "CI", "CD", "BUILD", "DEPLOY"}, Icon: "🚀", System: "You are a DevOps Specialist managing build pipelines and deployment automation."},
-		{RoleName: "QA/QC Specialist", RoleDesc: "Quality Control & Automated Testing", Keywords: []string{"QA", "QC", "TEST", "AUTOMATION", "REVIEW", "AUDIT"}, Icon: "🧪", System: "You are a QA/QC Engineer writing automated test suites and validating functionality."},
+		{RoleName: "DevOps Engineer", RoleDesc: "CI/CD, Build Systems & Deployment Automation", Keywords: []string{"DEVOPS", "DOCKER", "CI", "CD", "BUILD", "DEPLOY"}, Icon: "rocket_launch", System: "You are a DevOps Specialist managing build pipelines and deployment automation."},
+		{RoleName: "QA/QC Specialist", RoleDesc: "Quality Control & Automated Testing", Keywords: []string{"QA", "QC", "TEST", "AUTOMATION", "REVIEW", "AUDIT"}, Icon: "science", System: "You are a QA/QC Engineer writing automated test suites and validating functionality."},
+		{RoleName: "Web E2E Tester (Chrome CDP)", RoleDesc: "Automated Web Testing & Screenshot Verification", Keywords: []string{"E2E", "WEB TEST", "BROWSER", "UI TEST", "SCREENSHOT", "CHROME", "CDP", "PLAYWRIGHT"}, Icon: "language", System: "You are an Automated Web E2E Testing Agent controlling Chrome CDP to navigate web apps, extract DOM, and verify UI screenshot proofs."},
 	}
 
 	for _, r := range roles {

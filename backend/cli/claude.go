@@ -60,12 +60,14 @@ func (c *ClaudeCLI) RunSession(prompt string, model string, system string, sessi
 func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
-	args := []string{"-p", prompt, "--dangerously-skip-permissions"}
+	fullPrompt := prompt
+	if system != "" {
+		fullPrompt = fmt.Sprintf("[SYSTEM PROMPT: %s]\n\n%s", system, prompt)
+	}
+
+	args := []string{"-p", fullPrompt, "--dangerously-skip-permissions"}
 	if model != "" {
 		args = append(args, "--model", model)
-	}
-	if system != "" {
-		args = append(args, "--system", system)
 	}
 	if sessionID != "" {
 		args = append(args, "--resume", sessionID)

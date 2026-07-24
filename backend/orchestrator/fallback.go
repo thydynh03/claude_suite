@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"strings"
 
+	"claude_suite/backend/cli"
 	"claude_suite/backend/models"
 )
 
@@ -31,8 +32,14 @@ func (f *FallbackHandler) IsQuotaExhausted(agent *models.Agent, errStr string) b
 }
 
 func (f *FallbackHandler) GetFallbackModel(agent *models.Agent) (string, string) {
-	if agent.Provider == "claude_cli" {
-		return "anti_cli", "gemini-3.6-flash-high"
+	if agent.Provider == "anti_cli" {
+		nextKeyName := cli.GlobalAntiPool.RotateNextKey()
+		if nextKeyName != "" {
+			// Stay on anti_cli with rotated key
+			return "anti_cli", "gemini-3.6-flash-high"
+		}
+		// Pool exhausted -> fallback to Claude
+		return "claude_cli", "claude-sonnet-4-5"
 	}
-	return "claude_cli", "claude-sonnet-4-5"
+	return "anti_cli", "gemini-3.6-flash-high"
 }

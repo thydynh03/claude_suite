@@ -10,6 +10,7 @@
   import DocsPage from './components/pages/DocsPage.svelte';
   import SupportPage from './components/pages/SupportPage.svelte';
   import CodeStudioPage from './components/pages/CodeStudioPage.svelte';
+  import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
 
   import { activeTab, workspaceFolder, addLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
@@ -35,7 +36,7 @@
     });
 
     try {
-      if ((window as any)?.go?.main?.App) {
+      if (AppBindings && AppBindings.GetTasks) {
         const cfg = await AppBindings.GetWorkspaceConfig();
         if (cfg && cfg.last_workspace_folder) {
           workspaceFolder.set(cfg.last_workspace_folder);
@@ -127,6 +128,8 @@
         <VirtualOffice3D />
       {:else if $activeTab === 'scheduler'}
         <SchedulerPage />
+      {:else if $activeTab === 'browser'}
+        <BrowserAgentPage />
       {:else if $activeTab === 'docs'}
         <DocsPage />
       {:else if $activeTab === 'support'}

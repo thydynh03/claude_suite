@@ -15,6 +15,28 @@
   let cliOutput = '';
   let showCLIConsole = false;
 
+  let showFileTreeModal = false;
+  let fileSearchQuery = '';
+
+  $: filteredWorkspaceFiles = workspaceFiles.filter(f => f.toLowerCase().includes(fileSearchQuery.toLowerCase().trim()));
+
+  function toggleFileSelect(file: string) {
+    if (selectedFiles.includes(file)) {
+      selectedFiles = selectedFiles.filter(f => f !== file);
+    } else {
+      selectedFiles = [...selectedFiles, file];
+    }
+  }
+
+  function selectAllFilteredFiles() {
+    const combined = new Set([...selectedFiles, ...filteredWorkspaceFiles]);
+    selectedFiles = Array.from(combined);
+  }
+
+  function clearAllFileSelection() {
+    selectedFiles = [];
+  }
+
   onMount(async () => {
     try {
       if ((window as any)?.go?.main?.App) {
@@ -126,22 +148,44 @@
       <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-surface-container-lowest">
         <!-- File Selection Area -->
         <div class="space-y-3">
-          <div class="flex gap-2">
-            <button class="flex items-center gap-2 bg-surface-container-lowest px-4 py-2 rounded-lg border border-outline-variant hover:bg-primary-container/20 hover:border-primary/50 transition-all text-on-surface shadow-sm text-xs font-medium">
-              <span class="material-symbols-outlined text-on-surface-variant">folder_open</span>
-              Chọn Files từ Project Tree
+          <div class="flex items-center justify-between">
+            <button
+              type="button"
+              on:click={() => showFileTreeModal = true}
+              class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-xl hover:opacity-90 transition-all shadow-sm text-xs font-bold cursor-pointer">
+              <span class="material-symbols-outlined text-sm">account_tree</span>
+              Chọn Files từ Project Tree ({workspaceFiles.length} files)
             </button>
+
+            {#if selectedFiles.length > 0}
+              <button
+                type="button"
+                on:click={clearAllFileSelection}
+                class="text-[11px] text-rose-600 font-semibold hover:underline">
+                Bỏ chọn tất cả ({selectedFiles.length})
+              </button>
+            {/if}
           </div>
-          <!-- File Tree List -->
-          <div class="bg-surface-container-low/40 rounded-lg p-3 h-36 overflow-y-auto space-y-1 border border-outline-variant/60 font-mono text-xs">
-            {#each workspaceFiles.slice(0, 10) as file}
-              <label class="flex items-center gap-2 text-on-surface hover:bg-surface-container-low p-1 rounded transition-colors cursor-pointer">
-                <input type="checkbox" value={file} bind:group={selectedFiles} class="rounded bg-surface-container-lowest border-outline-variant text-primary" />
-                <span class="material-symbols-outlined text-sm text-amber-500">description</span>
-                <span class="truncate">{file}</span>
-              </label>
+
+          <!-- Selected Files Badges / Preview List -->
+          <div class="bg-surface-container-low/40 rounded-xl p-3 h-36 overflow-y-auto space-y-1.5 border border-outline-variant/60 font-mono text-xs">
+            {#each selectedFiles as file}
+              <div class="flex items-center justify-between bg-surface-container-lowest border border-outline-variant/80 px-2.5 py-1 rounded-lg text-on-surface">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                  <span class="truncate">{file}</span>
+                </div>
+                <button
+                  type="button"
+                  on:click={() => toggleFileSelect(file)}
+                  class="text-on-surface-variant hover:text-rose-600 p-0.5 rounded cursor-pointer">
+                  <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
             {:else}
-              <div class="text-on-surface-variant text-xs italic p-2">{$workspaceFolder ? 'Quét xong workspace files' : 'Chưa chọn workspace folder'}</div>
+              <div class="text-on-surface-variant text-xs italic p-4 text-center">
+                Chưa đính kèm file nào. Nhấn nút "Chọn Files từ Project Tree" để đính kèm ngữ cảnh.
+              </div>
             {/each}
           </div>
         </div>
@@ -344,3 +388,88 @@
     </div>
   {/if}
 </div>
+
+<!-- Project Tree & File Picker Modal -->
+{#if showFileTreeModal}
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low/50">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-xl">folder_open</span>
+          <div>
+            <h3 class="font-bold text-sm text-on-surface">Chọn Files từ Project Tree</h3>
+            <p class="text-[11px] text-on-surface-variant">Đã chọn {selectedFiles.length} / {workspaceFiles.length} tệp tin trong Workspace</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          on:click={() => showFileTreeModal = false}
+          class="w-8 h-8 rounded-full hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant cursor-pointer">
+          <span class="material-symbols-outlined text-lg">close</span>
+        </button>
+      </div>
+
+      <!-- Filter & Actions Bar -->
+      <div class="p-3 border-b border-outline-variant bg-surface-container-lowest flex items-center gap-3">
+        <div class="relative flex-1">
+          <span class="material-symbols-outlined absolute left-3 top-2 text-sm text-outline">search</span>
+          <input
+            type="text"
+            bind:value={fileSearchQuery}
+            placeholder="Tìm kiếm theo tên file..."
+            class="w-full bg-surface-container-low border border-outline-variant rounded-xl pl-9 pr-3 py-1.5 text-xs text-on-surface font-mono outline-none focus:border-primary"
+          />
+        </div>
+        <button
+          type="button"
+          on:click={selectAllFilteredFiles}
+          class="bg-surface-container-highest text-on-surface border border-outline-variant px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-surface-container-high cursor-pointer whitespace-nowrap">
+          Chọn tất cả kết quả
+        </button>
+        <button
+          type="button"
+          on:click={clearAllFileSelection}
+          class="bg-rose-500/10 text-rose-600 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-rose-500/20 cursor-pointer whitespace-nowrap">
+          Xóa đã chọn
+        </button>
+      </div>
+
+      <!-- Scrollable File List -->
+      <div class="flex-1 p-3 overflow-y-auto space-y-1 font-mono text-xs max-h-[450px]">
+        {#each filteredWorkspaceFiles as file}
+          {@const isChecked = selectedFiles.includes(file)}
+          <button
+            type="button"
+            on:click={() => toggleFileSelect(file)}
+            class="w-full text-left flex items-center gap-3 p-2 rounded-xl transition-all border cursor-pointer select-none
+            {isChecked ? 'bg-primary-container/30 border-primary text-on-surface font-bold' : 'border-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}"
+          >
+            <input
+              type="checkbox"
+              checked={isChecked}
+              on:click|stopPropagation={() => toggleFileSelect(file)}
+              class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0 cursor-pointer"
+            />
+            <span class="material-symbols-outlined text-sm {isChecked ? 'text-primary' : 'text-amber-500'}">description</span>
+            <span class="truncate flex-1">{file}</span>
+          </button>
+        {:else}
+          <div class="py-12 text-center text-on-surface-variant text-xs italic">
+            {workspaceFiles.length === 0 ? 'Chưa chọn workspace folder hoặc workspace trống' : 'Không tìm thấy file nào khớp từ khóa'}
+          </div>
+        {/each}
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3 border-t border-outline-variant bg-surface-container-low/50 flex justify-end gap-2">
+        <button
+          type="button"
+          on:click={() => showFileTreeModal = false}
+          class="bg-primary text-on-primary px-6 py-2 rounded-xl text-xs font-bold hover:opacity-90 transition-all cursor-pointer">
+          Hoàn thành ({selectedFiles.length} file đính kèm)
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
