@@ -3,4 +3,4 @@
 version.py - Version constants for Auto-Updater.
 """
 
-CURRENT_VERSION = "v1.0.5"
+CURRENT_VERSION = "v1.0.6"
