@@ -84,7 +84,7 @@ class StudioSettingsTabFrame(ctk.CTkFrame):
                 if total > 0:
                     percent = downloaded / total
                     self.after(0, self.update_progress.set, percent)
-                    self.after(0, self.update_status_lbl.configure, text=f"Đang tải: {downloaded/1024/1024:.1f}MB / {total/1024/1024:.1f}MB ({int(percent*100)}%)")
+                    self.after(0, lambda: self.update_status_lbl.configure(text=f"Đang tải: {downloaded/1024/1024:.1f}MB / {total/1024/1024:.1f}MB ({int(percent*100)}%)"))
                     
             def _on_complete(success, msg):
                 def _ui_update():
