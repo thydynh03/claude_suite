@@ -8,6 +8,10 @@ export const sidebarCollapsed = writable<boolean>(false);
 export const isThinking = writable<boolean>(false);
 export const logs = writable<LogEntry[]>([]);
 
+// Global persistent stores — survive tab switching (component destroy/remount)
+export const tasksStore = writable<any[]>([]);
+export const agentsStore = writable<any[]>([]);
+
 export function addLog(msg: string, level = 'INFO', time = '') {
   const t = time || new Date().toLocaleTimeString('en-US', { hour12: false });
   logs.update((l) => [...l.slice(-1000), { message: msg, level, time: t }]);

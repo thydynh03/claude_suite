@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Agent } from '../../lib/types';
-  import { logs, addLog } from '../../lib/stores/appState';
+  import { logs, addLog, agentsStore } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import Dropdown from '../ui/Dropdown.svelte';
 
   let subTab: 'agents' | 'cli' | 'logs' | 'updates' | 'integrations' = 'agents';
+  // Use global store so agent list persists across tab switches
   let agents: Agent[] = [];
+  const unsubscribeAgents = agentsStore.subscribe((v) => { agents = v as Agent[]; });
 
   // Quick CLI state
   let quickPrompt = '';
@@ -40,12 +42,20 @@
         showCLIConsole = await (AppBindings as any).GetShowCLIConsole();
       }
     } catch (e) {}
+    return () => { unsubscribeAgents(); };
   });
 
   async function loadAgents() {
     try {
       if ((window as any)?.go?.main?.App) {
-        agents = await AppBindings.GetAgents();
+        let loaded = await AppBindings.GetAgents();
+        // Auto-seed default agents if DB is empty
+        if (!loaded || loaded.length === 0) {
+          await AppBindings.ResetAgentsToDefaults();
+          loaded = await AppBindings.GetAgents();
+          addLog('Auto-seeded 8 default corporate agents.', 'INFO');
+        }
+        agentsStore.set(loaded || []);
       }
     } catch (e) {
       console.error(e);
@@ -54,8 +64,9 @@
 
   async function handleResetAgents() {
     await AppBindings.ResetAgentsToDefaults();
-    await loadAgents();
-    addLog('Reset agents to 7 default corporate roles', 'SUCCESS');
+    const loaded = await AppBindings.GetAgents();
+    agentsStore.set(loaded || []);
+    addLog(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
   }
 
   async function handleSaveAgent(agent: Agent) {

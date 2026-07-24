@@ -8,7 +8,7 @@
   import VirtualOffice3D from './components/pages/VirtualOffice3D.svelte';
   import SchedulerPage from './components/pages/SchedulerPage.svelte';
 
-  import { activeTab, workspaceFolder, addLog, sidebarCollapsed } from './lib/stores/appState';
+  import { activeTab, workspaceFolder, addLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -37,6 +37,19 @@
         if (cfg && cfg.last_workspace_folder) {
           workspaceFolder.set(cfg.last_workspace_folder);
         }
+        // Bootstrap global stores
+        try {
+          const res = await AppBindings.GetTasks();
+          tasksStore.set(Array.isArray(res) ? res : []);
+        } catch (_) {}
+        try {
+          let ag = await AppBindings.GetAgents();
+          if (!ag || ag.length === 0) {
+            await AppBindings.ResetAgentsToDefaults();
+            ag = await AppBindings.GetAgents();
+          }
+          agentsStore.set(ag || []);
+        } catch (_) {}
       }
     } catch (e) {
       console.warn('Wails config load error:', e);
@@ -54,6 +67,17 @@
           approvalTask = data.taskTitle || 'Unknown task';
           showApprovalModal = true;
         }
+      });
+      // Refresh global stores whenever orchestrator emits board_updated
+      EventsOn('board_updated', async () => {
+        try {
+          const res = await AppBindings.GetTasks();
+          tasksStore.set(Array.isArray(res) ? res : []);
+        } catch (_) {}
+        try {
+          const ag = await AppBindings.GetAgents();
+          agentsStore.set(ag || []);
+        } catch (_) {}
       });
     } catch (e) {
       console.warn('Wails events error:', e);

@@ -3,11 +3,15 @@
   import type { Task } from '../../lib/types';
   import KanbanView from './KanbanView.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, orchestratorRunning } from '../../lib/stores/appState';
+  import { addLog, orchestratorRunning, tasksStore } from '../../lib/stores/appState';
 
   let subTab: 'kanban' | 'builder' | 'reports' = 'kanban';
   let requirementText = '';
+  // Use global store so tasks persist across tab switches
   let tasks: Task[] = [];
+  // Subscribe to global store
+  const unsubscribeTasks = tasksStore.subscribe((v) => { tasks = v as Task[]; });
+
   let isDecomposing = false;
 
   let planModelChoice = 'claude:claude-opus-4-8';
@@ -31,6 +35,7 @@
       });
     }
     return () => {
+      unsubscribeTasks();
       if (unoff && typeof unoff === 'function') unoff();
     };
   });
@@ -39,11 +44,12 @@
     try {
       if ((window as any)?.go?.main?.App) {
         const res = await AppBindings.GetTasks();
-        tasks = Array.isArray(res) ? res : [];
+        const loaded = Array.isArray(res) ? res : [];
+        tasksStore.set(loaded);
       }
     } catch (e) {
       console.error(e);
-      tasks = [];
+      tasksStore.set([]);
     }
   }
 
@@ -54,14 +60,15 @@
     const providerName = provider === 'anti' ? 'Antigravity (Gemini)' : 'Claude Agent';
     addLog(`AI Decomposing project requirements with ${providerName} (${model})...`, 'THINKING');
     try {
+      let res: any;
       if (provider === 'anti') {
-        const res = await (AppBindings as any).DecomposePlanWithProvider(requirementText, "anti_cli", model);
-        tasks = Array.isArray(res) ? res : [];
+        res = await (AppBindings as any).DecomposePlanWithProvider(requirementText, "anti_cli", model);
       } else {
-        const res = await AppBindings.DecomposePlan(requirementText);
-        tasks = Array.isArray(res) ? res : [];
+        res = await AppBindings.DecomposePlan(requirementText);
       }
-      addLog(`Created ${(tasks || []).length} tasks!`, 'SUCCESS');
+      const loaded = Array.isArray(res) ? res : [];
+      tasksStore.set(loaded);
+      addLog(`Created ${loaded.length} tasks!`, 'SUCCESS');
     } catch (e: any) {
       const errStr = String(e || '');
       addLog(`Decompose error: ${errStr}`, 'ERROR');
@@ -90,14 +97,15 @@
     isDecomposing = true;
     addLog(`Chuyển sang ${fallbackAgentName} để phân rã kế hoạch...`, 'INFO');
     try {
+      let res: any;
       if (fallbackProvider === 'anti') {
-        const res = await (AppBindings as any).DecomposePlanWithProvider(requirementText, "anti_cli", fallbackModel);
-        tasks = Array.isArray(res) ? res : [];
+        res = await (AppBindings as any).DecomposePlanWithProvider(requirementText, "anti_cli", fallbackModel);
       } else {
-        const res = await AppBindings.DecomposePlan(requirementText);
-        tasks = Array.isArray(res) ? res : [];
+        res = await AppBindings.DecomposePlan(requirementText);
       }
-      addLog(`Đã phân rã thành công ${(tasks || []).length} tasks bằng ${fallbackAgentName}!`, 'SUCCESS');
+      const loaded = Array.isArray(res) ? res : [];
+      tasksStore.set(loaded);
+      addLog(`Đã phân rã thành công ${loaded.length} tasks bằng ${fallbackAgentName}!`, 'SUCCESS');
       planModelChoice = `${fallbackProvider}:${fallbackModel}`;
     } catch (err2) {
       addLog(`Lỗi phân rã bằng ${fallbackAgentName}: ${err2}`, 'ERROR');
