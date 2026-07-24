@@ -125,7 +125,10 @@ class Task:
     def tags(self) -> List[str]:
         """Tự động nội suy tags từ title hoặc lấy trực tiếp tag [xxx]"""
         import re
-        t = (self.title + " " + self.description + " " + self.prompt).lower()
+        t_str = self.title or ""
+        d_str = self.description or ""
+        p_str = self.prompt or ""
+        t = (t_str + " " + d_str + " " + p_str).lower()
         
         found = []
         # Các tag tường minh [tag]
@@ -206,7 +209,10 @@ class PlanTask:
     @property
     def tags(self) -> List[str]:
         import re
-        t = (self.title + " " + self.description + " " + self.prompt).lower()
+        t_str = self.title or ""
+        d_str = self.description or ""
+        p_str = self.prompt or ""
+        t = (t_str + " " + d_str + " " + p_str).lower()
         
         found = []
         matches = re.findall(r"\[([a-z0-9_]+)\]", t)
