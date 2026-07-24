@@ -246,19 +246,31 @@
             placeholder="Ví dụ: Xây dựng form đăng nhập theo giao diện đính kèm..."
           ></textarea>
 
-          <!-- Quick Actions Pills -->
+          <!-- Quick Actions & Prompt Templates Pills -->
           <div class="absolute bottom-4 left-4 flex flex-wrap gap-2">
-            <button on:click={() => addQuickPreset('Sửa lỗi:')} class="flex items-center gap-1 px-3 py-1 bg-tertiary-container/20 text-tertiary border border-tertiary/30 rounded-full text-[10px] font-bold uppercase hover:bg-tertiary-container/40 transition-all bg-white">
-              <span class="material-symbols-outlined text-xs">build</span> Sửa lỗi
+            <button
+              type="button"
+              on:click={() => addQuickPreset('🛠 Tối ưu hóa & Refactor cấu trúc code sạch sẽ, tuân thủ DRY & SOLID')}
+              class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer shadow-xs">
+              🛠 Refactor Clean Code
             </button>
-            <button on:click={() => addQuickPreset('Thêm tính năng:')} class="flex items-center gap-1 px-3 py-1 bg-secondary-container/30 text-primary border border-secondary/30 rounded-full text-[10px] font-bold uppercase hover:bg-secondary-container/50 transition-all bg-white">
-              <span class="material-symbols-outlined text-xs">add_circle</span> Thêm tính năng
+            <button
+              type="button"
+              on:click={() => addQuickPreset('🔒 Rà soát và vá toàn bộ lỗ hổng bảo mật OWASP, mã hóa dữ liệu sensitive')}
+              class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer shadow-xs">
+              🔒 Security Audit
             </button>
-            <button on:click={() => addQuickPreset('Tối ưu performance:')} class="flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold uppercase hover:bg-emerald-200 transition-all bg-white">
-              <span class="material-symbols-outlined text-xs">auto_fix_high</span> Tối ưu
+            <button
+              type="button"
+              on:click={() => addQuickPreset('⚡️ Tối ưu hóa hiệu năng, giảm bộ nhớ RAM và thời gian phản hồi')}
+              class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-xs">
+              ⚡️ Performance Boost
             </button>
-            <button on:click={() => addQuickPreset('Viết documentation:')} class="flex items-center gap-1 px-3 py-1 bg-surface-container-highest text-on-surface-variant border border-outline-variant rounded-full text-[10px] font-bold uppercase hover:bg-outline-variant/30 transition-all bg-white">
-              <span class="material-symbols-outlined text-xs">menu_book</span> Viết Docs
+            <button
+              type="button"
+              on:click={() => addQuickPreset('🧪 Viết unit tests và E2E web browser test tự động kiểm thử tính năng')}
+              class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-500/10 text-purple-600 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer shadow-xs">
+              🧪 Unit & E2E Tests
             </button>
           </div>
         </div>
