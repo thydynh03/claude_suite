@@ -28,11 +28,16 @@
   let updateStatusMessage = '';
   let updateStatusType: 'info' | 'success' | 'error' = 'info';
 
+  let showCLIConsole = false;
+
   onMount(async () => {
     await loadAgents();
     try {
       if ((AppBindings as any).GetAppVersion) {
         currentAppVersion = await (AppBindings as any).GetAppVersion();
+      }
+      if ((AppBindings as any).GetShowCLIConsole) {
+        showCLIConsole = await (AppBindings as any).GetShowCLIConsole();
       }
     } catch (e) {}
   });
@@ -274,9 +279,9 @@
     <div class="space-y-4">
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-4 shadow-sm">
         <div class="flex items-center gap-4">
-          <label class="text-xs font-bold text-on-surface whitespace-nowrap">Agent & Model:</label>
+          <label for="agent-model-select" class="text-xs font-bold text-on-surface whitespace-nowrap">Agent & Model:</label>
           <div class="flex gap-2 w-full max-w-sm">
-            <select bind:value={selectedAgentType} 
+            <select id="agent-model-select" bind:value={selectedAgentType} 
               on:change={() => selectedModel = selectedAgentType === 'claude' ? 'claude-opus-4-8' : 'gemini-3.1-pro-high'}
               class="w-1/2 bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary">
               <option value="claude">Claude</option>
@@ -299,6 +304,33 @@
               {/if}
             </select>
           </div>
+        </div>
+
+        <!-- CLI Window Visibility Toggle Switch -->
+        <div class="flex items-center justify-between p-3 bg-surface-container-low/50 rounded-xl border border-outline-variant/60">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-sm">terminal</span>
+            <div>
+              <div class="text-xs font-bold text-on-surface">Hiển thị Cửa Sổ CMD Khi Chạy CLI (Console Window)</div>
+              <div class="text-[11px] text-on-surface-variant">
+                {showCLIConsole ? '🟢 ĐANG BẬT: Mở cửa sổ CMD để xem CLI làm việc trực tiếp' : '⚫ ĐANG TẮT: Chạy ngầm 100% không làm phiền màn hình'}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            on:click={async () => {
+              showCLIConsole = !showCLIConsole;
+              if ((AppBindings as any).SetShowCLIConsole) {
+                await (AppBindings as any).SetShowCLIConsole(showCLIConsole);
+                addLog(`Chế độ cửa sổ CLI: ${showCLIConsole ? 'HIỆN (BẬT CMD)' : 'ẨN (TẮT CMD)'}`, 'INFO');
+              }
+            }}
+            class="px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 {showCLIConsole ? 'bg-emerald-600 text-white shadow-md' : 'bg-surface-container-highest text-on-surface-variant border border-outline-variant'}"
+          >
+            <span class="material-symbols-outlined text-sm">{showCLIConsole ? 'visibility' : 'visibility_off'}</span>
+            {showCLIConsole ? 'BẬT (Hiện CMD)' : 'TẮT (Ẩn ngầm)'}
+          </button>
         </div>
 
         <textarea
@@ -404,9 +436,10 @@
       </div>
       
       <div class="space-y-2">
-        <label class="text-sm font-bold text-on-surface">Global Webhook URL</label>
+        <label for="global-webhook-url" class="text-sm font-bold text-on-surface">Global Webhook URL</label>
         <p class="text-xs text-on-surface-variant">Used to send automated events and task completion notifications to external services like Slack, Discord, or custom backends.</p>
         <input 
+          id="global-webhook-url"
           type="text" 
           bind:value={webhookUrl}
           placeholder="https://hooks.slack.com/services/..."
@@ -415,9 +448,10 @@
       </div>
 
       <div class="space-y-2">
-        <label class="text-sm font-bold text-on-surface">MCP Connection String</label>
+        <label for="mcp-connection-string" class="text-sm font-bold text-on-surface">MCP Connection String</label>
         <p class="text-xs text-on-surface-variant">Configure the Model Context Protocol endpoint for advanced external integrations and agent memories.</p>
         <input 
+          id="mcp-connection-string"
           type="text" 
           bind:value={mcpConnectionString}
           placeholder="mcp://localhost:8000/v1"

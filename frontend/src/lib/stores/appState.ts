@@ -3,8 +3,9 @@ import type { LogEntry } from '../types';
 
 export const activeTab = writable<string>('cockpit'); // "cockpit", "kanban", "settings", "office"
 export const workspaceFolder = writable<string>('');
-export const orchestratorRunning = writable<bool>(false);
-export const isThinking = writable<bool>(false);
+export const orchestratorRunning = writable<boolean>(false);
+export const sidebarCollapsed = writable<boolean>(false);
+export const isThinking = writable<boolean>(false);
 export const logs = writable<LogEntry[]>([]);
 
 export function addLog(msg: string, level = 'INFO', time = '') {

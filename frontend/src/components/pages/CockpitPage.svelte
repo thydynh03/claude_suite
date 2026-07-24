@@ -7,20 +7,37 @@
   let workspaceFiles: string[] = [];
   let selectedFiles: string[] = [];
   let isRunning = false;
-  let activeAgent = 'Claude-3.5-Sonnet';
+  let selectedModel = 'claude-sonnet-4-5';
+  $: activeAgent = selectedModel.includes('gemini') ? 'Antigravity (Gemini 3.6 Flash)' : selectedModel.includes('opus') ? 'Claude 4.8 Opus' : 'Claude 4.5 Sonnet';
   let thinkingPercent = 75;
 
   let topTab = 'active'; // 'active' | 'history'
+  let cliOutput = '';
+  let showCLIConsole = false;
 
   onMount(async () => {
     try {
       if ((window as any)?.go?.main?.App) {
         workspaceFiles = await AppBindings.ScanWorkspaceFiles();
       }
+      if ((AppBindings as any).GetShowCLIConsole) {
+        showCLIConsole = await (AppBindings as any).GetShowCLIConsole();
+      }
     } catch (e) {
       console.error(e);
     }
   });
+
+  async function handleToggleShowCLIConsole() {
+    try {
+      if ((AppBindings as any).SetShowCLIConsole) {
+        await (AppBindings as any).SetShowCLIConsole(showCLIConsole);
+        addLog(`Cài đặt cửa sổ CMD: ${showCLIConsole ? 'BẬT (Hiện CMD)' : 'TẮT (Ẩn ngầm)'}`, 'INFO');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   function addQuickPreset(text: string) {
     if (promptInput) {
@@ -33,16 +50,20 @@
   async function handleRunAuto() {
     if (!promptInput.trim()) return;
     isRunning = true;
+    cliOutput = '⏳ Đang kết nối Agent và thực thi CLI...';
     addLog(`Initiated execution sequence for: "${promptInput.slice(0, 40)}..."`, 'SEND');
 
     try {
-      const res = await AppBindings.RunQuickCLI(promptInput, 'claude-sonnet-4-5', '', selectedFiles);
+      const res = await AppBindings.RunQuickCLI(promptInput, selectedModel, '', selectedFiles);
       if (res && res.success) {
+        cliOutput = res.output;
         addLog(`Execution finished successfully (${res.duration_sec.toFixed(1)}s)`, 'SUCCESS');
       } else if (res) {
+        cliOutput = '❌ Lỗi thực thi: ' + res.error;
         addLog(`Execution failed: ${res.error}`, 'ERROR');
       }
     } catch (e) {
+      cliOutput = '❌ Lỗi kết nối: ' + e;
       addLog(`Error executing CLI: ${e}`, 'ERROR');
     } finally {
       isRunning = false;
@@ -71,16 +92,20 @@
       </h1>
       <p class="text-on-surface-variant text-sm mt-1">Orchestrate agents, tasks, and code in a unified technical workspace.</p>
     </div>
-    <div class="flex items-center gap-2 bg-surface-container-lowest p-1 rounded-full border border-outline-variant shadow-sm">
-      <button on:click={() => topTab = 'active'} 
-        class="px-4 py-1 rounded-full text-xs font-bold flex items-center gap-1 transition-colors
-        {topTab === 'active' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'}">
+    <div class="bg-surface-container-high p-1 rounded-xl flex gap-1 border border-outline-variant">
+      <button 
+        type="button"
+        on:click={() => (topTab = 'active')} 
+        class="px-5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer
+        {topTab === 'active' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}">
         <span class="material-symbols-outlined text-sm">bolt</span> ACTIVE
       </button>
-      <button on:click={() => topTab = 'history'} 
-        class="px-4 py-1 rounded-full text-xs font-bold transition-colors
-        {topTab === 'history' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'}">
-        HISTORY
+      <button 
+        type="button"
+        on:click={() => (topTab = 'history')} 
+        class="px-5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer
+        {topTab === 'history' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}">
+        <span class="material-symbols-outlined text-sm">history</span> HISTORY ({$logs.length})
       </button>
     </div>
   </div>
@@ -140,6 +165,36 @@
         </div>
       </div>
       <div class="p-4 space-y-4 bg-surface-container-lowest">
+        <!-- Model Selection & CLI Console Toggle -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-surface-container-low/40 p-3 rounded-xl border border-outline-variant/60">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary text-sm">smart_toy</span>
+            <label for="cockpit-model-select" class="text-on-surface font-bold whitespace-nowrap">Model AI thực thi:</label>
+            <select id="cockpit-model-select" bind:value={selectedModel} class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface font-mono outline-none">
+              <optgroup label="Claude Agent">
+                <option value="claude-sonnet-4-5">Claude 4.5 Sonnet</option>
+                <option value="claude-opus-4-8">Claude 4.8 Opus</option>
+                <option value="claude-haiku-4-5">Claude 4.5 Haiku</option>
+              </optgroup>
+              <optgroup label="Antigravity Agent (Gemini)">
+                <option value="gemini-3.6-flash-high">Gemini 3.6 Flash (High)</option>
+                <option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- CLI Console Toggle Switch -->
+          <div class="flex items-center gap-2 bg-surface-container-lowest px-3 py-1.5 rounded-lg border border-outline-variant">
+            <label for="cockpit-cli-toggle" class="text-[11px] font-bold text-on-surface cursor-pointer select-none">Hiện cửa sổ CMD:</label>
+            <input 
+              id="cockpit-cli-toggle"
+              type="checkbox" 
+              bind:checked={showCLIConsole}
+              on:change={handleToggleShowCLIConsole}
+              class="w-4 h-4 rounded text-primary cursor-pointer"
+            />
+          </div>
+        </div>
         <div class="relative">
           <textarea
             bind:value={promptInput}
@@ -208,8 +263,15 @@
           </div>
         </div>
 
-        <!-- Real-time Log Container -->
-        <div class="flex-1 font-mono text-xs p-4 overflow-y-auto bg-slate-900 text-slate-100 space-y-1">
+        <!-- Real-time Log Container & CLI Output -->
+        <div class="flex-1 font-mono text-xs p-4 overflow-y-auto bg-slate-900 text-slate-100 space-y-3">
+          {#if cliOutput}
+            <div class="p-3 bg-slate-800/90 border border-slate-700 rounded-lg text-emerald-400 whitespace-pre-wrap font-mono text-xs shadow-inner">
+              <div class="text-[10px] text-slate-400 uppercase font-bold mb-1 pb-1 border-b border-slate-700">Phản hồi từ Agent ({selectedModel}):</div>
+              {cliOutput}
+            </div>
+          {/if}
+
           {#each $logs as log}
             <div class="flex gap-2">
               <span class="text-slate-400">[{log.time}]</span>
@@ -223,7 +285,9 @@
               <span class="text-slate-200">{log.message}</span>
             </div>
           {:else}
-            <div class="text-slate-500 italic">Sẵn sàng thực thi. Nhập prompt ở Step 2 và bấm 'Chạy Tự Động'.</div>
+            {#if !cliOutput}
+              <div class="text-slate-500 italic">Sẵn sàng thực thi. Nhập prompt ở Step 2 và bấm 'Chạy Tự Động'.</div>
+            {/if}
           {/each}
         </div>
       </div>
@@ -231,9 +295,52 @@
     </div>
   {:else}
     <!-- History View -->
-    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-8 text-center text-on-surface-variant italic">
-      <span class="material-symbols-outlined text-4xl mb-4 text-outline">history</span>
-      <p>Lịch sử hoạt động sẽ được hiển thị ở đây.</p>
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 space-y-4 shadow-sm">
+      <div class="flex justify-between items-center pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-xl">history</span>
+          <h3 class="font-bold text-sm text-on-surface">Lịch sử thực thi & Log tiến trình ({$logs.length} nhật ký)</h3>
+        </div>
+        <button type="button" on:click|preventDefault={() => topTab = 'active'} class="px-3 py-1 bg-primary text-on-primary font-bold text-xs rounded-lg hover:opacity-90 transition-all flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">arrow_back</span> Quay lại Active Workspace
+        </button>
+      </div>
+
+      {#if $logs.length > 0}
+        <div class="overflow-x-auto max-h-[500px]">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-surface-container-low text-on-surface-variant uppercase text-[10px] sticky top-0">
+              <tr>
+                <th class="p-3">Thời gian</th>
+                <th class="p-3">Trạng thái</th>
+                <th class="p-3">Nội dung nhật ký</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-outline-variant">
+              {#each $logs as log}
+                <tr class="hover:bg-surface-container-low/50">
+                  <td class="p-3 whitespace-nowrap text-on-surface-variant font-bold">[{log.time}]</td>
+                  <td class="p-3 whitespace-nowrap font-bold">
+                    <span class="px-2 py-0.5 rounded text-[10px]
+                      {log.level === 'SUCCESS' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' : ''}
+                      {log.level === 'ERROR' ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' : ''}
+                      {log.level === 'WARN' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30' : ''}
+                      {log.level === 'THINKING' ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30' : ''}
+                      {log.level === 'SEND' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30' : ''}
+                    ">[{log.level}]</span>
+                  </td>
+                  <td class="p-3 text-on-surface font-sans">{log.message}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {:else}
+        <div class="py-12 text-center text-on-surface-variant italic">
+          <span class="material-symbols-outlined text-4xl mb-2 text-outline">history</span>
+          <p>Chưa có nhật ký hoạt động nào được ghi lại trong phiên làm việc này.</p>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

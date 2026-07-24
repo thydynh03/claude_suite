@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activeTab, orchestratorRunning } from '../../lib/stores/appState';
+  import { activeTab, orchestratorRunning, sidebarCollapsed } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   async function handleExecutePlan() {
@@ -8,87 +8,121 @@
   }
 </script>
 
-<aside class="fixed left-0 top-[60px] h-[calc(100vh-60px)] w-[240px] flex flex-col py-4 bg-surface-container-low border-r border-outline-variant z-40">
-  <!-- Brand Header -->
-  <div class="px-6 mb-6">
-    <div class="flex items-center gap-2 mb-1">
-      <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm">
+<aside class="fixed left-0 top-[60px] h-[calc(100vh-60px)] {$sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'} flex flex-col py-4 bg-surface-container-low border-r border-outline-variant z-40 transition-all duration-300">
+  <!-- Brand Header & Collapse Toggle -->
+  <div class="px-4 mb-6 flex items-center justify-between">
+    <div class="flex items-center gap-2 overflow-hidden">
+      <div class="w-8 h-8 rounded-lg bg-primary flex-shrink-0 flex items-center justify-center shadow-sm">
         <span class="material-symbols-outlined text-on-primary text-xl">smart_toy</span>
       </div>
-      <div>
-        <h2 class="font-bold text-primary leading-tight text-base">Agent Center</h2>
-        <p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider">v4.8 Orchestrator</p>
-      </div>
+      {#if !$sidebarCollapsed}
+        <div class="truncate">
+          <h2 class="font-bold text-primary leading-tight text-sm truncate">Agent Center</h2>
+          <p class="text-[9px] text-on-surface-variant uppercase font-bold tracking-wider">v4.8 Orchestrator</p>
+        </div>
+      {/if}
     </div>
+    <button
+      type="button"
+      on:click|preventDefault={() => sidebarCollapsed.update(c => !c)}
+      class="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant transition-colors flex items-center justify-center cursor-pointer"
+      title={$sidebarCollapsed ? "Mở rộng Sidebar (>>)" : "Thu gọn Sidebar (<<)"}
+    >
+      <span class="material-symbols-outlined text-lg">{$sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
+    </button>
   </div>
 
   <!-- Navigation Items -->
   <nav class="flex-1 space-y-1">
     <button
-      on:click={() => activeTab.set('cockpit')}
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider
-      {$activeTab === 'cockpit' ? 'bg-secondary-container text-on-secondary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+      type="button"
+      on:click|preventDefault={() => activeTab.set('cockpit')}
+      title="AI Cockpit"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'cockpit' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
     >
-      <span class="material-symbols-outlined mr-3 text-primary">rocket_launch</span>
-      AI COCKPIT
+      <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">rocket_launch</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">AI COCKPIT</span>
+      {/if}
     </button>
 
     <button
-      on:click={() => activeTab.set('kanban')}
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider
-      {$activeTab === 'kanban' ? 'bg-secondary-container text-on-secondary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+      type="button"
+      on:click|preventDefault={() => activeTab.set('kanban')}
+      title="Task Board & Planning"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'kanban' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
     >
-      <span class="material-symbols-outlined mr-3 text-secondary">assignment</span>
-      TASK BOARD & PLANNING
+      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">assignment</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">TASK BOARD & PLANNING</span>
+      {/if}
     </button>
 
     <button
-      on:click={() => activeTab.set('settings')}
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider
-      {$activeTab === 'settings' ? 'bg-secondary-container text-on-secondary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+      type="button"
+      on:click|preventDefault={() => activeTab.set('settings')}
+      title="Studio & Settings"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'settings' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
     >
-      <span class="material-symbols-outlined mr-3 text-secondary">settings</span>
-      STUDIO & SETTINGS
+      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">settings</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">STUDIO & SETTINGS</span>
+      {/if}
     </button>
 
     <button
-      on:click={() => activeTab.set('office')}
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider
-      {$activeTab === 'office' ? 'bg-secondary-container text-on-secondary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+      type="button"
+      on:click|preventDefault={() => activeTab.set('office')}
+      title="Virtual Office"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'office' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
     >
-      <span class="material-symbols-outlined mr-3 text-secondary">apartment</span>
-      VIRTUAL OFFICE
+      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">apartment</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">VIRTUAL OFFICE</span>
+      {/if}
     </button>
 
     <button
-      on:click={() => activeTab.set('scheduler')}
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider
-      {$activeTab === 'scheduler' ? 'bg-secondary-container text-on-secondary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+      type="button"
+      on:click|preventDefault={() => activeTab.set('scheduler')}
+      title="Scheduler"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'scheduler' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
     >
-      <span class="material-symbols-outlined mr-3 text-secondary">schedule</span>
-      SCHEDULER
+      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">schedule</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">SCHEDULER</span>
+      {/if}
     </button>
   </nav>
 
   <!-- Bottom Execution Button & Links -->
-  <div class="px-4 mt-auto pt-4 border-t border-outline-variant/30">
+  <div class="px-3 mt-auto pt-4 border-t border-outline-variant/30">
     <button
-      on:click={handleExecutePlan}
-      class="w-full bg-primary py-3 rounded-xl text-on-primary font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-4 shadow-sm active:scale-95"
+      type="button"
+      on:click|preventDefault={handleExecutePlan}
+      title="Execute Plan"
+      class="w-full bg-primary py-3 rounded-xl text-on-primary font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-4 shadow-sm active:scale-95 cursor-pointer"
     >
       <span class="material-symbols-outlined">play_arrow</span>
-      Execute Plan
+      {#if !$sidebarCollapsed}<span>Execute Plan</span>{/if}
     </button>
 
-    <div class="space-y-1">
-      <a href="#docs" class="text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all">
-        <span class="material-symbols-outlined text-base mr-3">description</span>
-        <span class="uppercase tracking-wider font-semibold">DOCS</span>
-      </a>
-      <a href="#support" class="text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all">
-        <span class="material-symbols-outlined text-base mr-3">help</span>
-        <span class="uppercase tracking-wider font-semibold">SUPPORT</span>
-      </a>
-    </div>
+    {#if !$sidebarCollapsed}
+      <div class="space-y-1">
+        <a href="#docs" class="text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all">
+          <span class="material-symbols-outlined text-base mr-3">description</span>
+          <span class="uppercase tracking-wider font-semibold">DOCS</span>
+        </a>
+        <a href="#support" class="text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all">
+          <span class="material-symbols-outlined text-base mr-3">help</span>
+          <span class="uppercase tracking-wider font-semibold">SUPPORT</span>
+        </a>
+      </div>
+    {/if}
   </div>
 </aside>

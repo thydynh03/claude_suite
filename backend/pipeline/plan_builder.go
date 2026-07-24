@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/models"
@@ -18,12 +19,14 @@ func NewPlanBuilder(cliRunner cli.CLIRunner) *PlanBuilder {
 }
 
 type DecomposedTask struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Prompt      string   `json:"prompt"`
-	Priority    string   `json:"priority"`
-	ModelHint   string   `json:"model_hint"`
-	DependsOn   []int    `json:"depends_on"` // 0-indexed dependency indices
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Prompt       string   `json:"prompt"`
+	Priority     string   `json:"priority"`
+	ModelHint    string   `json:"model_hint"`
+	ProviderHint string   `json:"provider_hint"` // "anti_cli" | "claude_cli"
+	RoleTag      string   `json:"role_tag"`      // "BRAINSTORM" | "PLAN" | "ARCH" | "CODE" | "REVIEW" | "TEST" | "QA"
+	DependsOn    []int    `json:"depends_on"`    // 0-indexed dependency indices
 }
 
 type DecomposedPlan struct {
@@ -31,27 +34,41 @@ type DecomposedPlan struct {
 }
 
 func (p *PlanBuilder) Decompose(projectRequirement string, cwd string) ([]models.Task, error) {
-	systemPrompt := `You are a Principal Software Architect. Decompose the following project requirement into structured, executable tasks.
-OUTPUT ONLY VALID JSON with this exact schema:
-{
-  "tasks": [
-    {
-      "title": "Task Title",
-      "description": "Short description",
-      "prompt": "Detailed actionable prompt for LLM agent",
-      "priority": "high" | "normal" | "low",
-      "model_hint": "claude-opus-4-8" | "claude-sonnet-4-5",
-      "depends_on": [] // 0-based task indices
-    }
-  ]
-}`
+	return p.DecomposeWithProvider(projectRequirement, cwd, "claude_cli", "claude-opus-4-8")
+}
 
-	prompt := fmt.Sprintf("Project Requirement:\n%s\n\nDecompose into JSON task tree.", projectRequirement)
+func (p *PlanBuilder) DecomposeWithProvider(projectRequirement string, cwd string, provider string, model string) ([]models.Task, error) {
+	systemPrompt := "You are a Tech Lead & Principal Architect leading a software engineering company.\n" +
+		"Decompose the user's project requirement into specific, actionable, modular tasks.\n\n" +
+		"Return ONLY a JSON object formatted inside a ```json ... ``` codeblock matching this EXACT JSON schema:\n" +
+		"{\n" +
+		"  \"tasks\": [\n" +
+		"    {\n" +
+		"      \"title\": \"Clear task title\",\n" +
+		"      \"description\": \"Detailed explanation of task requirements\",\n" +
+		"      \"prompt\": \"Full step-by-step instructions for the subagent assigned to work on this task\",\n" +
+		"      \"priority\": \"high\" | \"normal\" | \"low\",\n" +
+		"      \"provider_hint\": \"claude_cli\" | \"anti_cli\",\n" +
+		"      \"role_tag\": \"BA\" | \"ARCH\" | \"CODE\" | \"REVIEW\" | \"QA\" | \"DEVOPS\" | \"PM\" | \"PDM\",\n" +
+		"      \"depends_on\": []\n" +
+		"    }\n" +
+		"  ]\n" +
+		"}"
 
-	result := p.cliRunner.RunOnce(prompt, "claude-opus-4-8", systemPrompt, nil, cwd)
+	prompt := fmt.Sprintf("Project Requirement:\n\"%s\"\n\nAnalyze and decompose into 3 to 7 specific tasks.", projectRequirement)
+
+	var result *cli.RunResult
+	if provider == "anti_cli" {
+		anti := cli.NewAntigravityCLI()
+		result = anti.RunOnce(prompt, model, systemPrompt, nil, cwd)
+	} else {
+		result = p.cliRunner.RunOnce(prompt, model, systemPrompt, nil, cwd)
+	}
 
 	if !result.Success {
-		// Fallback to simple split
+		if result.Error != "" {
+			return nil, fmt.Errorf("CLI Error: %s", result.Error)
+		}
 		return p.SimpleSplit(projectRequirement), nil
 	}
 
@@ -65,34 +82,74 @@ OUTPUT ONLY VALID JSON with this exact schema:
 
 func (p *PlanBuilder) SimpleSplit(requirement string) []models.Task {
 	return []models.Task{
-		{Title: "Phân tích yêu cầu", Description: "Phân tích và hiểu yêu cầu: " + requirement, Prompt: "Analyze requirements for: " + requirement, Priority: "high", Status: "backlog"},
-		{Title: "Lập kế hoạch thực hiện", Description: "Tạo kế hoạch chi tiết", Prompt: "Create detailed execution plan for: " + requirement, Priority: "high", Status: "backlog"},
-		{Title: "Thực hiện Phase 1", Description: "Code và phát triển tính năng core", Prompt: "Execute phase 1 of: " + requirement, Priority: "normal", Status: "backlog"},
-		{Title: "Kiểm thử & Review", Description: "Viết unit test và review code", Prompt: "Review and write tests for: " + requirement, Priority: "normal", Status: "backlog"},
+		{Title: "[BA] Phân tích yêu cầu", Description: "Phân tích và hiểu yêu cầu: " + requirement, Prompt: "[BA][claude_cli] Analyze requirements for: " + requirement, Priority: "high", Status: "backlog"},
+		{Title: "[ARCH] Lập kiến trúc & kế hoạch", Description: "Tạo kế hoạch chi tiết", Prompt: "[ARCH][claude_cli] Create detailed architecture plan for: " + requirement, Priority: "high", Status: "backlog"},
+		{Title: "[CODE] Thực hiện Phase 1 (Core Dev)", Description: "Code và phát triển tính năng core", Prompt: "[CODE][anti_cli] Execute core feature development for: " + requirement, Priority: "normal", Status: "backlog"},
+		{Title: "[QA] Kiểm thử & Review Code", Description: "Viết unit test và review code", Prompt: "[QA][anti_cli] Review and write automated tests for: " + requirement, Priority: "normal", Status: "backlog"},
 	}
 }
 
 func parseJSONTasks(rawJSON string, requirement string) ([]models.Task, error) {
-	// Extract JSON block using regex if wrapped in markdown ```json
-	re := regexp.MustCompile(`(?s)\{.*?\}`)
-	match := re.FindString(rawJSON)
-	if match == "" {
-		match = rawJSON
+	if strings.TrimSpace(rawJSON) == "" {
+		return nil, fmt.Errorf("empty raw JSON")
+	}
+
+	var jsonStr string
+	// Check for ```json ... ``` codeblock
+	codeBlockReg := regexp.MustCompile("(?s)```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```")
+	matches := codeBlockReg.FindStringSubmatch(rawJSON)
+
+	if len(matches) > 1 && strings.TrimSpace(matches[1]) != "" {
+		jsonStr = matches[1]
+	} else {
+		firstOpen := strings.Index(rawJSON, "{")
+		lastClose := strings.LastIndex(rawJSON, "}")
+		if firstOpen != -1 && lastClose > firstOpen {
+			jsonStr = rawJSON[firstOpen : lastClose+1]
+		} else {
+			jsonStr = rawJSON
+		}
 	}
 
 	var plan DecomposedPlan
-	if err := json.Unmarshal([]byte(match), &plan); err != nil {
-		return nil, err
+	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
+		return nil, fmt.Errorf("unmarshal error: %v (jsonStr len=%d)", err, len(jsonStr))
 	}
 
 	var tasks []models.Task
 	taskIDMap := make(map[int]string)
 
 	for i, dt := range plan.Tasks {
+		roleTag := dt.RoleTag
+		if roleTag == "" {
+			titleLower := fmt.Sprintf("%s %s", dt.Title, dt.Prompt)
+			if regexp.MustCompile(`(?i)test|qa|kiểm`).MatchString(titleLower) {
+				roleTag = "QA"
+			} else if regexp.MustCompile(`(?i)arch|design|kiến trúc`).MatchString(titleLower) {
+				roleTag = "ARCH"
+			} else if regexp.MustCompile(`(?i)ba|req|yêu cầu|plan`).MatchString(titleLower) {
+				roleTag = "BA"
+			} else if regexp.MustCompile(`(?i)review|audit|sec`).MatchString(titleLower) {
+				roleTag = "REVIEW"
+			} else {
+				roleTag = "CODE"
+			}
+		}
+
+		providerHint := dt.ProviderHint
+		if providerHint == "" {
+			providerHint = "claude_cli"
+		}
+
+		promptWithTags := fmt.Sprintf("[%s][%s] %s", roleTag, providerHint, dt.Prompt)
+		if dt.Prompt == "" {
+			promptWithTags = fmt.Sprintf("[%s][%s] %s", roleTag, providerHint, dt.Title)
+		}
+
 		t := models.Task{
-			Title:       dt.Title,
+			Title:       fmt.Sprintf("[%s] %s", roleTag, dt.Title),
 			Description: dt.Description,
-			Prompt:      dt.Prompt,
+			Prompt:      promptWithTags,
 			Priority:    dt.Priority,
 			Status:      "backlog",
 			DependsOn:   []string{},
@@ -104,7 +161,6 @@ func parseJSONTasks(rawJSON string, requirement string) ([]models.Task, error) {
 		taskIDMap[i] = tasks[i].TaskID
 	}
 
-	// Resolve 0-based indices to task IDs
 	for i, dt := range plan.Tasks {
 		for _, depIdx := range dt.DependsOn {
 			if parentID, ok := taskIDMap[depIdx]; ok {

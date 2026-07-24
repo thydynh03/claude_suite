@@ -29,14 +29,22 @@ func (r *AgentRepository) GetAll() ([]models.Agent, error) {
 	var agents []models.Agent
 	for rows.Next() {
 		var a models.Agent
+		var rawCreated, rawUpdated interface{}
+		var rawSessionID, rawLastTask, rawLastError, rawNotes interface{}
 		err := rows.Scan(
 			&a.AgentID, &a.Name, &a.Role, &a.Provider, &a.Model, &a.System, &a.Icon,
-			&a.SessionID, &a.Status, &a.TasksDone, &a.LastTask, &a.LastError, &a.Notes,
-			&a.TokensUsed, &a.TokenLimit, &a.CreatedAt, &a.UpdatedAt,
+			&rawSessionID, &a.Status, &a.TasksDone, &rawLastTask, &rawLastError, &rawNotes,
+			&a.TokensUsed, &a.TokenLimit, &rawCreated, &rawUpdated,
 		)
 		if err != nil {
 			return nil, err
 		}
+		a.SessionID = parseString(rawSessionID)
+		a.LastTask = parseString(rawLastTask)
+		a.LastError = parseString(rawLastError)
+		a.Notes = parseString(rawNotes)
+		a.CreatedAt = parseTimeValue(rawCreated)
+		a.UpdatedAt = parseTimeValue(rawUpdated)
 		a.TokenRemaining = a.TokenLimit - a.TokensUsed
 		if a.TokenRemaining < 0 {
 			a.TokenRemaining = 0
@@ -58,14 +66,22 @@ func (r *AgentRepository) GetByID(agentID string) (*models.Agent, error) {
 	row := r.db.QueryRow(query, agentID)
 
 	var a models.Agent
+	var rawCreated, rawUpdated interface{}
+	var rawSessionID, rawLastTask, rawLastError, rawNotes interface{}
 	err := row.Scan(
 		&a.AgentID, &a.Name, &a.Role, &a.Provider, &a.Model, &a.System, &a.Icon,
-		&a.SessionID, &a.Status, &a.TasksDone, &a.LastTask, &a.LastError, &a.Notes,
-		&a.TokensUsed, &a.TokenLimit, &a.CreatedAt, &a.UpdatedAt,
+		&rawSessionID, &a.Status, &a.TasksDone, &rawLastTask, &rawLastError, &rawNotes,
+		&a.TokensUsed, &a.TokenLimit, &rawCreated, &rawUpdated,
 	)
 	if err != nil {
 		return nil, err
 	}
+	a.SessionID = parseString(rawSessionID)
+	a.LastTask = parseString(rawLastTask)
+	a.LastError = parseString(rawLastError)
+	a.Notes = parseString(rawNotes)
+	a.CreatedAt = parseTimeValue(rawCreated)
+	a.UpdatedAt = parseTimeValue(rawUpdated)
 	a.TokenRemaining = a.TokenLimit - a.TokensUsed
 	return &a, nil
 }
@@ -116,13 +132,14 @@ func (r *AgentRepository) ResetToDefaults() error {
 	_ = r.DeleteAll()
 
 	presets := []models.Agent{
-		{Name: "CEO / Director of Engineering", Role: "Executive Leader & Strategic Orchestrator", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "👔", System: "You are the Executive Technical Leader."},
-		{Name: "Business Analyst (BA)", Role: "Requirements Engineering & Business Domain Lead", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "📋", System: "You are a Senior Business Analyst."},
-		{Name: "Technical Project Manager (PM)", Role: "Agile Project Manager & Scrum Master", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "📊", System: "You are a Technical Project Manager."},
-		{Name: "Chief Architect & Tech Lead", Role: "Principal System Architect & Tech Lead", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "🏗️", System: "You are a Principal Software Architect."},
-		{Name: "Senior Fullstack Developer", Role: "Staff Software Engineer & Fullstack Coder", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "💻", System: "You are a Senior Fullstack Engineer."},
-		{Name: "Senior Code Reviewer & Auditor", Role: "Code Reviewer & Security Specialist", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "🔍", System: "You are a Code Reviewer & Security Auditor."},
-		{Name: "Lead QA & Test Specialist", Role: "Quality Assurance & Test Automation Specialist", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "🧪", System: "You are a Quality Assurance Specialist."},
+		{Name: "Tech Lead & Architect", Role: "Technical Leadership & System Architecture", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "🏗️", System: "You are a Tech Lead & Principal Systems Architect."},
+		{Name: "Product Manager (PdM)", Role: "Product Strategy & Feature Definition", Model: "claude-opus-4-8", Provider: "claude_cli", Icon: "🎯", System: "You are a Product Manager defining feature roadmap and product vision."},
+		{Name: "Project Manager (PM)", Role: "Agile Execution & Task Orchestration", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "📊", System: "You are a Technical Project Manager tracking project milestones."},
+		{Name: "Business Analyst (BA)", Role: "Requirements Specification & Domain Analysis", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "📋", System: "You are a Senior Business Analyst specifying acceptance criteria."},
+		{Name: "Front-end Developer", Role: "UI/UX & Frontend Web Engineering", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "🎨", System: "You are a Senior Frontend Developer specializing in Svelte, React, HTML5, CSS3."},
+		{Name: "Back-end Developer", Role: "Core Business Logic & API/Database Engineering", Model: "claude-sonnet-4-5", Provider: "claude_cli", Icon: "⚙️", System: "You are a Senior Backend Engineer specializing in Go, Node.js, and SQL databases."},
+		{Name: "DevOps Engineer", Role: "CI/CD, Build Systems & Deployment Automation", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "🚀", System: "You are a DevOps Specialist managing CI/CD pipelines and deployment scripts."},
+		{Name: "QA/QC Specialist", Role: "Quality Control & Automated Testing", Model: "gemini-3.6-flash-high", Provider: "anti_cli", Icon: "🧪", System: "You are a QA/QC Engineer writing automated test suites and validating functionality."},
 	}
 
 	for _, p := range presets {

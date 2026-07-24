@@ -7,7 +7,11 @@
   export let tasks: Task[] = [];
   export let onRefresh: () => void;
 
+  let showAddModal = false;
   let newTaskTitle = '';
+  let newTaskDescription = '';
+  let newTaskPriority = 'normal';
+  let newTaskAssignedTo = '';
 
   const columns = [
     { key: 'backlog', title: 'Backlog', icon: 'inventory_2', color: 'text-outline' },
@@ -18,38 +22,150 @@
   ];
 
   function getTasksByStatus(status: string): Task[] {
-    return tasks.filter((t) => t.status === status);
+    return (Array.isArray(tasks) ? tasks : []).filter((t) => t && t.status === status);
   }
 
   async function handleAddTask() {
     if (!newTaskTitle.trim()) return;
-    await AppBindings.CreateTask({
-      task_id: '',
-      title: newTaskTitle,
-      description: '',
-      prompt: newTaskTitle,
-      priority: 'normal',
-      status: 'backlog',
-      assigned_to: '',
-      depends_on: [],
-      retry_count: 0,
-      max_retries: 3,
-      result: '',
-      session_id: '',
-      parent_id: '',
-    });
-    newTaskTitle = '';
-    onRefresh();
+    try {
+      await AppBindings.CreateTask({
+        task_id: '',
+        title: newTaskTitle,
+        description: newTaskDescription,
+        prompt: newTaskTitle,
+        priority: newTaskPriority,
+        status: 'backlog',
+        assigned_to: newTaskAssignedTo,
+        depends_on: [],
+        retry_count: 0,
+        max_retries: 3,
+        result: '',
+        session_id: '',
+        parent_id: '',
+      });
+      newTaskTitle = '';
+      newTaskDescription = '';
+      showAddModal = false;
+      addLog(`Đã tạo Task mới: ${newTaskTitle}`, 'SUCCESS');
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      console.error('CreateTask error:', e);
+    }
   }
 
+  let agentOptions = [
+    { value: '', label: '👤 Unassigned' },
+    { value: 'Tech Lead & Architect', label: '🏗️ Tech Lead & Architect' },
+    { value: 'Product Manager (PdM)', label: '🎯 Product Manager (PdM)' },
+    { value: 'Project Manager (PM)', label: '📊 Project Manager (PM)' },
+    { value: 'Business Analyst (BA)', label: '📋 Business Analyst (BA)' },
+    { value: 'Front-end Developer', label: '🎨 Front-end Developer' },
+    { value: 'Back-end Developer', label: '⚙️ Back-end Developer' },
+    { value: 'DevOps Engineer', label: '🚀 DevOps Engineer' },
+    { value: 'QA/QC Specialist', label: '🧪 QA/QC Specialist' }
+  ];
+
   async function handleMoveStatus(taskID: string, newStatus: string) {
-    await AppBindings.UpdateTaskStatus(taskID, newStatus);
-    onRefresh();
+    const list = Array.isArray(tasks) ? tasks : [];
+    const t = list.find((x) => x.task_id === taskID);
+    if (t) t.status = newStatus;
+    tasks = [...list];
+
+    try {
+      await AppBindings.UpdateTaskStatus(taskID, newStatus);
+      addLog(`Task status updated to ${newStatus}`, 'INFO');
+    } catch (e) {
+      console.error(e);
+    }
+    if (onRefresh) onRefresh();
+  }
+
+  async function handleAssignAgent(taskID: string, assignedTo: string) {
+    const list = Array.isArray(tasks) ? tasks : [];
+    const t = list.find((x) => x.task_id === taskID);
+    if (t) t.assigned_to = assignedTo;
+    tasks = [...list];
+
+    try {
+      if ((AppBindings as any).AssignTask) {
+        await (AppBindings as any).AssignTask(taskID, assignedTo);
+        addLog(`Task assigned to ${assignedTo || 'Unassigned'}`, 'SUCCESS');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    if (onRefresh) onRefresh();
+  }
+
+  let selectedTaskIDs: string[] = [];
+  let draggedTaskID: string | null = null;
+  let dragOverColumn: string | null = null;
+
+  function handleDragStart(e: DragEvent, taskID: string) {
+    draggedTaskID = taskID;
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', taskID);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  function handleDragOver(e: DragEvent, colKey: string) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverColumn = colKey;
+  }
+
+  function handleDragLeave() {
+    dragOverColumn = null;
+  }
+
+  async function handleDrop(e: DragEvent, targetStatus: string) {
+    e.preventDefault();
+    dragOverColumn = null;
+    const taskID = e.dataTransfer?.getData('text/plain') || draggedTaskID;
+    if (taskID) {
+      await handleMoveStatus(taskID, targetStatus);
+    }
+    draggedTaskID = null;
+  }
+
+  async function handleClearAll() {
+    if (confirm('Bạn có chắc chắn muốn xóa toàn bộ Tasks không?')) {
+      await AppBindings.ClearAllTasks();
+      selectedTaskIDs = [];
+      onRefresh();
+      addLog('Đã xóa toàn bộ tasks.', 'INFO');
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedTaskIDs.length === 0) return;
+    if (confirm(`Bạn có chắc muốn xóa ${selectedTaskIDs.length} tasks đã chọn?`)) {
+      for (const id of selectedTaskIDs) {
+        await AppBindings.DeleteTask(id);
+      }
+      selectedTaskIDs = [];
+      onRefresh();
+      addLog(`Đã xóa ${selectedTaskIDs.length} tasks đã chọn.`, 'INFO');
+    }
   }
 
   async function handleClearDone() {
-    await AppBindings.DeleteDoneTasks();
-    onRefresh();
+    try {
+      const doneTasks = tasks.filter(t => t.status === 'done');
+      if (doneTasks.length === 0) {
+        addLog('Không có task nào ở trạng thái Done để xóa.', 'WARN');
+        return;
+      }
+      for (const t of doneTasks) {
+        await AppBindings.DeleteTask(t.task_id);
+      }
+      tasks = tasks.filter(t => t.status !== 'done');
+      addLog(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      console.error('ClearDone error:', e);
+    }
   }
 </script>
 
@@ -57,21 +173,25 @@
   <!-- Actions Bar -->
   <div class="flex flex-wrap items-center justify-between gap-4">
     <div class="flex items-center gap-2">
-      <input
-        type="text"
-        bind:value={newTaskTitle}
-        on:keydown={(e) => e.key === 'Enter' && handleAddTask()}
-        placeholder="Tạo Task mới (nhấn Enter)..."
-        class="bg-surface-container-lowest border border-outline-variant px-3 py-1.5 rounded-lg text-xs w-72 focus:ring-2 focus:ring-primary outline-none"
-      />
-      <button on:click={handleAddTask} class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
-        <span class="material-symbols-outlined text-sm">add</span> Add Task
+      <button 
+        type="button" 
+        on:click|preventDefault={() => showAddModal = true} 
+        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all shadow-sm cursor-pointer">
+        <span class="material-symbols-outlined text-sm font-bold">add</span> Add Task
       </button>
     </div>
 
     <div class="flex items-center gap-2">
-      <button on:click={handleClearDone} class="bg-surface-container-highest border border-outline-variant px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-surface-container-high transition-all flex items-center gap-1">
+      {#if selectedTaskIDs.length > 0}
+        <button type="button" on:click|preventDefault={handleDeleteSelected} class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 animate-pulse cursor-pointer">
+          <span class="material-symbols-outlined text-sm">delete</span> Xóa đã chọn ({selectedTaskIDs.length})
+        </button>
+      {/if}
+      <button type="button" on:click|preventDefault={handleClearDone} class="bg-surface-container-highest border border-outline-variant px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-surface-container-high transition-all flex items-center gap-1.5 cursor-pointer">
         <span class="material-symbols-outlined text-sm">delete_sweep</span> Clear Done
+      </button>
+      <button type="button" on:click|preventDefault={handleClearAll} class="bg-rose-500/10 text-rose-600 border border-rose-500/30 px-3.5 py-1.5 rounded-xl text-xs font-bold hover:bg-rose-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
+        <span class="material-symbols-outlined text-sm">delete_forever</span> Clear All
       </button>
     </div>
   </div>
@@ -89,19 +209,57 @@
           </div>
         </div>
 
-        <!-- Column Card Body -->
-        <div class="min-h-[420px] bg-surface-container-low/40 border border-outline-variant border-dashed rounded-xl p-3 space-y-3 overflow-y-auto max-h-[500px]">
+        <!-- Column Card Body with Drag & Drop target -->
+        <div
+          role="region"
+          aria-label="{col.title} Column"
+          class="min-h-[420px] border border-dashed rounded-xl p-3 space-y-3 overflow-y-auto max-h-[500px] transition-all
+          {dragOverColumn === col.key ? 'bg-primary-container/20 border-primary border-2 scale-[1.01]' : 'bg-surface-container-low/40 border-outline-variant'}"
+          on:dragover={(e) => handleDragOver(e, col.key)}
+          on:dragleave={handleDragLeave}
+          on:drop={(e) => handleDrop(e, col.key)}
+        >
           {#each colTasks as task}
-            <div class="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-primary rounded-xl p-3 space-y-2 shadow-sm hover:shadow-md transition-all">
-              <div class="font-semibold text-xs text-on-surface">{task.title}</div>
+            <div
+              role="button"
+              tabindex="0"
+              draggable="true"
+              on:dragstart={(e) => handleDragStart(e, task.task_id)}
+              class="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-primary rounded-xl p-3 space-y-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 flex-1">
+                  <input
+                    type="checkbox"
+                    value={task.task_id}
+                    bind:group={selectedTaskIDs}
+                    class="rounded border-outline-variant text-primary focus:ring-primary cursor-pointer w-4 h-4"
+                  />
+                  <div class="font-semibold text-xs text-on-surface group-hover:text-primary transition-colors">{task.title}</div>
+                </div>
+                <span class="material-symbols-outlined text-sm text-outline group-hover:text-on-surface-variant cursor-grab">drag_indicator</span>
+              </div>
+
               {#if task.prompt}
-                <p class="text-[11px] text-on-surface-variant line-clamp-2">{task.prompt}</p>
+                <p class="text-[11px] text-on-surface-variant line-clamp-2 pl-6">{task.prompt}</p>
               {/if}
-              <div class="flex items-center justify-between pt-1 border-t border-outline-variant/40 text-[10px]">
+
+              <!-- Assignment Dropdown -->
+              <div class="space-y-1 pt-1 border-t border-outline-variant/30 ml-6">
+                <span class="text-[9px] font-bold text-on-surface-variant uppercase">Assignee:</span>
+                <Dropdown
+                  options={agentOptions}
+                  value={task.assigned_to || ''}
+                  on:change={(e) => handleAssignAgent(task.task_id, e.detail)}
+                />
+              </div>
+
+              <!-- Status Dropdown & Priority -->
+              <div class="flex items-center justify-between pt-1 border-t border-outline-variant/40 text-[10px] ml-6">
                 <span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-mono font-bold uppercase">{task.priority}</span>
 
                 <!-- Quick status switcher -->
-                <div class="w-24">
+                <div class="w-28">
                   <Dropdown
                     options={[
                       { value: 'backlog', label: 'Backlog' },
@@ -119,7 +277,7 @@
           {:else}
             <div class="flex flex-col items-center justify-center h-48 text-center text-on-surface-variant opacity-50">
               <span class="material-symbols-outlined text-3xl mb-1">{col.icon}</span>
-              <p class="text-xs">Empty</p>
+              <p class="text-xs">Kéo thả Task vào đây</p>
             </div>
           {/each}
         </div>
@@ -127,3 +285,76 @@
     {/each}
   </div>
 </div>
+
+{#if showAddModal}
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[450px] space-y-4">
+    <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
+      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">add_task</span> Tạo Task Mới (Kanban)
+      </h3>
+      <button type="button" on:click={() => showAddModal = false} class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+
+    <div class="space-y-3 text-xs">
+      <div>
+        <label for="new-task-title" class="font-bold text-on-surface block mb-1">Tiêu đề Task:</label>
+        <input 
+          id="new-task-title"
+          type="text"
+          bind:value={newTaskTitle}
+          placeholder="Ví dụ: [CODE] Lập trình giao diện Login..."
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 outline-none focus:border-primary text-on-surface font-semibold"
+        />
+      </div>
+
+      <div>
+        <label for="new-task-desc" class="font-bold text-on-surface block mb-1">Mô tả / Prompt chi tiết:</label>
+        <textarea
+          id="new-task-desc"
+          bind:value={newTaskDescription}
+          placeholder="Mô tả chi tiết công việc hoặc prompt cho AI Agent..."
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 h-24 outline-none focus:border-primary text-on-surface resize-none"
+        ></textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="new-task-priority" class="font-bold text-on-surface block mb-1">Độ ưu tiên:</label>
+          <select id="new-task-priority" bind:value={newTaskPriority} class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-on-surface outline-none">
+            <option value="high">HIGH (Cao)</option>
+            <option value="normal">NORMAL (Bình thường)</option>
+            <option value="low">LOW (Thấp)</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="new-task-assignee" class="font-bold text-on-surface block mb-1">Phân công Agent:</label>
+          <select id="new-task-assignee" bind:value={newTaskAssignedTo} class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-on-surface outline-none">
+            {#each agentOptions as opt}
+              <option value={opt.value}>{opt.label}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-3 border-t border-outline-variant">
+      <button 
+        type="button" 
+        on:click={() => showAddModal = false} 
+        class="px-4 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs rounded-xl hover:bg-surface-container-highest transition-all cursor-pointer">
+        Hủy bỏ
+      </button>
+      <button 
+        type="button" 
+        on:click={handleAddTask} 
+        class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">check</span> Tạo Task
+      </button>
+    </div>
+  </div>
+</div>
+{/if}

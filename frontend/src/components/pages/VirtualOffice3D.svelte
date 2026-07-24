@@ -232,10 +232,8 @@
     }
     scene.add(rackGroup);
 
-    // Create IT Desks with Avatars
-    createDesk(-6, -4, 'Chief AI', 0x3b82f6);
-    createDesk(0, 2, 'Senior Arch', 0x8b5cf6);
-    createDesk(6, -4, 'Lead Coder', 0xf59e0b);
+    // Create IT Desks dynamically based on active agents
+    loadDynamicDesks();
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -247,6 +245,43 @@
     controls.dampingFactor = 0.05;
 
     animate();
+  }
+
+  async function loadDynamicDesks() {
+    let agentList: any[] = [];
+    try {
+      if ((window as any)?.go?.main?.App) {
+        agentList = await AppBindings.GetAgents();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (!agentList || agentList.length === 0) {
+      agentList = [
+        { name: 'Chief AI' },
+        { name: 'Senior Arch' },
+        { name: 'Lead Coder' }
+      ];
+    }
+
+    const colors = [0x3b82f6, 0x8b5cf6, 0xf59e0b, 0x10b981, 0xef4444, 0xec4899, 0x6366f1];
+    const positions = [
+      { x: -7, z: -5 },
+      { x: 0, z: -5 },
+      { x: 7, z: -5 },
+      { x: -7, z: 3 },
+      { x: 0, z: 3 },
+      { x: 7, z: 3 },
+      { x: -3.5, z: 9 },
+      { x: 3.5, z: 9 }
+    ];
+
+    agentList.forEach((ag, idx) => {
+      const pos = positions[idx % positions.length];
+      const color = colors[idx % colors.length];
+      createDesk(pos.x, pos.z, ag.name || `Agent ${idx + 1}`, color);
+    });
   }
 
   function createDesk(x: number, z: number, role: string, color: number) {

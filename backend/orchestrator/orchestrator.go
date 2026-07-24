@@ -74,7 +74,7 @@ func (o *Orchestrator) Start() {
 	o.stopCh = make(chan struct{})
 	o.mu.Unlock()
 
-	o.emitLog("Orchestrator started.", "INFO")
+	o.emitLog("🚀 Orchestrator ACTIVE: Đã bật chế độ tự động đọc Backlog & Phân công Task.", "INFO")
 	go o.loop()
 }
 
@@ -88,7 +88,7 @@ func (o *Orchestrator) Stop() {
 	close(o.stopCh)
 	o.mu.Unlock()
 
-	o.emitLog("Orchestrator stopped.", "INFO")
+	o.emitLog("🛑 Orchestrator INACTIVE: Đã tạm dừng đọc Backlog.", "WARN")
 }
 
 func (o *Orchestrator) IsRunning() bool {
@@ -124,25 +124,37 @@ func (o *Orchestrator) processNextTask() {
 		return
 	}
 
+	o.emitLog(fmt.Sprintf("📋 Quét Backlog: Tìm thấy Task '%s'. Đang phân tích Agent phù hợp...", task.Title), "INFO")
+
 	agents, err := o.agentRepo.GetAll()
 	if err != nil || len(agents) == 0 {
+		o.emitLog("⚠️ Không tìm thấy Agent danh sách trong Database.", "WARN")
 		return
 	}
 
 	agent := o.dispatcher.FindMatchingAgent(task, agents)
 	if agent == nil {
+		o.emitLog(fmt.Sprintf("⚠️ Không tìm thấy Agent phù hợp cho task '%s'", task.Title), "WARN")
 		return
 	}
 
 	if agent.AgentID == "" {
 		_ = o.agentRepo.Create(agent)
+		o.emitLog(fmt.Sprintf("✨ Tự động tạo Sub-Agent mới: '%s' (%s - Model: %s)", agent.Name, agent.Role, agent.Model), "SUCCESS")
 	}
 
-	// Mark task running
+	o.emitLog(fmt.Sprintf("🤖 Phân công Task '%s' cho Agent '%s' (%s - %s)", task.Title, agent.Name, agent.Provider, agent.Model), "INFO")
+
+	// Assign agent & mark task running
+	_ = o.taskRepo.AssignTask(task.TaskID, agent.Name)
 	_ = o.taskRepo.UpdateStatus(task.TaskID, "running", "", "")
 	agent.Status = "running"
 	agent.LastTask = task.Title
 	_ = o.agentRepo.Update(agent)
+
+	if o.ctx != nil {
+		runtime.EventsEmit(o.ctx, "board_updated", nil)
+	}
 
 	// Approval Checkpoint
 	nameLower := strings.ToLower(agent.Name)

@@ -17,6 +17,8 @@ import (
 	"claude_suite/backend/models"
 )
 
+var ShowCLIConsole bool = false
+
 type ClaudeCLI struct {
 	executablePath string
 	antigravity    *AntigravityCLI
@@ -65,7 +67,7 @@ func (c *ClaudeCLI) RunOnce(prompt string, model string, system string, onLog Lo
 func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
-	args := []string{"-p", prompt}
+	args := []string{"-p", prompt, "--dangerously-skip-permissions"}
 	if model != "" {
 		args = append(args, "--model", model)
 	}
@@ -76,11 +78,31 @@ func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCa
 		args = append(args, "--resume", sessionID)
 	}
 
-	cmd := exec.Command(c.executablePath, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	var cmd *exec.Cmd
+	if ShowCLIConsole {
+		cmdArgs := append([]string{"/k", c.executablePath}, args...)
+		cmd = exec.Command("cmd.exe", cmdArgs...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    false,
+			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
+		}
+	} else {
+		cmd = exec.Command(c.executablePath, args...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+		}
+	}
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}
+	cmd.Env = append(os.Environ(),
+		"CI=true",
+		"NONINTERACTIVE=1",
+		"ANTIGRAVITY_SKIP_PERMISSIONS=1",
+		"AGY_TRUST_ALL=1",
+		"CLAUDE_SKIP_PERMISSIONS=1",
+	)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

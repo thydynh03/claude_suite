@@ -30,12 +30,12 @@ func (r *TaskRepository) GetAll() ([]models.Task, error) {
 	for rows.Next() {
 		var t models.Task
 		var dependsJson string
-		var startedAt, finishedAt sql.NullTime
+		var rawCreated, rawStarted, rawFinished interface{}
 
 		err := rows.Scan(
 			&t.TaskID, &t.Title, &t.Description, &t.Prompt, &t.Priority, &t.Status,
 			&t.AssignedTo, &dependsJson, &t.RetryCount, &t.MaxRetries, &t.Result,
-			&t.SessionID, &t.ParentID, &t.CreatedAt, &startedAt, &finishedAt,
+			&t.SessionID, &t.ParentID, &rawCreated, &rawStarted, &rawFinished,
 		)
 		if err != nil {
 			return nil, err
@@ -46,12 +46,9 @@ func (r *TaskRepository) GetAll() ([]models.Task, error) {
 			t.DependsOn = []string{}
 		}
 
-		if startedAt.Valid {
-			t.StartedAt = startedAt.Time
-		}
-		if finishedAt.Valid {
-			t.FinishedAt = finishedAt.Time
-		}
+		t.CreatedAt = parseTimeValue(rawCreated)
+		t.StartedAt = parseTimeValue(rawStarted)
+		t.FinishedAt = parseTimeValue(rawFinished)
 
 		tasks = append(tasks, t)
 	}
@@ -99,6 +96,11 @@ func (r *TaskRepository) UpdateStatus(taskID, status string, result string, sess
 		_, err = r.db.Exec(query, status, taskID)
 	}
 
+	return err
+}
+
+func (r *TaskRepository) AssignTask(taskID string, assignedTo string) error {
+	_, err := r.db.Exec(`UPDATE tasks SET assigned_to=? WHERE task_id=?`, assignedTo, taskID)
 	return err
 }
 

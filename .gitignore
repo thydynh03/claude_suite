@@ -12,3 +12,4 @@ agent_manager.db*
 *.syso
 __pycache__/
 workspace_config.json
+ClaudeSuite_Kanban_Report_*.md

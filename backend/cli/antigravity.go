@@ -52,17 +52,36 @@ func (a *AntigravityCLI) RunOnce(prompt string, model string, system string, onL
 func (a *AntigravityCLI) execute(model, prompt, system string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
-	args := []string{"prompt"}
+	args := []string{"--print", prompt, "--dangerously-skip-permissions"}
 	if model != "" {
 		args = append(args, "--model", model)
 	}
-	args = append(args, "-p", prompt)
 
-	cmd := exec.Command(a.executablePath, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	var cmd *exec.Cmd
+	if ShowCLIConsole {
+		cmdArgs := append([]string{"/k", a.executablePath}, args...)
+		cmd = exec.Command("cmd.exe", cmdArgs...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    false,
+			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
+		}
+	} else {
+		cmd = exec.Command(a.executablePath, args...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+		}
+	}
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}
+	cmd.Env = append(os.Environ(),
+		"CI=true",
+		"NONINTERACTIVE=1",
+		"ANTIGRAVITY_SKIP_PERMISSIONS=1",
+		"AGY_TRUST_ALL=1",
+		"CLAUDE_SKIP_PERMISSIONS=1",
+	)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

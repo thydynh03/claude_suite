@@ -5,6 +5,8 @@ import {models} from '../models';
 import {main} from '../models';
 import {cli} from '../models';
 
+export function AssignTask(arg1:string,arg2:string):Promise<void>;
+
 export function CancelScheduledJob(arg1:string):Promise<void>;
 
 export function CheckForUpdates():Promise<services.UpdateInfo>;
@@ -14,6 +16,8 @@ export function ClearAllTasks():Promise<void>;
 export function CreateTask(arg1:models.Task):Promise<void>;
 
 export function DecomposePlan(arg1:string):Promise<Array<models.Task>>;
+
+export function DecomposePlanWithProvider(arg1:string,arg2:string,arg3:string):Promise<Array<models.Task>>;
 
 export function DeleteAgent(arg1:string):Promise<void>;
 
@@ -34,6 +38,8 @@ export function GetAppVersion():Promise<string>;
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
 
 export function GetScheduledJobs():Promise<Array<services.ScheduledJob>>;
+
+export function GetShowCLIConsole():Promise<boolean>;
 
 export function GetTasks():Promise<Array<models.Task>>;
 
@@ -60,6 +66,8 @@ export function ScanWorkspaceFiles():Promise<Array<string>>;
 export function SchedulePrompt(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
 export function SelectWorkspaceFolder():Promise<string>;
+
+export function SetShowCLIConsole(arg1:boolean):Promise<boolean>;
 
 export function StartOrchestrator():Promise<boolean>;
 

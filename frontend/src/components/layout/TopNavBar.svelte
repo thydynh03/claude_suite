@@ -3,6 +3,71 @@
   import { activeTab, workspaceFolder, orchestratorRunning, isThinking } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
+  let openMenu: 'file' | 'view' | 'window' | null = null;
+  let zoomLevel = 100;
+
+  function toggleMenu(menu: 'file' | 'view' | 'window') {
+    openMenu = openMenu === menu ? null : menu;
+  }
+
+  function closeMenus() {
+    openMenu = null;
+  }
+
+  function handleZoomIn() {
+    zoomLevel = Math.min(zoomLevel + 10, 150);
+    document.body.style.zoom = `${zoomLevel}%`;
+    closeMenus();
+  }
+
+  function handleZoomOut() {
+    zoomLevel = Math.max(zoomLevel - 10, 70);
+    document.body.style.zoom = `${zoomLevel}%`;
+    closeMenus();
+  }
+
+  function handleResetZoom() {
+    zoomLevel = 100;
+    document.body.style.zoom = '100%';
+    closeMenus();
+  }
+
+  function handleMinimize() {
+    if ((window as any)?.runtime?.WindowMinimise) {
+      (window as any).runtime.WindowMinimise();
+    }
+    closeMenus();
+  }
+
+  function handleMaximize() {
+    if ((window as any)?.runtime?.WindowToggleMaximise) {
+      (window as any).runtime.WindowToggleMaximise();
+    }
+    closeMenus();
+  }
+
+  function handleCloseWindow() {
+    if ((window as any)?.runtime?.Quit) {
+      (window as any).runtime.Quit();
+    }
+    closeMenus();
+  }
+
+  function handleNewConversation() {
+    activeTab.set('cockpit');
+    closeMenus();
+  }
+
+  function handleCreateProject() {
+    activeTab.set('kanban');
+    closeMenus();
+  }
+
+  function handleCommandPalette() {
+    activeTab.set('settings');
+    closeMenus();
+  }
+
   async function handleSelectFolder() {
     try {
       const folder = await AppBindings.SelectWorkspaceFolder();
@@ -12,6 +77,7 @@
     } catch (e) {
       console.error(e);
     }
+    closeMenus();
   }
 
   async function handleToggleOrchestrator() {
@@ -32,16 +98,90 @@
       <span class="text-lg font-bold text-on-surface">Claude Suite</span>
     </div>
 
-    <nav class="hidden md:flex items-center gap-4">
-      <button on:click={handleSelectFolder} class="text-on-surface-variant text-sm hover:bg-surface-container-highest transition-colors px-2 py-1 rounded">
-        File
-      </button>
-      <button class="text-on-surface-variant text-sm hover:bg-surface-container-highest transition-colors px-2 py-1 rounded">
-        View
-      </button>
-      <button class="text-on-surface-variant text-sm hover:bg-surface-container-highest transition-colors px-2 py-1 rounded">
-        Window
-      </button>
+    <nav class="hidden md:flex items-center gap-1 relative select-none" on:mouseleave={closeMenus}>
+      <!-- File Menu -->
+      <div class="relative">
+        <button
+          type="button"
+          on:click={() => toggleMenu('file')}
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-md flex items-center gap-1 {openMenu === 'file' ? 'bg-surface-container-highest text-on-surface font-bold' : ''}"
+        >
+          File
+        </button>
+        {#if openMenu === 'file'}
+          <div class="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 text-xs font-sans text-slate-200 divide-y divide-slate-800">
+            <div class="py-1">
+              <button type="button" on:click={handleNewConversation} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center group">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-blue-400">chat</span> New Conversation</span>
+                <span class="text-[10px] text-slate-400 font-mono">Ctrl+Shift+O</span>
+              </button>
+              <button type="button" on:click={handleCreateProject} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center group">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-purple-400">create_new_folder</span> Create Project</span>
+              </button>
+              <button type="button" on:click={handleCommandPalette} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center group">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-emerald-400">terminal</span> Command Palette</span>
+                <span class="text-[10px] text-slate-400 font-mono">Ctrl+Shift+P</span>
+              </button>
+            </div>
+            <div class="py-1">
+              <button type="button" on:click={handleSelectFolder} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-amber-400">folder_open</span> Open Workspace</span>
+              </button>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- View Menu -->
+      <div class="relative">
+        <button
+          type="button"
+          on:click={() => toggleMenu('view')}
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-md flex items-center gap-1 {openMenu === 'view' ? 'bg-surface-container-highest text-on-surface font-bold' : ''}"
+        >
+          View
+        </button>
+        {#if openMenu === 'view'}
+          <div class="absolute left-0 top-full mt-1 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 text-xs font-sans text-slate-200">
+            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_in</span> Zoom In</span>
+              <span class="text-[10px] text-slate-400 font-mono">Ctrl++</span>
+            </button>
+            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_out</span> Zoom Out</span>
+              <span class="text-[10px] text-slate-400 font-mono">Ctrl+-</span>
+            </button>
+            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">restart_alt</span> Reset Zoom</span>
+              <span class="text-[10px] text-slate-400 font-mono">Ctrl+0</span>
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Window Menu -->
+      <div class="relative">
+        <button
+          type="button"
+          on:click={() => toggleMenu('window')}
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-md flex items-center gap-1 {openMenu === 'window' ? 'bg-surface-container-highest text-on-surface font-bold' : ''}"
+        >
+          Window
+        </button>
+        {#if openMenu === 'window'}
+          <div class="absolute left-0 top-full mt-1 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 text-xs font-sans text-slate-200">
+            <button type="button" on:click={handleMinimize} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">minimize</span> Minimize</span>
+            </button>
+            <button type="button" on:click={handleMaximize} class="w-full text-left px-4 py-2 hover:bg-slate-800 flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">crop_square</span> Maximize</span>
+            </button>
+            <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-slate-800 text-rose-400 flex justify-between items-center border-t border-slate-800 mt-1 pt-2">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Close</span>
+            </button>
+          </div>
+        {/if}
+      </div>
     </nav>
 
     <!-- Workspace Pill Badge -->

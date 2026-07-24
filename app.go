@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
@@ -162,6 +163,10 @@ func (a *App) UpdateTaskStatus(taskID string, status string) error {
 	return a.taskRepo.UpdateStatus(taskID, status, "", "")
 }
 
+func (a *App) AssignTask(taskID string, assignedTo string) error {
+	return a.taskRepo.AssignTask(taskID, assignedTo)
+}
+
 func (a *App) DeleteTask(taskID string) error {
 	return a.taskRepo.Delete(taskID)
 }
@@ -194,6 +199,15 @@ func (a *App) ResolveApproval(approved bool) {
 	a.orchestrator.ResolveApproval(approved)
 }
 
+func (a *App) SetShowCLIConsole(show bool) bool {
+	cli.ShowCLIConsole = show
+	return cli.ShowCLIConsole
+}
+
+func (a *App) GetShowCLIConsole() bool {
+	return cli.ShowCLIConsole
+}
+
 func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles []string) (*cli.RunResult, error) {
 	ctxPrompt := ""
 	if len(localFiles) > 0 || a.workspaceConfig.LastWorkspaceFolder != "" {
@@ -205,7 +219,15 @@ func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles
 		fullPrompt = fmt.Sprintf("%s\n\n%s", ctxPrompt, prompt)
 	}
 
-	result := a.cliRunner.RunOnce(fullPrompt, model, system, nil, a.workspaceConfig.LastWorkspaceFolder)
+	var runner cli.CLIRunner
+	modelLower := strings.ToLower(model)
+	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+		runner = cli.NewAntigravityCLI()
+	} else {
+		runner = a.cliRunner
+	}
+
+	result := runner.RunOnce(fullPrompt, model, system, nil, a.workspaceConfig.LastWorkspaceFolder)
 	return result, nil
 }
 
@@ -213,6 +235,19 @@ func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles
 
 func (a *App) DecomposePlan(requirement string) ([]models.Task, error) {
 	tasks, err := a.planBuilder.Decompose(requirement, a.workspaceConfig.LastWorkspaceFolder)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range tasks {
+		_ = a.taskRepo.Create(&tasks[i])
+	}
+
+	return a.taskRepo.GetAll()
+}
+
+func (a *App) DecomposePlanWithProvider(requirement string, provider string, model string) ([]models.Task, error) {
+	tasks, err := a.planBuilder.DecomposeWithProvider(requirement, a.workspaceConfig.LastWorkspaceFolder, provider, model)
 	if err != nil {
 		return nil, err
 	}

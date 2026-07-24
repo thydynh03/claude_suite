@@ -8,7 +8,7 @@
   import VirtualOffice3D from './components/pages/VirtualOffice3D.svelte';
   import SchedulerPage from './components/pages/SchedulerPage.svelte';
 
-  import { activeTab, workspaceFolder, addLog } from './lib/stores/appState';
+  import { activeTab, workspaceFolder, addLog, sidebarCollapsed } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -43,20 +43,18 @@
     }
 
     try {
-      if ((window as any)?.runtime?.EventsOnMultiple) {
-        EventsOn('log_entry', (data: any) => {
-          if (data && data.message) {
-            addLog(data.message, data.level || 'INFO', data.time || '');
-          }
-        });
-        EventsOn('ask_approval', (data: any) => {
-          if (data) {
-            approvalAgent = data.agentName || 'Agent';
-            approvalTask = data.taskTitle || 'Unknown task';
-            showApprovalModal = true;
-          }
-        });
-      }
+      EventsOn('log_entry', (data: any) => {
+        if (data && data.message) {
+          addLog(data.message, data.level || 'INFO', data.time || '');
+        }
+      });
+      EventsOn('ask_approval', (data: any) => {
+        if (data) {
+          approvalAgent = data.agentName || 'Agent';
+          approvalTask = data.taskTitle || 'Unknown task';
+          showApprovalModal = true;
+        }
+      });
     } catch (e) {
       console.warn('Wails events error:', e);
     }
@@ -79,7 +77,7 @@
     <SideNavBar />
 
     <!-- Main Canvas Viewport -->
-    <main class="ml-[240px] flex-1 p-6 h-[calc(100vh-60px)] overflow-y-auto bg-background">
+    <main class="{$sidebarCollapsed ? 'ml-[72px]' : 'ml-[240px]'} flex-1 p-6 h-[calc(100vh-60px)] overflow-y-auto bg-background transition-all duration-300">
       {#if $activeTab === 'cockpit'}
         <CockpitPage />
       {:else if $activeTab === 'kanban'}
