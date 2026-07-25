@@ -759,9 +759,9 @@ func (f *fakeTaskActions) ScanWorkspaceFiles() ([]string, error) { return nil, n
 func (f *fakeTaskActions) ReadFileContent(relPath string) (string, error) {
 	return "fake content: " + relPath, nil
 }
-func (f *fakeTaskActions) StartOrchestrator()            { f.running = true }
-func (f *fakeTaskActions) StopOrchestrator()             { f.running = false }
-func (f *fakeTaskActions) IsOrchestratorRunning() bool   { return f.running }
+func (f *fakeTaskActions) StartOrchestrator()          { f.running = true }
+func (f *fakeTaskActions) StopOrchestrator()           { f.running = false }
+func (f *fakeTaskActions) IsOrchestratorRunning() bool { return f.running }
 func (f *fakeTaskActions) ResolveApproval(taskID string, approved bool) {
 	f.approvalTaskID, f.approval = taskID, approved
 }

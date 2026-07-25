@@ -162,9 +162,17 @@ func (a *App) ScanWorkspaceFiles() ([]string, error) {
 }
 
 func (a *App) ReadFileContent(relPath string) (string, error) {
+	workspace := a.workspaceConfig.LastWorkspaceFolder
 	fullPath := relPath
-	if !filepath.IsAbs(relPath) && a.workspaceConfig.LastWorkspaceFolder != "" {
-		fullPath = filepath.Join(a.workspaceConfig.LastWorkspaceFolder, relPath)
+	if !filepath.IsAbs(relPath) && workspace != "" {
+		fullPath = filepath.Join(workspace, relPath)
+	}
+	// Same containment rule as the TUI adapter: filepath.Join cleans "..", but a
+	// symlink inside the workspace can still point outside it. Having the check
+	// in one frontend and not the other is worse than not having it at all,
+	// because the asymmetry reads as protection that is not there.
+	if err := services.EnsureWithinWorkspace(workspace, fullPath); err != nil {
+		return "", err
 	}
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
