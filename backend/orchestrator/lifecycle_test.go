@@ -9,6 +9,18 @@ import (
 	"claude_suite/backend/models"
 )
 
+// waitForIdle waits until no run is in flight. Checking the task's status alone
+// is not enough: runTask writes the row before its goroutine removes itself from
+// activeRuns, and a dispatch during that window is skipped as already busy.
+func waitForIdle(t *testing.T, o *Orchestrator) {
+	t.Helper()
+	waitFor(t, "the run to be released", func() bool {
+		o.runMu.Lock()
+		defer o.runMu.Unlock()
+		return len(o.activeRuns) == 0
+	})
+}
+
 func taskStatus(t *testing.T, o *Orchestrator, taskID string) string {
 	t.Helper()
 	tasks, err := o.taskRepo.GetAll()
@@ -198,9 +210,7 @@ func TestAFailingTaskStopsAtItsRetryLimit(t *testing.T) {
 	// Scan far more times than the limit allows.
 	for i := 0; i < 10; i++ {
 		o.dispatchAvailable()
-		waitFor(t, "the run to settle", func() bool {
-			return taskStatus(t, o, task.TaskID) != "running"
-		})
+		waitForIdle(t, o)
 	}
 
 	if got := taskStatus(t, o, task.TaskID); got != "failed" {

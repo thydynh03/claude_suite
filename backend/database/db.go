@@ -25,6 +25,16 @@ func GetDBPath() string {
 	return filepath.Join(paths.EnsureDataDir(), paths.DatabaseFile)
 }
 
+// dsnWithPragmas builds a modernc.org/sqlite DSN that applies the connection
+// settings to every pooled connection:
+//
+//	journal_mode=WAL   readers do not block the writer
+//	busy_timeout=5000  a blocked writer waits instead of failing at once
+//	foreign_keys=ON    the schema's references are enforced
+func dsnWithPragmas(path string) string {
+	return path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
+}
+
 // OpenAt opens the database at path, applies the connection pragmas and runs
 // migrations. InitDB uses it for the app's shared instance; tests use it for a
 // throwaway file under t.TempDir().
@@ -33,13 +43,16 @@ func GetDBPath() string {
 // connections and each new connection to ":memory:" gets its own empty
 // database — which breaks the moment the orchestrator runs tasks in parallel.
 func OpenAt(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	// The pragmas belong in the DSN, not in a db.Exec afterwards. database/sql
+	// keeps a pool, and a pragma runs on whichever single connection served that
+	// statement — every connection the pool opens later starts with the defaults,
+	// busy_timeout among them. With several agents writing task rows at once,
+	// those later connections fail immediately with SQLITE_BUSY instead of
+	// waiting, and almost every write here discards its error.
+	db, err := sql.Open("sqlite", dsnWithPragmas(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite db: %w", err)
 	}
-
-	// Enable WAL mode, busy timeout & foreign keys for high-concurrency access
-	_, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;`)
 
 	if err := migrateSchema(db); err != nil {
 		_ = db.Close()
