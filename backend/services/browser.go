@@ -5,8 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -30,36 +29,105 @@ type BrowserActionResult struct {
 	Success          bool     `json:"success"`
 	Error            string   `json:"error"`
 	AIResponse       string   `json:"ai_response"`
-	Status           string   `json:"status"`            // "completed", "in_progress", "need_user_intervention", "failed"
+	Status           string   `json:"status"`            // "completed", "in_progress", "need_user_intervention", "stopped", "failed"
 	CurrentStep      int      `json:"current_step"`      // Current step count
 	MaxSteps         int      `json:"max_steps"`         // Max step count
 	UserIntervention string   `json:"user_intervention"` // Reason if user intervention is required
 }
 
-type BrowserAgentService struct{}
+type BrowserAgentService struct {
+	mu         sync.Mutex
+	cancelFunc context.CancelFunc
+
+	askMu    sync.Mutex
+	askChans map[string]chan string
+	emit     BrowserEventEmitter
+}
 
 func NewBrowserAgentService() *BrowserAgentService {
 	return &BrowserAgentService{}
 }
 
-func getChromeExecOptions(headless bool, useRealProfile bool) []chromedp.ExecAllocatorOption {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+func (s *BrowserAgentService) StopBrowserTask() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cancelFunc != nil {
+		s.cancelFunc()
+		s.cancelFunc = nil
+	}
+	s.cancelPendingAsks()
+}
+
+func isPortOpen(host string, port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 1*time.Second)
+	if err != nil {
+		return false
+	}
+	if conn != nil {
+		_ = conn.Close()
+		return true
+	}
+	return false
+}
+
+// IsPortOpen is the exported version of isPortOpen for use in other packages.
+func IsPortOpen(host string, port int) bool {
+	return isPortOpen(host, port)
+}
+
+func getChromeExecOptions(headless bool) []chromedp.ExecAllocatorOption {
+	return append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", headless),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("ignore-certificate-errors", true),
 	)
+}
 
-	if useRealProfile {
-		localAppData := os.Getenv("LOCALAPPDATA")
-		if localAppData != "" {
-			userDataDir := filepath.Join(localAppData, "Google", "Chrome", "User Data")
-			if _, err := os.Stat(userDataDir); err == nil {
-				opts = append(opts, chromedp.UserDataDir(userDataDir))
-			}
+func createCDPAContext(parentCtx context.Context, targetURL string, headless bool, usePersistentProfile bool, logf func(string)) (context.Context, context.CancelFunc, context.CancelFunc, error) {
+	if usePersistentProfile {
+		port, err := EnsureAgentChromeSession(targetURL, logf)
+		if err != nil {
+			return nil, nil, nil, err
 		}
+		wsURL, err := chromeWebSocketURL(port)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("không đọc được webSocketDebuggerUrl trên port %d: %w", port, err)
+		}
+		if logf != nil {
+			logf("🔑 Đã attach vào Chrome Agent qua CDP — dùng lại các phiên đăng nhập đã lưu trong profile này.")
+		}
+		allocCtx, cancelAlloc := chromedp.NewRemoteAllocator(parentCtx, wsURL)
+		ctx, cancelCtx := chromedp.NewContext(allocCtx)
+		return ctx, cancelCtx, cancelAlloc, nil
 	}
-	return opts
+
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(parentCtx, getChromeExecOptions(headless)...)
+	ctx, cancelCtx := chromedp.NewContext(allocCtx)
+	return ctx, cancelCtx, cancelAlloc, nil
+}
+
+// jsString escapes a value for safe interpolation into an evaluated JS expression.
+func jsString(v string) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
+}
+
+func truncateHTML(html string) string {
+	if len(html) > 8000 {
+		return html[:8000] + "\n... [HTML Snippet Truncated]"
+	}
+	return html
+}
+
+func truncateText(text string) string {
+	if len(text) > 4000 {
+		return text[:4000] + "\n... [Text Content Truncated]"
+	}
+	return text
 }
 
 // RunBrowserTask performs browser navigation, DOM inspection & full-page screenshot via Chrome CDP
@@ -78,12 +146,21 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 		return nil, fmt.Errorf("target URL cannot be empty")
 	}
 
-	opts := getChromeExecOptions(headless, useRealProfile)
+	var logs []string
+	logf := func(msg string) { logs = append(logs, msg) }
 
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+	ctx, cancelCtx, cancelAlloc, err := createCDPAContext(context.Background(), targetURL, headless, useRealProfile, logf)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("❌ Không kết nối được Chrome: %v", err))
+		return &BrowserActionResult{
+			URL:     targetURL,
+			Success: false,
+			Error:   err.Error(),
+			Logs:    logs,
+			Status:  "failed",
+		}, err
+	}
 	defer cancelAlloc()
-
-	ctx, cancelCtx := chromedp.NewContext(allocCtx)
 	defer cancelCtx()
 
 	ctx, cancelTimeout := context.WithTimeout(ctx, 35*time.Second)
@@ -91,9 +168,7 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 
 	var title, html, text string
 	var buf []byte
-	var logs []string
 
-	// Capture browser console errors and uncaught exceptions.
 	var consoleMu sync.Mutex
 	var consoleErrors []string
 	chromedp.ListenTarget(ctx, func(ev interface{}) {
@@ -119,11 +194,7 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 		}
 	})
 
-	profileInfo := "Temp Profile"
-	if useRealProfile {
-		profileInfo = "Real Chrome Profile (Logged-in Sessions)"
-	}
-	logs = append(logs, fmt.Sprintf("🌐 Chrome CDP Agent: Kết nối (%s) & Điều hướng tới: %s", profileInfo, targetURL))
+	logs = append(logs, fmt.Sprintf("🎯 Điều hướng tới URL: %s", targetURL))
 	if prompt != "" {
 		logs = append(logs, fmt.Sprintf("🎯 Nhận lệnh từ người dùng: \"%s\"", prompt))
 	}
@@ -147,7 +218,7 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 		}), chromedp.FullScreenshot(&buf, 90))
 	}
 
-	err := chromedp.Run(ctx, tasks)
+	err = chromedp.Run(ctx, tasks)
 	if err != nil {
 		logs = append(logs, fmt.Sprintf("❌ Lỗi khi điều khiển Chrome: %v", err))
 		return &BrowserActionResult{
@@ -161,7 +232,6 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 
 	logs = append(logs, fmt.Sprintf("✅ Tải trang thành công! Tiêu đề: '%s'", title))
 
-	// Run assertions: each expected text must appear in the page body.
 	passed := true
 	var assertions []string
 	for _, want := range expectTexts {
@@ -190,18 +260,11 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 		screenshotB64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf)
 	}
 
-	if len(html) > 8000 {
-		html = html[:8000] + "\n... [HTML Snippet Truncated]"
-	}
-	if len(text) > 4000 {
-		text = text[:4000] + "\n... [Text Content Truncated]"
-	}
-
 	return &BrowserActionResult{
 		URL:              targetURL,
 		Title:            title,
-		HTMLSnippet:      html,
-		TextContent:      text,
+		HTMLSnippet:      truncateHTML(html),
+		TextContent:      truncateText(text),
 		ScreenshotBase64: screenshotB64,
 		ConsoleErrors:    errs,
 		Assertions:       assertions,
@@ -212,7 +275,7 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 	}, nil
 }
 
-// RunAutonomousBrowserTask performs multi-step ReAct loop for web automation
+// RunAutonomousBrowserTask performs multi-step ReAct loop using a SINGLE Chrome CDP context
 func (s *BrowserAgentService) RunAutonomousBrowserTask(
 	targetURL string,
 	prompt string,
@@ -220,34 +283,175 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 	model string,
 	takeScreenshot bool,
 	headless bool,
-	useRealProfile bool,
+	usePersistentProfile bool,
 	maxSteps int,
 	runner cli.CLIRunner,
+	onLog func(msg string),
 ) (*BrowserActionResult, error) {
 	if maxSteps <= 0 {
 		maxSteps = 5
 	}
 
-	result, err := s.RunE2ETestWithProfile(targetURL, prompt, nil, takeScreenshot, headless, useRealProfile)
-	if err != nil || result == nil || !result.Success {
+	result := &BrowserActionResult{
+		URL:         targetURL,
+		MaxSteps:    maxSteps,
+		CurrentStep: 1,
+		Status:      "in_progress",
+		Success:     true,
+	}
+
+	logMsg := func(msg string) {
+		result.Logs = append(result.Logs, msg)
+		if onLog != nil {
+			onLog(msg)
+		}
+	}
+
+	if targetURL == "" {
+		result.Success = false
+		result.Error = "Target URL cannot be empty"
+		result.Status = "failed"
+		return result, fmt.Errorf("target URL cannot be empty")
+	}
+
+	// Cancellable task context
+	ctx, cancelTask := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.cancelFunc = cancelTask
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.cancelFunc = nil
+		s.mu.Unlock()
+		cancelTask()
+	}()
+
+	// Allocate SINGLE CDP Context for the entire multi-step loop
+	if usePersistentProfile && headless {
+		logMsg("ℹ️ Chế độ Profile bền vững luôn chạy Chrome hiển thị (bỏ qua tuỳ chọn Headless) để bạn đăng nhập được khi cần.")
+	}
+	cdpCtx, cancelCtx, cancelAlloc, err := createCDPAContext(ctx, targetURL, headless, usePersistentProfile, logMsg)
+	if err != nil {
+		logMsg(fmt.Sprintf("❌ Không kết nối được Chrome: %v", err))
+		result.Success = false
+		result.Error = err.Error()
+		result.Status = "failed"
+		return result, err
+	}
+	defer cancelAlloc()
+	defer cancelCtx()
+
+	// Initial Navigation & DOM Extraction
+	var title, html, text, landedURL string
+	var buf []byte
+
+	logMsg(fmt.Sprintf("🌐 Chrome CDP Agent: Kết nối & Điều hướng tới: %s", targetURL))
+	if prompt != "" {
+		logMsg(fmt.Sprintf("🎯 Nhận lệnh từ người dùng: \"%s\"", prompt))
+	}
+
+	initTasks := chromedp.Tasks{
+		chromedp.Navigate(targetURL),
+		chromedp.Sleep(2 * time.Second),
+		chromedp.Title(&title),
+		chromedp.ActionFunc(func(c context.Context) error {
+			logMsg("🔍 Đang trích xuất cấu trúc DOM & nội dung văn bản...")
+			return nil
+		}),
+		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
+		chromedp.Text("body", &text, chromedp.ByQuery),
+		chromedp.Location(&landedURL),
+	}
+	if takeScreenshot {
+		initTasks = append(initTasks, chromedp.ActionFunc(func(c context.Context) error {
+			logMsg("📸 Chụp ảnh màn hình trang web (Full-Page Screenshot)...")
+			return nil
+		}), chromedp.FullScreenshot(&buf, 90))
+	}
+
+	initCtx, cancelInit := context.WithTimeout(cdpCtx, 60*time.Second)
+	defer cancelInit()
+	if err := chromedp.Run(initCtx, initTasks); err != nil {
+		logMsg(fmt.Sprintf("❌ Lỗi khi điều khiển Chrome: %v", err))
+		result.Success = false
+		result.Error = err.Error()
+		result.Status = "failed"
 		return result, err
 	}
 
-	result.MaxSteps = maxSteps
-	result.CurrentStep = 1
+	result.Title = title
+	result.HTMLSnippet = truncateHTML(html)
+	result.TextContent = truncateText(text)
+	if len(buf) > 0 {
+		result.ScreenshotBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf)
+	}
+	if landedURL != "" {
+		result.URL = landedURL
+	}
+	logMsg(fmt.Sprintf("✅ Tải trang thành công! Tiêu đề: '%s'", title))
+
+	// Free-text answer to the login prompt below; seeded into the AI's history.
+	userGuidance := ""
+
+	// A sign-in wall would otherwise eat the entire step budget on a form the AI
+	// cannot fill. Park the run on a choice form instead of killing it.
+	if usePersistentProfile && LooksLikeLoginWall(result.URL, title) {
+		logMsg(fmt.Sprintf("🔐 Trang đang yêu cầu đăng nhập: %s", result.URL))
+		answer, askErr := s.AskUser(ctx,
+			fmt.Sprintf("Trang này cần đăng nhập (%s).\nHãy đăng nhập trong cửa sổ Chrome Agent vừa mở — profile sẽ ghi nhớ cho các lần sau — rồi chọn bên dưới.", result.URL),
+			[]BrowserAskOption{
+				{Label: "✅ Tôi đã đăng nhập xong — tải lại trang", Value: "reload"},
+				{Label: "➡️ Cứ tiếp tục, không cần đăng nhập", Value: "continue"},
+				{Label: "🛑 Dừng agent", Value: "stop"},
+			})
+		switch {
+		case askErr != nil:
+			logMsg(fmt.Sprintf("⚠️ Không hỏi được người dùng (%v) — dừng để chờ can thiệp.", askErr))
+			result.Status = "need_user_intervention"
+			result.UserIntervention = fmt.Sprintf("Cần đăng nhập tại %s", result.URL)
+			return result, nil
+		case answer == "stop":
+			logMsg("🛑 Người dùng chọn dừng agent tại bước đăng nhập.")
+			result.Status = "stopped"
+			return result, nil
+		case answer == "continue":
+			logMsg("➡️ Người dùng chọn tiếp tục dù chưa đăng nhập.")
+		case answer == "reload":
+			logMsg("🔄 Người dùng xác nhận đã đăng nhập — tải lại trang đích...")
+			if err := s.executeActionOnCDPContext(cdpCtx, "reload", "", targetURL, "", 0, takeScreenshot, result, logMsg); err != nil {
+				logMsg(fmt.Sprintf("⚠️ Tải lại trang thất bại: %v", err))
+			}
+			title = result.Title
+		default:
+			// Free text is an instruction, not a "reload" — hand it to the AI verbatim.
+			logMsg(fmt.Sprintf("💬 Chỉ dẫn của người dùng: \"%s\" — tiếp tục theo hướng đó.", answer))
+			userGuidance = answer
+		}
+	}
 
 	if strings.TrimSpace(prompt) == "" || runner == nil {
 		result.Status = "completed"
 		return result, nil
 	}
 
-	result.Logs = append(result.Logs, fmt.Sprintf("🧠 Bộ não AI (%s): Bắt đầu vòng lặp ReAct Đa bước (Tối đa %d bước)...", model, maxSteps))
-
+	logMsg(fmt.Sprintf("🧠 Bộ não AI (%s): Bắt đầu vòng lặp ReAct Đa bước (Tối đa %d bước)...", model, maxSteps))
 	actionHistory := []string{}
+	if userGuidance != "" {
+		actionHistory = append(actionHistory,
+			fmt.Sprintf("Chỉ dẫn bổ sung từ người dùng: \"%s\". Hãy tuân theo chỉ dẫn này.", userGuidance))
+	}
 
 	for step := 1; step <= maxSteps; step++ {
+		select {
+		case <-ctx.Done():
+			logMsg("🛑 Đã dừng Browser Agent theo yêu cầu của người dùng.")
+			result.Status = "stopped"
+			return result, nil
+		default:
+		}
+
 		result.CurrentStep = step
-		result.Logs = append(result.Logs, fmt.Sprintf("🔄 [Bước %d/%d]: Đang phân tích trạng thái DOM & lịch sử hành động...", step, maxSteps))
+		logMsg(fmt.Sprintf("🔄 [Bước %d/%d]: Đang phân tích DOM & lịch sử thao tác...", step, maxSteps))
 
 		historyStr := "Chưa có thao tác nào."
 		if len(actionHistory) > 0 {
@@ -284,14 +488,21 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
    hoặc ACTION_JSON: {"action": "type", "selector": "...", "text": "..."}
    hoặc ACTION_JSON: {"action": "scroll", "direction": "down"}
    hoặc ACTION_JSON: {"action": "wait", "seconds": 2}
+   hoặc ACTION_JSON: {"action": "navigate", "text": "https://..."}
 
 3. Nếu bạn ĐÃ HOÀN THÀNH MỤC TIÊU của người dùng (ví dụ: đã comment xong, hoặc đã tổng hợp thông tin xong):
    BẮT BỘC xuất mã ở cuối câu trả lời dạng:
    FINISH_JSON: {"status": "success", "summary": "Nội dung tóm tắt kết quả thành công..."}
 
-4. Nếu gặp LỖI KHÔNG THỂ PHỤC HỒI hoặc CẦN NGUỜI DÙNG CAN THIỆP (ví dụ: dính CAPTCHA, chưa đăng nhập, nút 2FA OTP, hoặc không thấy phần tử):
-   BẮT BỘC xuất mã ở cuối câu trả lời dạng:
-   STOP_JSON: {"status": "need_user_intervention", "reason": "Lý do cụ thể cần người dùng can thiệp..."}
+4. Nếu bạn CẦN NGƯỜI DÙNG QUYẾT ĐỊNH hoặc CUNG CẤP THÔNG TIN (ví dụ: chọn 1 trong nhiều nút,
+   cần nội dung comment cụ thể, cần xác nhận trước khi bấm Submit, không chắc chọn phần tử nào):
+   ĐỪNG dừng lại. BẮT BUỘC xuất mã ở cuối câu trả lời dạng:
+   ASK_JSON: {"question": "Câu hỏi rõ ràng cho người dùng...", "options": ["Lựa chọn 1", "Lựa chọn 2"]}
+   Người dùng sẽ thấy form lựa chọn ngay trên Live Log (luôn kèm ô "Khác" để tự nhập).
+   Câu trả lời sẽ được đưa lại cho bạn ở LỊCH SỬ THAO TÁC, và bạn TIẾP TỤC làm việc bình thường.
+
+5. CHỈ dùng STOP_JSON khi thực sự BẾ TẮC và người dùng cũng không giúp được gì thêm:
+   STOP_JSON: {"status": "need_user_intervention", "reason": "Lý do cụ thể..."}
 `, systemPrompt, step, maxSteps, result.URL, result.Title, prompt, historyStr, result.TextContent, result.HTMLSnippet)
 
 		runRes := runner.RunOnce(fullPrompt, model, systemPrompt, nil, "")
@@ -300,7 +511,7 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 			if runRes != nil && runRes.Error != "" {
 				errMsg = runRes.Error
 			}
-			result.Logs = append(result.Logs, fmt.Sprintf("⚠️ [Bước %d/%d] AI Model phản hồi lỗi: %s", step, maxSteps, errMsg))
+			logMsg(fmt.Sprintf("⚠️ [Bước %d/%d] AI Model phản hồi lỗi: %s", step, maxSteps, errMsg))
 			result.Status = "failed"
 			break
 		}
@@ -318,12 +529,45 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 				}
 				_ = json.Unmarshal([]byte(finishPart[:idx+1]), &fin)
 				result.Status = "completed"
-				result.Logs = append(result.Logs, fmt.Sprintf("🎉 [Bước %d/%d] AI xác nhận HOÀN THÀNH TÁC VỤ! Summary: %s", step, maxSteps, fin.Summary))
+				logMsg(fmt.Sprintf("🎉 [Bước %d/%d] AI xác nhận HOÀN THÀNH TÁC VỤ! Summary: %s", step, maxSteps, fin.Summary))
 				break
 			}
 		}
 
-		// Check STOP_JSON (User intervention)
+		// Check ASK_JSON — park the loop on a form instead of tearing the agent down.
+		if strings.Contains(runRes.Output, "ASK_JSON:") {
+			askPart := strings.TrimSpace(runRes.Output[strings.Index(runRes.Output, "ASK_JSON:")+len("ASK_JSON:"):])
+			if idx := strings.Index(askPart, "}"); idx != -1 {
+				var ask struct {
+					Question string   `json:"question"`
+					Options  []string `json:"options"`
+				}
+				if json.Unmarshal([]byte(askPart[:idx+1]), &ask) == nil && strings.TrimSpace(ask.Question) != "" {
+					opts := make([]BrowserAskOption, 0, len(ask.Options))
+					for _, o := range ask.Options {
+						if strings.TrimSpace(o) != "" {
+							opts = append(opts, BrowserAskOption{Label: o, Value: o})
+						}
+					}
+					logMsg(fmt.Sprintf("❓ [Bước %d/%d] AI cần bạn quyết định: %s", step, maxSteps, ask.Question))
+
+					answer, askErr := s.AskUser(ctx, ask.Question, opts)
+					if askErr != nil {
+						logMsg(fmt.Sprintf("⚠️ [Bước %d/%d] Không nhận được phản hồi (%v).", step, maxSteps, askErr))
+						result.Status = "need_user_intervention"
+						result.UserIntervention = ask.Question
+						break
+					}
+
+					logMsg(fmt.Sprintf("💬 [Bước %d/%d] Người dùng trả lời: \"%s\"", step, maxSteps, answer))
+					actionHistory = append(actionHistory,
+						fmt.Sprintf("Bước %d: Đã hỏi người dùng \"%s\" -> Người dùng trả lời: \"%s\"", step, ask.Question, answer))
+					continue
+				}
+			}
+		}
+
+		// Check STOP_JSON
 		if strings.Contains(runRes.Output, "STOP_JSON:") {
 			stopPart := runRes.Output[strings.Index(runRes.Output, "STOP_JSON:")+len("STOP_JSON:"):]
 			stopPart = strings.TrimSpace(stopPart)
@@ -333,13 +577,43 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 					Reason string `json:"reason"`
 				}
 				_ = json.Unmarshal([]byte(stopPart[:idx+1]), &stp)
-				result.Status = stp.Status
-				if result.Status == "" {
-					result.Status = "need_user_intervention"
+				logMsg(fmt.Sprintf("🛑 [Bước %d/%d] AI báo bế tắc: %s", step, maxSteps, stp.Reason))
+
+				// Offer a way out before giving up — the run stays alive either way.
+				answer, askErr := s.AskUser(ctx,
+					fmt.Sprintf("Agent đang bế tắc:\n%s\n\nBạn muốn xử lý thế nào?", stp.Reason),
+					[]BrowserAskOption{
+						{Label: "🔄 Tôi đã xử lý xong (đăng nhập / CAPTCHA / OTP) — thử lại", Value: "retry"},
+						{Label: "➡️ Bỏ qua, để AI tự tìm cách khác", Value: "skip"},
+						{Label: "🛑 Dừng agent tại đây", Value: "stop"},
+					})
+
+				if askErr != nil || answer == "stop" {
+					result.Status = stp.Status
+					if result.Status == "" || answer == "stop" {
+						result.Status = "need_user_intervention"
+					}
+					result.UserIntervention = stp.Reason
+					if askErr != nil {
+						logMsg(fmt.Sprintf("⚠️ [Bước %d/%d] Không nhận được phản hồi (%v) — dừng vòng lặp.", step, maxSteps, askErr))
+					} else {
+						logMsg(fmt.Sprintf("🛑 [Bước %d/%d] Người dùng chọn dừng agent.", step, maxSteps))
+					}
+					break
 				}
-				result.UserIntervention = stp.Reason
-				result.Logs = append(result.Logs, fmt.Sprintf("🛑 [Bước %d/%d] Dừng vòng lặp: Cần người dùng can thiệp! Lý do: %s", step, maxSteps, stp.Reason))
-				break
+
+				logMsg(fmt.Sprintf("💬 [Bước %d/%d] Người dùng trả lời: \"%s\"", step, maxSteps, answer))
+				if answer == "retry" {
+					if err := s.executeActionOnCDPContext(cdpCtx, "reload", "", result.URL, "", 0, takeScreenshot, result, logMsg); err != nil {
+						logMsg(fmt.Sprintf("⚠️ Tải lại trang thất bại: %v", err))
+					}
+					actionHistory = append(actionHistory,
+						fmt.Sprintf("Bước %d: Bế tắc (%s) -> Người dùng đã xử lý thủ công, trang đã được tải lại. Hãy thử lại.", step, stp.Reason))
+				} else {
+					actionHistory = append(actionHistory,
+						fmt.Sprintf("Bước %d: Bế tắc (%s) -> Chỉ dẫn của người dùng: \"%s\". Hãy làm theo.", step, stp.Reason, answer))
+				}
+				continue
 			}
 		}
 
@@ -359,13 +633,15 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 				if json.Unmarshal([]byte(actionJSONStr), &act) == nil && act.Action != "" {
 					actionMsg := fmt.Sprintf("Bước %d: Action=%s, Selector=%s, Text=%s", step, act.Action, act.Selector, act.Text)
 					actionHistory = append(actionHistory, actionMsg)
-					result.Logs = append(result.Logs, fmt.Sprintf("⚡ [Bước %d/%d] Đang thực thi CDP Action: %s", step, maxSteps, actionMsg))
+					logMsg(fmt.Sprintf("⚡ [Bước %d/%d] Đang thực thi CDP Action trên cùng 1 tab: %s", step, maxSteps, actionMsg))
 
-					s.executeCDPActionWithProfile(result.URL, act.Action, act.Selector, act.Text, act.Direction, act.Seconds, headless, useRealProfile, result)
+					if err := s.executeActionOnCDPContext(cdpCtx, act.Action, act.Selector, act.Text, act.Direction, act.Seconds, takeScreenshot, result, logMsg); err != nil {
+						logMsg(fmt.Sprintf("⚠️ [Bước %d/%d] Thao tác CDP bị lỗi: %v", step, maxSteps, err))
+					}
 				}
 			}
 		} else {
-			result.Logs = append(result.Logs, fmt.Sprintf("ℹ️ [Bước %d/%d] AI không tạo thêm hành động mới, kết thúc chu kỳ.", step, maxSteps))
+			logMsg(fmt.Sprintf("ℹ️ [Bước %d/%d] AI không tạo thêm hành động mới, kết thúc chu kỳ.", step, maxSteps))
 			result.Status = "completed"
 			break
 		}
@@ -378,42 +654,38 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 	return result, nil
 }
 
-func (s *BrowserAgentService) executeCDPActionWithProfile(targetURL, action, selector, text, direction string, seconds int, headless bool, useRealProfile bool, result *BrowserActionResult) {
-	opts := getChromeExecOptions(headless, useRealProfile)
-
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancelAlloc()
-
-	ctx, cancelCtx := chromedp.NewContext(allocCtx)
-	defer cancelCtx()
-
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	defer cancelTimeout()
-
+func (s *BrowserAgentService) executeActionOnCDPContext(
+	ctx context.Context,
+	action, selector, text, direction string,
+	seconds int,
+	takeScreenshot bool,
+	result *BrowserActionResult,
+	logMsg func(string),
+) error {
 	var tasks chromedp.Tasks
 
 	switch strings.ToLower(action) {
 	case "click":
 		if selector != "" {
 			tasks = append(tasks,
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					result.Logs = append(result.Logs, fmt.Sprintf("🖱️ Auto-scroll Into View & Click: '%s'", selector))
+				chromedp.ActionFunc(func(c context.Context) error {
+					logMsg(fmt.Sprintf("🖱️ Auto-scroll Into View & Click phần tử: '%s'", selector))
 					return nil
 				}),
-				chromedp.Evaluate(fmt.Sprintf("document.querySelector('%s')?.scrollIntoView({behavior: 'smooth', block: 'center'})", selector), nil),
+				chromedp.Evaluate(fmt.Sprintf("document.querySelector(%s)?.scrollIntoView({behavior: 'smooth', block: 'center'})", jsString(selector)), nil),
 				chromedp.Sleep(1*time.Second),
-				chromedp.Evaluate(fmt.Sprintf("document.querySelector('%s')?.click()", selector), nil),
+				chromedp.Evaluate(fmt.Sprintf("document.querySelector(%s)?.click()", jsString(selector)), nil),
 				chromedp.Sleep(2*time.Second),
 			)
 		}
 	case "type":
 		if selector != "" {
 			tasks = append(tasks,
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					result.Logs = append(result.Logs, fmt.Sprintf("⌨️ Auto-scroll Into View, Focus & Type '%s' vào '%s'", text, selector))
+				chromedp.ActionFunc(func(c context.Context) error {
+					logMsg(fmt.Sprintf("⌨️ Auto-scroll Into View, Focus & Type '%s' vào '%s'", text, selector))
 					return nil
 				}),
-				chromedp.Evaluate(fmt.Sprintf("document.querySelector('%s')?.scrollIntoView({behavior: 'smooth', block: 'center'})", selector), nil),
+				chromedp.Evaluate(fmt.Sprintf("document.querySelector(%s)?.scrollIntoView({behavior: 'smooth', block: 'center'})", jsString(selector)), nil),
 				chromedp.Sleep(1*time.Second),
 				chromedp.SendKeys(selector, text, chromedp.ByQuery),
 				chromedp.Sleep(1*time.Second),
@@ -425,8 +697,8 @@ func (s *BrowserAgentService) executeCDPActionWithProfile(targetURL, action, sel
 			scrollAmount = -800
 		}
 		tasks = append(tasks,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				result.Logs = append(result.Logs, fmt.Sprintf("📜 Scroll trang web (%d px)", scrollAmount))
+			chromedp.ActionFunc(func(c context.Context) error {
+				logMsg(fmt.Sprintf("📜 Scroll trang web (%d px)", scrollAmount))
 				return nil
 			}),
 			chromedp.Evaluate(fmt.Sprintf("window.scrollBy(0, %d)", scrollAmount), nil),
@@ -437,38 +709,54 @@ func (s *BrowserAgentService) executeCDPActionWithProfile(targetURL, action, sel
 			seconds = 2
 		}
 		tasks = append(tasks, chromedp.Sleep(time.Duration(seconds)*time.Second))
+	case "reload", "navigate":
+		target := strings.TrimSpace(text)
+		if target == "" {
+			target = result.URL
+		}
+		tasks = append(tasks,
+			chromedp.ActionFunc(func(c context.Context) error {
+				logMsg(fmt.Sprintf("🔄 Điều hướng tới: %s", target))
+				return nil
+			}),
+			chromedp.Navigate(target),
+			chromedp.Sleep(2*time.Second),
+		)
 	}
 
-	var newTitle, newHTML, newText string
+	var newTitle, newHTML, newText, newURL string
 	var buf []byte
 	tasks = append(tasks,
 		chromedp.Title(&newTitle),
 		chromedp.OuterHTML("html", &newHTML, chromedp.ByQuery),
 		chromedp.Text("body", &newText, chromedp.ByQuery),
-		chromedp.FullScreenshot(&buf, 90),
+		chromedp.Location(&newURL),
 	)
-
-	if err := chromedp.Run(ctx, tasks); err == nil {
-		if newTitle != "" {
-			result.Title = newTitle
-		}
-		if newHTML != "" {
-			if len(newHTML) > 8000 {
-				newHTML = newHTML[:8000] + "\n... [HTML Snippet Truncated]"
-			}
-			result.HTMLSnippet = newHTML
-		}
-		if newText != "" {
-			if len(newText) > 4000 {
-				newText = newText[:4000] + "\n... [Text Content Truncated]"
-			}
-			result.TextContent = newText
-		}
-		if len(buf) > 0 {
-			result.ScreenshotBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf)
-		}
-		result.Logs = append(result.Logs, "✅ Cập nhật DOM, Text & Screenshot mới nhất sau thao tác!")
-	} else {
-		result.Logs = append(result.Logs, fmt.Sprintf("⚠️ Thao tác CDP Action thất bại: %v", err))
+	if takeScreenshot {
+		tasks = append(tasks, chromedp.FullScreenshot(&buf, 90))
 	}
+
+	runCtx, cancelRun := context.WithTimeout(ctx, 60*time.Second)
+	defer cancelRun()
+	if err := chromedp.Run(runCtx, tasks); err != nil {
+		return err
+	}
+
+	if newURL != "" {
+		result.URL = newURL
+	}
+	if newTitle != "" {
+		result.Title = newTitle
+	}
+	if newHTML != "" {
+		result.HTMLSnippet = truncateHTML(newHTML)
+	}
+	if newText != "" {
+		result.TextContent = truncateText(newText)
+	}
+	if len(buf) > 0 {
+		result.ScreenshotBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf)
+	}
+	logMsg("✅ Cập nhật DOM, Text & Screenshot mới nhất sau thao tác!")
+	return nil
 }
