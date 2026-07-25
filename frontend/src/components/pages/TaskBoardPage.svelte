@@ -254,23 +254,40 @@
 
         <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-y-auto max-h-[420px] p-4 space-y-4">
           {#each tasks as task, idx}
-            <div class="relative pl-4 border-l-2 border-primary py-2 bg-surface-container-low/40 rounded-r-lg p-3 space-y-2">
-              <div class="flex items-start gap-2">
-                <span class="font-mono text-xs text-primary font-bold">[{idx + 1}]</span>
-                <h3 class="font-semibold text-sm text-on-surface">{task.title}</h3>
+            <div class="relative border-l-4 border-primary bg-surface-container-low/60 rounded-r-xl p-4 space-y-3 shadow-xs hover:shadow-sm transition-all border border-outline-variant/50">
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-mono text-xs font-black bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20">#{idx + 1}</span>
+                  <h3 class="font-bold text-sm text-on-surface flex items-center gap-2">
+                    {task.title}
+                  </h3>
+                </div>
+                <div class="flex items-center gap-2 font-mono text-[11px]">
+                  <span class="px-2 py-0.5 rounded-full font-bold uppercase {task.priority === 'high' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : 'bg-blue-500/10 text-blue-600 border border-blue-500/20'}">
+                    Priority: {task.priority || 'normal'}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full font-bold uppercase bg-surface-container-high text-on-surface-variant border border-outline-variant">
+                    {task.status || 'backlog'}
+                  </span>
+                </div>
               </div>
-              <div class="ml-4 space-y-2 text-xs">
-                <div class="flex items-center gap-4 font-mono text-on-surface-variant">
-                  <span>Priority: <strong class="text-primary">{task.priority}</strong></span>
-                  <span>Status: <strong>{task.status}</strong></span>
-                </div>
-                <div class="bg-surface-container-lowest p-2 rounded border border-outline-variant text-on-surface-variant font-mono">
-                  Prompt: {task.prompt || task.description}
-                </div>
+
+              {#if task.description && task.description !== task.title}
+                <p class="text-xs text-on-surface-variant leading-relaxed bg-surface-container-lowest/60 p-2.5 rounded-lg border border-outline-variant/40">
+                  {task.description}
+                </p>
+              {/if}
+
+              <!-- Structured Prompt Tag Display -->
+              <div class="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant font-mono text-[11px] space-y-1.5 leading-relaxed text-on-surface select-text overflow-x-auto whitespace-pre-wrap">
+                {task.prompt || task.description}
               </div>
             </div>
           {:else}
-            <div class="text-center text-on-surface-variant text-xs p-8 italic">Chưa có task nào. Nhập mô tả và bấm 'AI Decompose'.</div>
+            <div class="text-center text-on-surface-variant text-xs p-10 italic flex flex-col items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-3xl text-outline-variant">psychology</span>
+              <span>Chưa có kế hoạch. Nhập mục tiêu dự án bên trái và bấm 'Tạo kế hoạch AI' để AI tự động Brainstorming chi tiết!</span>
+            </div>
           {/each}
         </div>
       </div>
