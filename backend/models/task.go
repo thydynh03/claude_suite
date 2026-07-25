@@ -2,6 +2,7 @@ package models
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -39,21 +40,9 @@ func (t *Task) ExtractTags() []string {
 		}
 	}
 
-	// Keyword inference
-	keywords := map[string]string{
-		"code":     "CODE",
-		"test":     "TEST",
-		"review":   "REVIEW",
-		"plan":     "PLAN",
-		"design":   "ARCH",
-		"database": "DB",
-		"bug":      "BUG",
-		"doc":      "DOCS",
-	}
-
-	for kw, tag := range keywords {
-		if strings.Contains(combined, kw) {
-			tagSet[tag] = true
+	for _, rule := range keywordTags {
+		if rule.pattern.MatchString(combined) {
+			tagSet[rule.tag] = true
 		}
 	}
 
@@ -62,7 +51,30 @@ func (t *Task) ExtractTags() []string {
 		tags = append(tags, tag)
 	}
 	if len(tags) == 0 {
-		tags = append(tags, "GENERAL")
+		return []string{"GENERAL"}
 	}
+	// Sorted so the same task always produces the same tag string; the dispatcher
+	// joins these into the text it matches agents against.
+	sort.Strings(tags)
 	return tags
+}
+
+// keywordTags infers a tag when the task text contains a keyword as a whole word.
+//
+// Matching is deliberately word-boundary rather than substring. With a substring
+// match, "Upgrade to the latest release" contained "test" and the task was
+// dispatched to the QA agent; "decode" implied CODE and "explanation" implied
+// PLAN. Common inflections are still matched, so "coding" and "tests" work.
+var keywordTags = []struct {
+	pattern *regexp.Regexp
+	tag     string
+}{
+	{regexp.MustCompile(`\bcod(e|es|ed|ing)\b`), "CODE"},
+	{regexp.MustCompile(`\btest(s|ed|ing)?\b`), "TEST"},
+	{regexp.MustCompile(`\breview(s|ed|ing)?\b`), "REVIEW"},
+	{regexp.MustCompile(`\bplan(s|ned|ning)?\b`), "PLAN"},
+	{regexp.MustCompile(`\bdesign(s|ed|ing)?\b`), "ARCH"},
+	{regexp.MustCompile(`\bdatabases?\b`), "DB"},
+	{regexp.MustCompile(`\bbugs?\b`), "BUG"},
+	{regexp.MustCompile(`\bdocs?\b|\bdocumentation\b`), "DOCS"},
 }
