@@ -49,6 +49,47 @@ func (g *GitService) AutoSnapshot(cwd string) error {
 	return cmdCommit.Run()
 }
 
+// allowedGitSubcommands are the git subcommands the in-app command box may run.
+// Destructive history rewrites and force pushes are intentionally excluded.
+var allowedGitSubcommands = map[string]bool{
+	"status": true, "add": true, "commit": true, "log": true, "diff": true,
+	"branch": true, "checkout": true, "switch": true, "restore": true, "reset": true,
+	"revert": true, "stash": true, "show": true, "remote": true, "fetch": true,
+	"pull": true, "tag": true, "rm": true, "mv": true, "config": true,
+}
+
+// RunCommand runs a whitelisted git command inside the workspace and returns its
+// combined output. Rejects non-git input and disallowed/destructive subcommands.
+func (g *GitService) RunCommand(cwd string, args []string) (string, error) {
+	if cwd == "" {
+		return "", fmt.Errorf("chưa chọn workspace")
+	}
+	// Accept an optional leading "git" token for convenience.
+	if len(args) > 0 && args[0] == "git" {
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		return "", fmt.Errorf("lệnh git rỗng")
+	}
+	sub := args[0]
+	if !allowedGitSubcommands[sub] {
+		return "", fmt.Errorf("lệnh git '%s' không được phép trong panel này", sub)
+	}
+	// Block force pushes explicitly.
+	joined := strings.Join(args, " ")
+	if sub == "push" || strings.Contains(joined, "--force") || strings.Contains(joined, "-f ") {
+		return "", fmt.Errorf("push/--force bị chặn trong panel vì an toàn")
+	}
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = cwd
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("git %s: %v", sub, err)
+	}
+	return string(out), nil
+}
+
 // GetWorkspaceDiff returns the current uncommitted diff (tracked changes plus a
 // listing of new untracked files) so the UI can show what an agent just changed.
 func (g *GitService) GetWorkspaceDiff(cwd string) (string, error) {

@@ -61,6 +61,10 @@ export function GetGitStatus():Promise<Record<string, any>>;
 
 export function GetWorkspaceDiff():Promise<string>;
 
+export function RunGitCommand(arg1:Array<string>):Promise<string>;
+
+export function GenerateCommitMessage():Promise<string>;
+
 export function GetMaxConcurrency():Promise<number>;
 
 export function SetTaskTimeoutMinutes(arg1:number):Promise<number>;
