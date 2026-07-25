@@ -191,3 +191,78 @@ func TestARepeatingJobSkipsMissedOccurrences(t *testing.T) {
 		t.Errorf("next run is not in the future: %+v", jobs)
 	}
 }
+
+// An unknown kind is rejected when it is scheduled, not at midnight when nobody
+// is watching it fail.
+func TestScheduleKindRejectsAnUnknownKind(t *testing.T) {
+	s := NewSchedulerService()
+	when := time.Now().Add(time.Hour).Format(time.RFC3339)
+
+	if _, err := s.ScheduleKind("deploy-to-prod", "go", when, false, "", ""); err == nil {
+		t.Error("an unknown kind was accepted")
+	}
+	if jobs := s.GetJobs(); len(jobs) != 0 {
+		t.Errorf("the rejected job was still stored: %+v", jobs)
+	}
+}
+
+func TestScheduleKindStoresAndReloadsTheKind(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "jobs.json")
+	first := NewSchedulerService()
+	first.UseStore(store)
+
+	when := time.Now().Add(time.Hour).Format(time.RFC3339)
+	if _, err := first.ScheduleKind(JobKindE2E, "check the login page", when, true, "", ""); err != nil {
+		t.Fatalf("schedule: %v", err)
+	}
+
+	second := NewSchedulerService()
+	second.UseStore(store)
+	jobs := second.GetJobs()
+	if len(jobs) != 1 || jobs[0].Kind != JobKindE2E {
+		t.Errorf("kind did not survive the restart: %+v", jobs)
+	}
+}
+
+// A job scheduled before kinds existed has none, and must keep running as the
+// prompt it always was rather than being refused.
+func TestABlankKindIsAPlainPrompt(t *testing.T) {
+	s := NewSchedulerService()
+	when := time.Now().Add(time.Hour).Format(time.RFC3339)
+
+	id, err := s.ScheduleKind("", "just ask", when, false, "", "")
+	if err != nil {
+		t.Fatalf("a blank kind was rejected: %v", err)
+	}
+	for _, job := range s.GetJobs() {
+		if job.ID == id && job.Kind != JobKindPrompt {
+			t.Errorf("kind = %q, want %q", job.Kind, JobKindPrompt)
+		}
+	}
+}
+
+// The kind reaches the callback; without it every job would run as a prompt.
+func TestTheKindReachesTheTrigger(t *testing.T) {
+	s := NewSchedulerService()
+
+	seen := make(chan string, 1)
+	s.SetTriggerCallback(func(job JobRequest) error {
+		seen <- job.Kind
+		return nil
+	})
+
+	if _, err := s.ScheduleKind(JobKindDigest, "", time.Now().Add(-time.Second).Format(time.RFC3339), false, "", ""); err != nil {
+		t.Fatalf("schedule: %v", err)
+	}
+	s.Start()
+	defer s.Stop()
+
+	select {
+	case got := <-seen:
+		if got != JobKindDigest {
+			t.Errorf("the trigger saw kind %q, want %q", got, JobKindDigest)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the job never ran")
+	}
+}

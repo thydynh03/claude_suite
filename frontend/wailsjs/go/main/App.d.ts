@@ -71,6 +71,8 @@ export function GetGitStatus():Promise<Record<string, any>>;
 
 export function GetIntegrationsConfig():Promise<models.IntegrationsConfig>;
 
+export function GetJobKinds():Promise<Array<string>>;
+
 export function GetMaxConcurrency():Promise<number>;
 
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
@@ -142,6 +144,8 @@ export function SaveRoleContent(arg1:string,arg2:string):Promise<void>;
 export function ScanWorkspaceFiles():Promise<Array<string>>;
 
 export function ScheduleJob(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:string):Promise<string>;
+
+export function ScheduleKind(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:string,arg6:string):Promise<string>;
 
 export function SchedulePrompt(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 

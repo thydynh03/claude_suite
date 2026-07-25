@@ -92,22 +92,7 @@ func NewApp() *App {
 		oauthListener:   services.NewOAuthListenerService(),
 	}
 
-	app.schedulerSvc.SetTriggerCallback(func(job services.JobRequest) error {
-		model := job.Model
-		if model == "" {
-			// A job that did not pick one follows the provider it did pick, so a
-			// Gemini-scheduled run does not quietly execute on Claude.
-			model = defaultModelFor(job.Provider)
-		}
-		result, err := app.RunQuickCLI(job.Prompt, model, "", nil)
-		if err != nil {
-			return err
-		}
-		if result != nil && !result.Success {
-			return fmt.Errorf("%s", result.Error)
-		}
-		return nil
-	})
+	app.schedulerSvc.SetTriggerCallback(app.runScheduledJob)
 
 	return app
 }
@@ -1019,4 +1004,153 @@ func (a *App) ScheduleJob(prompt, targetTime string, repeat bool, provider, mode
 // SetScheduledJobEnabled pauses or resumes a repeating job.
 func (a *App) SetScheduledJobEnabled(id string, enabled bool) bool {
 	return a.schedulerSvc.SetJobEnabled(id, enabled)
+}
+
+// runScheduledJob executes a due job. Each kind delegates to a capability the
+// app already has, so a schedule can do anything a person could do from the UI
+// rather than only sending a prompt.
+func (a *App) runScheduledJob(job services.JobRequest) error {
+	model := job.Model
+	if model == "" {
+		// Follow the provider the job picked, so a Gemini schedule does not
+		// quietly execute on Claude — RunQuickCLI routes on the model name.
+		model = defaultModelFor(job.Provider)
+	}
+
+	switch job.Kind {
+	case services.JobKindPlan:
+		return a.runScheduledPlan(job, model)
+	case services.JobKindE2E:
+		return a.runScheduledE2E(job)
+	case services.JobKindGitCommit:
+		return a.runScheduledCommit()
+	case services.JobKindDigest:
+		return a.runScheduledDigest()
+	default: // JobKindPrompt, and anything scheduled before kinds existed
+		result, err := a.RunQuickCLI(job.Prompt, model, "", nil)
+		if err != nil {
+			return err
+		}
+		if result != nil && !result.Success {
+			return fmt.Errorf("%s", result.Error)
+		}
+		return nil
+	}
+}
+
+// runScheduledPlan turns the prompt into tasks and lets the orchestrator work
+// through them, which is the overnight case: describe it before bed, review the
+// diff in the morning.
+func (a *App) runScheduledPlan(job services.JobRequest, model string) error {
+	provider := "claude_cli"
+	if job.Provider == "anti" || job.Provider == "anti_cli" {
+		provider = "anti_cli"
+	}
+
+	tasks, err := a.planBuilder.DecomposeWithProvider(job.Prompt, a.workspaceConfig.LastWorkspaceFolder, provider, model)
+	if err != nil {
+		return fmt.Errorf("decompose: %w", err)
+	}
+	for i := range tasks {
+		if err := a.taskRepo.Create(&tasks[i]); err != nil {
+			return fmt.Errorf("create task: %w", err)
+		}
+	}
+
+	a.emitBoardUpdated()
+	a.orchestrator.Start()
+	return nil
+}
+
+// runScheduledE2E queues a browser test. It goes through the board rather than
+// calling the browser directly so a failure lands in the existing repair loop:
+// the orchestrator spawns a fix task and re-runs the test.
+func (a *App) runScheduledE2E(job services.JobRequest) error {
+	prompt := job.Prompt
+	if strings.TrimSpace(prompt) == "" {
+		prompt = "Kiểm thử giao diện web và báo lỗi console nếu có."
+	}
+
+	task := models.Task{
+		Title:    "[E2E] " + firstLine(prompt),
+		Prompt:   prompt,
+		Priority: "high",
+		Status:   "backlog",
+	}
+	if err := a.taskRepo.Create(&task); err != nil {
+		return fmt.Errorf("create E2E task: %w", err)
+	}
+
+	a.emitBoardUpdated()
+	a.orchestrator.Start()
+	return nil
+}
+
+// runScheduledCommit writes a commit for whatever is uncommitted, so a night of
+// agent work does not sit as a loose diff.
+func (a *App) runScheduledCommit() error {
+	workspace := a.workspaceConfig.LastWorkspaceFolder
+	if workspace == "" {
+		return fmt.Errorf("chưa chọn workspace")
+	}
+
+	diff, err := a.gitService.GetWorkspaceDiff(workspace)
+	if err != nil {
+		return fmt.Errorf("read diff: %w", err)
+	}
+	if strings.TrimSpace(diff) == "" || strings.Contains(diff, "Không có thay đổi") {
+		return nil // nothing to commit is a success, not a failure
+	}
+
+	message, err := a.GenerateCommitMessage()
+	if err != nil {
+		return fmt.Errorf("write commit message: %w", err)
+	}
+	if _, err := a.gitService.RunCommand(workspace, []string{"add", "."}); err != nil {
+		return fmt.Errorf("stage changes: %w", err)
+	}
+	return a.gitService.CreateCommit(workspace, message)
+}
+
+// runScheduledDigest sends the day's summary to the configured webhook. With no
+// webhook set there is nowhere for it to go, and saying so beats a silent no-op.
+func (a *App) runScheduledDigest() error {
+	if a.integrationsConfig.OutboundWebhookURL == "" {
+		return fmt.Errorf("chưa cấu hình webhook để gửi tổng kết")
+	}
+
+	tasks, err := a.taskRepo.GetAll()
+	if err != nil {
+		return fmt.Errorf("read tasks: %w", err)
+	}
+	agents, err := a.agentRepo.GetAll()
+	if err != nil {
+		return fmt.Errorf("read agents: %w", err)
+	}
+
+	summary := services.BuildDigest(services.DigestInput{
+		Tasks:  tasks,
+		Agents: agents,
+		Since:  time.Now().Add(-24 * time.Hour),
+	})
+	a.orchestrator.NotifyDigest(summary)
+	return nil
+}
+
+func firstLine(s string) string {
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		s = s[:idx]
+	}
+	return textutil.Truncate(strings.TrimSpace(s), 60, "…")
+}
+
+// ScheduleKind schedules a job of a given kind (prompt, plan, e2e, git-commit,
+// digest).
+func (a *App) ScheduleKind(kind, prompt, targetTime string, repeat bool, provider, model string) (string, error) {
+	return a.schedulerSvc.ScheduleKind(kind, prompt, targetTime, repeat, provider, model)
+}
+
+// GetJobKinds lists the kinds the scheduler accepts, for the UI to offer.
+func (a *App) GetJobKinds() []string {
+	return services.KnownJobKinds
 }

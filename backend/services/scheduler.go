@@ -26,6 +26,9 @@ type ScheduledJob struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 
+	// Kind selects what the job does. Blank means a plain prompt.
+	Kind string `json:"kind"`
+
 	// Enabled lets a repeating job be paused without losing its schedule.
 	Enabled bool `json:"enabled"`
 
@@ -37,8 +40,39 @@ type ScheduledJob struct {
 	RunCount   int       `json:"run_count"`
 }
 
+// Job kinds. The scheduler does not know what any of these do — it passes the
+// kind to the application, which owns the capability. Keeping the mapping out of
+// here is what lets a job run a whole plan or a browser suite without the
+// scheduler growing a dependency on the orchestrator.
+const (
+	JobKindPrompt    = "prompt"     // send a prompt to an agent
+	JobKindPlan      = "plan"       // decompose the prompt into tasks and run them
+	JobKindE2E       = "e2e"        // drive the browser suite, repairing what fails
+	JobKindGitCommit = "git-commit" // let the AI commit whatever is uncommitted
+	JobKindDigest    = "digest"     // summarise the day and send it to the webhook
+)
+
+// KnownJobKinds lists every kind the scheduler accepts.
+var KnownJobKinds = []string{JobKindPrompt, JobKindPlan, JobKindE2E, JobKindGitCommit, JobKindDigest}
+
+// normaliseKind defaults a blank kind to a plain prompt — which is what every
+// job scheduled before kinds existed is — and rejects anything unrecognised
+// rather than silently running it as a prompt.
+func normaliseKind(kind string) (string, error) {
+	if kind == "" {
+		return JobKindPrompt, nil
+	}
+	for _, known := range KnownJobKinds {
+		if kind == known {
+			return kind, nil
+		}
+	}
+	return "", fmt.Errorf("unknown job kind %q (expected one of %v)", kind, KnownJobKinds)
+}
+
 // JobRequest is what the scheduler hands the application when a job comes due.
 type JobRequest struct {
+	Kind     string
 	Prompt   string
 	Provider string
 	Model    string
@@ -218,7 +252,7 @@ func (s *SchedulerService) checkJobs() {
 		fired = true
 
 		if s.onTrigger != nil {
-			request := JobRequest{Prompt: job.Prompt, Provider: job.Provider, Model: job.Model}
+			request := JobRequest{Kind: job.Kind, Prompt: job.Prompt, Provider: job.Provider, Model: job.Model}
 			// The callback runs an agent, which takes minutes. Doing it inline would
 			// hold the lock and stall every other job.
 			go s.runJob(id, request)
@@ -288,6 +322,27 @@ func (s *SchedulerService) runJob(id string, request JobRequest) {
 // the run uses whatever provider and model the caller's trigger defaults to.
 func (s *SchedulerService) SchedulePrompt(prompt string, targetTimeStr string, repeat bool) (string, error) {
 	return s.ScheduleJob(prompt, targetTimeStr, repeat, "", "")
+}
+
+// ScheduleKind adds a job of a given kind. An unknown kind is rejected here
+// rather than at midnight, when nobody is watching.
+func (s *SchedulerService) ScheduleKind(kind, prompt, targetTimeStr string, repeat bool, provider, model string) (string, error) {
+	resolved, err := normaliseKind(kind)
+	if err != nil {
+		return "", err
+	}
+	id, err := s.ScheduleJob(prompt, targetTimeStr, repeat, provider, model)
+	if err != nil {
+		return "", err
+	}
+
+	s.mu.Lock()
+	if job, ok := s.jobs[id]; ok {
+		job.Kind = resolved
+		s.saveLocked()
+	}
+	s.mu.Unlock()
+	return id, nil
 }
 
 // ScheduleJob adds a job that runs against a chosen provider and model. Pointing

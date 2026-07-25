@@ -134,6 +134,10 @@ export function GetIntegrationsConfig() {
   return window['go']['main']['App']['GetIntegrationsConfig']();
 }
 
+export function GetJobKinds() {
+  return window['go']['main']['App']['GetJobKinds']();
+}
+
 export function GetMaxConcurrency() {
   return window['go']['main']['App']['GetMaxConcurrency']();
 }
@@ -276,6 +280,10 @@ export function ScanWorkspaceFiles() {
 
 export function ScheduleJob(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['ScheduleJob'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function ScheduleKind(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['ScheduleKind'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SchedulePrompt(arg1, arg2, arg3) {

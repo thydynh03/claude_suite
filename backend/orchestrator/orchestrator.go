@@ -790,3 +790,9 @@ func (o *Orchestrator) emitTaskLog(taskID, msg, level string) {
 		})
 	}
 }
+
+// NotifyDigest sends a summary through the same outbound webhook task events
+// use, so the daily digest arrives wherever the user already gets notifications.
+func (o *Orchestrator) NotifyDigest(summary string) {
+	go o.notifierSvc.NotifyTaskEvent("digest", "Tổng kết hằng ngày", "ok", summary)
+}

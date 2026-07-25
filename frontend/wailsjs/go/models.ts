@@ -411,6 +411,7 @@ export namespace services {
 	    repeat: boolean;
 	    provider: string;
 	    model: string;
+	    kind: string;
 	    enabled: boolean;
 	    // Go type: time
 	    last_run_at: any;
@@ -430,6 +431,7 @@ export namespace services {
 	        this.repeat = source["repeat"];
 	        this.provider = source["provider"];
 	        this.model = source["model"];
+	        this.kind = source["kind"];
 	        this.enabled = source["enabled"];
 	        this.last_run_at = this.convertValues(source["last_run_at"], null);
 	        this.last_status = source["last_status"];
