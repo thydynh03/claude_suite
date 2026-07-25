@@ -371,7 +371,7 @@ func (a *App) IsWebhookRunning() bool {
 }
 
 func (a *App) GetAppVersion() string {
-	return version.CurrentVersion
+	return version.GetVersion()
 }
 
 func (a *App) CheckForUpdates() (*services.UpdateInfo, error) {

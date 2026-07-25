@@ -111,6 +111,9 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 		cmd := exec.Command("git", "pull", "origin", "master")
 		if out, err := cmd.CombinedOutput(); err == nil {
 			fmt.Println("Git pull auto-update output:", string(out))
+			// Save current git tag to version.json
+			gitTag := version.GetVersion()
+			_ = version.SetInstalledVersion(gitTag)
 			return nil
 		}
 	}
