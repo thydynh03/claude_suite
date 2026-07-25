@@ -30,30 +30,45 @@ func GetDBPath() string {
 	return filepath.Join(baseDir, "agent_manager.db")
 }
 
+// OpenAt opens the database at path, applies the connection pragmas and runs
+// migrations. InitDB uses it for the app's shared instance; tests use it for a
+// throwaway file under t.TempDir().
+//
+// Tests want a file rather than ":memory:" because database/sql pools
+// connections and each new connection to ":memory:" gets its own empty
+// database — which breaks the moment the orchestrator runs tasks in parallel.
+func OpenAt(path string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open sqlite db: %w", err)
+	}
+
+	// Enable WAL mode, busy timeout & foreign keys for high-concurrency access
+	_, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;`)
+
+	if err := migrateSchema(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	return db, nil
+}
+
 // InitDB initializes SQLite connection with WAL mode and runs migrations
 func InitDB() (*sql.DB, error) {
 	var initErr error
 	dbOnce.Do(func() {
 		dbPath := GetDBPath()
-		db, err := sql.Open("sqlite", dbPath)
+		db, err := OpenAt(dbPath)
 		if err != nil {
-			initErr = fmt.Errorf("failed to open sqlite db: %w", err)
+			initErr = err
 			return
 		}
-
-		// Enable WAL mode, busy timeout & foreign keys for high-concurrency access
-		_, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;`)
 
 		// Run SQLite Integrity Check
 		var checkRes string
 		_ = db.QueryRow(`PRAGMA quick_check;`).Scan(&checkRes)
 		if checkRes != "ok" && checkRes != "" {
 			fmt.Printf("SQLite Integrity Check Notice: %s\n", checkRes)
-		}
-
-		if err := migrateSchema(db); err != nil {
-			initErr = fmt.Errorf("failed to run migrations: %w", err)
-			return
 		}
 
 		dbInstance = db
