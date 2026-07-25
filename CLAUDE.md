@@ -37,6 +37,20 @@ CI runs the first block on every push/PR (`.github/workflows/ci.yml`).
 - `frontend/src/lib/stores/appState.ts` — global stores (`tasksStore`, `agentsStore`,
   `taskLogsStore`).
 
+## Before changing anything that looks redundant
+
+`docs/ARCHITECTURE_DECISIONS.md` lists the decisions that read as unnecessary
+detours but are load-bearing — `/c` vs `/k`, the `file:` URL for SQLite, the
+dedicated Chrome profile, per-task approval channels, the synchronous webhook
+bind. Read the relevant entry before "simplifying" one of them.
+
+## Two frontends, one backend
+
+`app.go` (Wails) and `backend/tui/task_actions.go` (TUI) are parallel adapters
+over the same services. A capability must use the **same method name on both**;
+`backend/contract` fails the build when it does not. TUI-only methods need an
+entry in `tuiOnlyMethods` with a reason.
+
 ## Critical conventions & gotchas
 
 - **Wails bindings must stay in sync with `app.go`.** After adding/changing an
