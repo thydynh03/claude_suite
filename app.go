@@ -17,6 +17,7 @@ import (
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
 	"claude_suite/backend/services"
+	"claude_suite/backend/textutil"
 	"claude_suite/backend/version"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -555,9 +556,7 @@ func (a *App) GenerateCommitMessage() (string, error) {
 	if strings.TrimSpace(diff) == "" || strings.Contains(diff, "Không có thay đổi") {
 		return "", fmt.Errorf("không có thay đổi để tạo commit message")
 	}
-	if len(diff) > 12000 {
-		diff = diff[:12000]
-	}
+	diff = textutil.Truncate(diff, 12000, "\n... [diff truncated]")
 	system := "You are a senior engineer writing a Conventional Commits message. Reply with ONLY the commit message: a concise type(scope): subject line under 72 chars, optionally a blank line and short bullet body. No code fences, no explanation."
 	prompt := "Write a commit message for this diff:\n\n" + diff
 	result := a.cliRunner.RunOnce(prompt, "claude-haiku-4-5", system, nil, a.workspaceConfig.LastWorkspaceFolder)

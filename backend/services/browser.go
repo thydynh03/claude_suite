@@ -1,6 +1,7 @@
 package services
 
 import (
+	"claude_suite/backend/textutil"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -117,17 +118,11 @@ func jsString(v string) string {
 }
 
 func truncateHTML(html string) string {
-	if len(html) > 8000 {
-		return html[:8000] + "\n... [HTML Snippet Truncated]"
-	}
-	return html
+	return textutil.Truncate(html, 8000, "\n... [HTML Snippet Truncated]")
 }
 
 func truncateText(text string) string {
-	if len(text) > 4000 {
-		return text[:4000] + "\n... [Text Content Truncated]"
-	}
-	return text
+	return textutil.Truncate(text, 4000, "\n... [Text Content Truncated]")
 }
 
 // RunBrowserTask performs browser navigation, DOM inspection & full-page screenshot via Chrome CDP

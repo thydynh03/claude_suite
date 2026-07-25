@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"claude_suite/backend/models"
+	"claude_suite/backend/textutil"
 )
 
 var ShowCLIConsole bool = false
@@ -280,10 +281,7 @@ func toolInputSummary(input interface{}) string {
 	}
 	for _, key := range []string{"file_path", "path", "command", "pattern", "url", "query"} {
 		if v, ok := m[key].(string); ok && v != "" {
-			if len(v) > 120 {
-				v = v[:120] + "…"
-			}
-			return "→ " + v
+			return "→ " + textutil.Truncate(v, 120, "…")
 		}
 	}
 	return ""

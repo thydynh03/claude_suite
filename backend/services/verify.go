@@ -1,6 +1,7 @@
 package services
 
 import (
+	"claude_suite/backend/textutil"
 	"context"
 	"os"
 	"os/exec"
@@ -67,11 +68,8 @@ func runCmd(dir string, timeout time.Duration, name string, args ...string) (boo
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
-	s := string(out)
-	if len(s) > 6000 {
-		s = s[len(s)-6000:] // keep the tail where errors usually are
-	}
-	return err == nil, s
+	// Keep the tail: a compiler or bundler puts its error summary at the bottom.
+	return err == nil, textutil.TruncateTail(string(out), 6000)
 }
 
 func fileExists(p string) bool {
