@@ -115,7 +115,7 @@
       if (res?.logs?.length) liveLogs = [...liveLogs, ...res.logs.map((l: string) => `[${new Date().toLocaleTimeString()}] ${l}`)];
       if (res?.success) {
         chromeAgentReady = true;
-        addLog('✅ Chrome Agent đã mở. Đăng nhập các trang bạn cần — profile sẽ ghi nhớ cho lần sau.', 'SUCCESS');
+        addLog('✅ Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy ĐÓNG cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
       } else {
         addLog(`❌ Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
       }

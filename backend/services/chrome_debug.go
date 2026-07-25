@@ -127,6 +127,104 @@ func ChromeAgentStatus() (ready bool, port int, profileDir string) {
 	return p > 0, p, dir
 }
 
+// agentChromePIDs lists chrome.exe processes running on the agent's profile.
+// Matching on the profile directory is what keeps this from ever touching the
+// user's own Chrome.
+func agentChromePIDs() []int {
+	dir := AgentUserDataDir()
+	if dir == "" {
+		return nil
+	}
+	script := `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ForEach-Object { "$($_.ProcessId)|$($_.CommandLine)" }`
+	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script).Output()
+	if err != nil {
+		return nil
+	}
+	var pids []int
+	for _, line := range strings.Split(string(out), "\n") {
+		sep := strings.Index(line, "|")
+		if sep < 0 {
+			continue
+		}
+		if !strings.Contains(line[sep+1:], dir) {
+			continue
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(line[:sep]))
+		if err == nil && pid > 0 {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// closeAgentChrome shuts the agent's Chrome down, preferring a graceful close so
+// that cookies written during a sign-in are flushed to disk before exit.
+func closeAgentChrome(logf func(string)) {
+	pids := agentChromePIDs()
+	if len(pids) == 0 {
+		return
+	}
+	if logf != nil {
+		logf("🔻 Đóng cửa sổ Chrome Agent đang mở để chuyển chế độ...")
+	}
+	for _, pid := range pids {
+		// No /F: let Chrome exit on its own so the cookie store is committed.
+		_ = exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T").Run()
+	}
+	for i := 0; i < 24; i++ {
+		time.Sleep(250 * time.Millisecond)
+		if len(agentChromePIDs()) == 0 {
+			return
+		}
+	}
+	// Graceful close did not take; fall back to a forced kill.
+	for _, pid := range agentChromePIDs() {
+		_ = exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").Run()
+	}
+	time.Sleep(time.Second)
+}
+
+// OpenAgentChromeForLogin opens the agent profile as an ORDINARY browser, with no
+// debug port at all.
+//
+// Google refuses to sign in to a browser it can tell is driven over CDP
+// ("This browser or app may not be secure"), which blocks both Google accounts
+// and every "Sign in with Google" button. Launching the same profile without the
+// debug port removes the signal, and the session written during that visit is
+// still there when the agent reattaches later — the cookie store survives the
+// switch because the profile path never changes.
+func OpenAgentChromeForLogin(targetURL string, logf func(string)) error {
+	dir := AgentUserDataDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("không tạo được thư mục profile agent %s: %w", dir, err)
+	}
+
+	// A second launch on the same user-data-dir just opens a window inside the
+	// existing process, so an attached instance has to go first or the new window
+	// would still be CDP-controlled.
+	closeAgentChrome(logf)
+
+	args := []string{
+		"--user-data-dir=" + dir,
+		"--no-first-run",
+		"--no-default-browser-check",
+	}
+	if cleanURL := strings.Trim(strings.TrimSpace(targetURL), "\"'"); cleanURL != "" {
+		args = append(args, cleanURL)
+	}
+
+	if logf != nil {
+		logf("🔓 Mở Chrome Agent ở chế độ ĐĂNG NHẬP (không bật debug port) — Google sẽ không chặn.")
+	}
+	if err := exec.Command(ChromeExecutablePath(), args...).Start(); err != nil {
+		return fmt.Errorf("không khởi động được Chrome tại %s: %w", ChromeExecutablePath(), err)
+	}
+	if logf != nil {
+		logf("👉 Đăng nhập xong thì ĐÓNG cửa sổ này lại, rồi bấm 'Kích hoạt Agent'.")
+	}
+	return nil
+}
+
 // EnsureAgentChromeSession makes the agent's persistent Chrome profile reachable
 // over CDP and returns the port it is listening on. It reuses an already-running
 // instance and never touches — or shuts down — the user's own Chrome.
@@ -146,6 +244,12 @@ func EnsureAgentChromeSession(targetURL string, logf func(string)) (int, error) 
 		log("🌐 Chrome Agent đã chạy sẵn trên port %d — kết nối lại (giữ nguyên các phiên đã đăng nhập).", port)
 		return port, nil
 	}
+
+	// The profile may still be open from login mode (no debug port). Launching
+	// again would just add a window to that portless process and the poll below
+	// would time out, so close it first — matched by profile dir, so the user's
+	// own Chrome is never involved.
+	closeAgentChrome(logf)
 
 	// A stale file from a previous run would be read back as a live port.
 	_ = os.Remove(filepath.Join(userDataDir, "DevToolsActivePort"))

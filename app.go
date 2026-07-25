@@ -712,21 +712,21 @@ func (a *App) ResolveBrowserAsk(id string, answer string) bool {
 	return a.browserService.ResolveAsk(id, answer)
 }
 
-// OpenAgentChromeWindow brings up the agent's own persistent Chrome profile so the
-// user can sign in to a site once; the profile keeps that session for later runs.
+// OpenAgentChromeWindow opens the agent's profile as a plain browser with no debug
+// port, which is the only way Google will let the user sign in — it refuses any
+// browser it can tell is driven over CDP. The session written here is reused by
+// later agent runs.
 func (a *App) OpenAgentChromeWindow(targetURL string) map[string]interface{} {
 	logs := []string{}
-	port, err := services.EnsureAgentChromeSession(targetURL, func(msg string) {
+	if err := services.OpenAgentChromeForLogin(targetURL, func(msg string) {
 		logs = append(logs, msg)
-	})
-	if err != nil {
+	}); err != nil {
 		logs = append(logs, fmt.Sprintf("❌ %v", err))
 		return map[string]interface{}{"success": false, "logs": logs, "error": err.Error()}
 	}
 	return map[string]interface{}{
 		"success": true,
 		"logs":    logs,
-		"port":    port,
 		"profile": services.AgentUserDataDir(),
 	}
 }
