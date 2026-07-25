@@ -54,6 +54,7 @@ func (p *PlanBuilder) DecomposeWithProvider(projectRequirement string, cwd strin
 		"2. Provide rich, clear titles starting with role tags like '[BA]', '[ARCH]', '[CODE]', '[QA]', or '[DEVOPS]'.\n" +
 		"3. Write comprehensive multi-sentence descriptions covering data models, API endpoints, UI state, performance, and unit testing.\n" +
 		"4. Format every task prompt with clear markdown sections: '📌 [ACTION]', '📑 [REQUIREMENTS]', '📁 [TARGET FILES]', '🎯 [EXPECTED OUTPUT]'.\n" +
+		"4b. For any web/UI/E2E testing task, START the title with '[E2E]', include the target URL (e.g. http://localhost:5173) in the prompt, and add one or more explicit '[EXPECT: <visible text on the page>]' directives so the automated Chrome browser tester can assert them.\n" +
 		"5. Respond ONLY with valid JSON in a ```json ... ``` codeblock matching this EXACT schema:\n" +
 		"{\n" +
 		"  \"tasks\": [\n" +

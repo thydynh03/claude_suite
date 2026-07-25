@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -298,18 +299,34 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		strings.Contains(titleLower, "[web test]") || strings.Contains(agentLower, "e2e") ||
 		strings.Contains(agentLower, "chrome cdp")
 	if isExplicitE2E && o.browserSvc != nil {
-		testUrl := "http://localhost:5173"
-		onLog(fmt.Sprintf("🌐 Chrome CDP E2E Skill: đang mở & kiểm thử %s...", testUrl), "INFO")
-		bRes, bErr := o.browserSvc.RunBrowserTask(testUrl, true)
+		testUrl := extractTestURL(task.Prompt + " " + task.Description)
+		expects := extractExpectedTexts(task.Prompt + " " + task.Description)
+		onLog(fmt.Sprintf("🌐 Chrome CDP E2E Skill: đang mở & kiểm thử %s (%d assertion)...", testUrl, len(expects)), "INFO")
+		bRes, bErr := o.browserSvc.RunE2ETest(testUrl, expects, true)
 		if bErr == nil && bRes != nil && bRes.Success {
-			outputSummary := fmt.Sprintf("✅ Chrome CDP E2E Test Passed!\nURL: %s\nTitle: %s\nText Snippet: %s\nScreenshot Captured: Yes", bRes.URL, bRes.Title, bRes.TextContent)
 			_ = o.taskRepo.AssignTask(task.TaskID, "Web E2E Tester (Chrome CDP)")
-			_ = o.taskRepo.UpdateStatus(task.TaskID, "done", outputSummary, "chrome-cdp-auto-session")
-			agent.Status = "idle"
-			agent.TasksDone++
-			_ = o.agentRepo.Update(agent)
-			onLog(fmt.Sprintf("🎉 Chrome CDP hoàn thành E2E '%s'.", task.Title), "SUCCESS")
+			for _, a := range bRes.Assertions {
+				onLog("   "+a, "INFO")
+			}
+			summary := fmt.Sprintf("URL: %s\nTitle: %s\nAssertions:\n%s", bRes.URL, bRes.Title, strings.Join(bRes.Assertions, "\n"))
+			if len(bRes.ConsoleErrors) > 0 {
+				summary += "\nConsole errors:\n- " + strings.Join(bRes.ConsoleErrors, "\n- ")
+			}
+			if bRes.Passed {
+				_ = o.taskRepo.UpdateStatus(task.TaskID, "done", "✅ E2E PASSED\n"+summary, "chrome-cdp-auto-session")
+				agent.Status = "idle"
+				agent.TasksDone++
+				_ = o.agentRepo.Update(agent)
+				onLog(fmt.Sprintf("🎉 Chrome CDP E2E '%s' PASSED.", task.Title), "SUCCESS")
+			} else {
+				_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED\n"+summary, "chrome-cdp-auto-session")
+				agent.Status = "idle"
+				agent.LastError = "E2E assertions/console failed"
+				_ = o.agentRepo.Update(agent)
+				onLog(fmt.Sprintf("❌ Chrome CDP E2E '%s' FAILED (xem assertion/console).", task.Title), "ERROR")
+			}
 			o.emitBoard()
+			o.emitAgents()
 			return
 		}
 		onLog(fmt.Sprintf("⚠️ Chrome CDP Auto-Test warning: %v. Chuyển cho Agent thử lại...", bErr), "WARN")
@@ -466,6 +483,34 @@ func (o *Orchestrator) RetryTask(taskID string) error {
 	o.emitLog(fmt.Sprintf("🔄 Task %s được đưa lại Backlog để chạy lại.", taskID), "INFO")
 	o.emitBoard()
 	return nil
+}
+
+var (
+	urlRe    = regexp.MustCompile(`https?://[^\s"'` + "`" + `)\]]+`)
+	expectRe = regexp.MustCompile(`(?i)\[EXPECT(?:\s+TEXT)?:\s*([^\]]+)\]`)
+)
+
+// extractTestURL pulls the first http(s) URL from the task text, defaulting to the
+// local dev server when none is specified.
+func extractTestURL(s string) string {
+	if m := urlRe.FindString(s); m != "" {
+		return strings.TrimRight(m, ".,")
+	}
+	return "http://localhost:5173"
+}
+
+// extractExpectedTexts reads explicit `[EXPECT: some text]` directives from a task
+// prompt so E2E assertions never guess (avoiding false failures).
+func extractExpectedTexts(s string) []string {
+	var out []string
+	for _, m := range expectRe.FindAllStringSubmatch(s, -1) {
+		if len(m) > 1 {
+			if v := strings.TrimSpace(m[1]); v != "" {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
 
 func (o *Orchestrator) emitBoard() {
