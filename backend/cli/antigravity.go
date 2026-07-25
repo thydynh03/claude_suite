@@ -76,15 +76,57 @@ func (p *AccountKeyPool) SetKeys(keys []AntiAccountKey) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.keys = keys
+	ensureKeyIDs(p.keys)
 	p.current = 0
+}
+
+// ensureKeyIDs gives every account an id.
+//
+// Accounts saved before the field existed load back with an empty one, and the
+// UI lists them with a keyed loop: eleven accounts sharing the empty key made
+// the whole table render as "no accounts" while the counter above it still said
+// eleven. Filling them in on load fixes the stored file on the next save too.
+func ensureKeyIDs(keys []AntiAccountKey) {
+	seen := map[string]bool{}
+	for i := range keys {
+		id := strings.TrimSpace(keys[i].ID)
+		if id != "" && !seen[id] {
+			seen[id] = true
+			continue
+		}
+		// Derive from the email so the id survives reordering; fall back to the
+		// position when there is nothing else to go on.
+		base := strings.TrimSpace(strings.ToLower(keys[i].Email))
+		if base == "" {
+			base = strings.TrimSpace(strings.ToLower(keys[i].Name))
+		}
+		if base == "" {
+			base = fmt.Sprintf("key-%d", i+1)
+		}
+		candidate := base
+		for n := 2; seen[candidate]; n++ {
+			candidate = fmt.Sprintf("%s-%d", base, n)
+		}
+		keys[i].ID = candidate
+		seen[candidate] = true
+	}
 }
 
 func (p *AccountKeyPool) GetKeys() []AntiAccountKey {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// An empty pool is the state of every fresh install, and %0 panics. A panic
+	// inside a bound method never returns to the frontend, so the promise behind
+	// it hangs and the page sits there spinning forever.
+	if len(p.keys) == 0 {
+		return []AntiAccountKey{}
+	}
+
+	current := p.current % len(p.keys)
 	keysCopy := make([]AntiAccountKey, len(p.keys))
 	for i, k := range p.keys {
-		k.IsCurrent = (i == p.current%len(p.keys))
+		k.IsCurrent = i == current
 		keysCopy[i] = k
 	}
 	return keysCopy

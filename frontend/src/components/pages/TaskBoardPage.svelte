@@ -207,7 +207,7 @@
   </div>
 
   <div class={subTab === 'kanban' ? 'block' : 'hidden'}>
-    <KanbanView tasks={$tasksStore} onRefresh={loadTasks} />
+    <KanbanView onRefresh={loadTasks} />
   </div>
 
   {#if subTab === 'builder'}

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { flip } from 'svelte/animate';
+  import { fade } from 'svelte/transition';
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { tick } from 'svelte';
@@ -7,14 +9,15 @@
   import { addLog, tasksStore, agentsStore, taskLogsStore, taskScreenshotsStore, clearTaskLog } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
-  export let tasks: Task[] = [];
   export let onRefresh: () => void;
 
-  onMount(() => {
-    const unsub = tasksStore.subscribe((val) => {
-      tasks = Array.isArray(val) ? [...val] : [];
-    });
+  // One source, not two. This used to be a prop the parent passed *and* a
+  // subscription that overwrote it, so whichever fired last won and a board
+  // that had just changed could be replaced by the stale copy. That is why new
+  // tasks only appeared after switching tabs and back.
+  $: tasks = ($tasksStore || []) as Task[];
 
+  onMount(() => {
     (async () => {
       try {
         if ((AppBindings as any).GetMaxConcurrency) {
@@ -27,12 +30,26 @@
       } catch (e) {}
     })();
 
-    // board_updated is handled centrally in App.svelte (single source of truth
-    // that refreshes tasksStore); KanbanView reacts via its tasksStore subscription.
-    return () => {
-      unsub();
-    };
+    // board_updated is handled centrally in App.svelte, which refreshes
+    // tasksStore; this view is a plain reader of that store.
   });
+
+  let refreshing = false;
+
+  // board_updated normally keeps this current. The button is for the moment it
+  // did not, so the answer is never "switch tabs and come back".
+  async function refreshBoard() {
+    refreshing = true;
+    try {
+      const res = await AppBindings.GetTasks();
+      tasksStore.set(Array.isArray(res) ? res : []);
+      if (onRefresh) await onRefresh();
+    } catch (e: any) {
+      addLog(`Không tải lại được bảng: ${e?.message || e}`, 'ERROR');
+    } finally {
+      refreshing = false;
+    }
+  }
 
   $: agentOptions = [
     { value: '', label: 'Unassigned (Auto Dispatch)' },
@@ -54,6 +71,9 @@
   // Live log for the currently open task + auto-scroll to newest line.
   let logContainer: HTMLDivElement | null = null;
   $: currentTaskLogs = detailTaskId ? (($taskLogsStore[detailTaskId]) || []) : [];
+  // Rendering all 500 buffered lines on every incoming log froze the drawer for
+  // a running task. The tail is what anyone is reading anyway.
+  $: visibleTaskLogs = currentTaskLogs.slice(-120);
   $: if (currentTaskLogs.length && logContainer) {
     tick().then(() => { if (logContainer) logContainer.scrollTop = logContainer.scrollHeight; });
   }
@@ -243,14 +263,15 @@
   async function handleDeleteSelected() {
     if (selectedTaskIDs.length === 0) return;
     if (confirm(`Bạn có chắc muốn xóa ${selectedTaskIDs.length} tasks đã chọn?`)) {
+      const removed = selectedTaskIDs.length;
       for (const id of selectedTaskIDs) {
         await AppBindings.DeleteTask(id);
       }
-      tasks = tasks.filter(t => !selectedTaskIDs.includes(t.task_id));
-      tasksStore.set([...tasks]);
       selectedTaskIDs = [];
-      if (onRefresh) await onRefresh();
-      addLog(`Đã xóa ${selectedTaskIDs.length} tasks đã chọn.`, 'SUCCESS');
+      // The store is the single source now, so refresh it rather than editing a
+      // local copy the next board event would overwrite.
+      await refreshBoard();
+      addLog(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
     }
   }
 
@@ -352,6 +373,12 @@
           <span class="material-symbols-outlined text-sm">delete</span> Xóa đã chọn ({selectedTaskIDs.length})
         </button>
       {/if}
+      <button type="button" on:click|preventDefault={refreshBoard} disabled={refreshing}
+        title="Tải lại bảng từ cơ sở dữ liệu"
+        class="bg-surface-container-highest border border-outline-variant px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-surface-container-high disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer">
+        <span class="material-symbols-outlined text-sm {refreshing ? 'animate-spin' : ''}">refresh</span>
+        Tải lại
+      </button>
       <button type="button" on:click|preventDefault={handleClearDone} class="bg-surface-container-highest border border-outline-variant px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-surface-container-high transition-all flex items-center gap-1.5 cursor-pointer">
         <span class="material-symbols-outlined text-sm">delete_sweep</span> Clear Done
       </button>
@@ -384,11 +411,13 @@
           on:dragleave={handleDragLeave}
           on:drop={(e) => handleDrop(e, col.key)}
         >
-          {#each colTasks as task}
+          {#each colTasks as task (task.task_id)}
             <div
               role="button"
               tabindex="0"
               draggable="true"
+              animate:flip={{ duration: 320 }}
+              in:fade={{ duration: 160 }}
               on:dragstart={(e) => handleDragStart(e, task.task_id)}
               class="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-primary rounded-xl p-3 space-y-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative"
             >
@@ -616,7 +645,7 @@
           </div>
         </div>
         <div bind:this={logContainer} class="bg-black/90 text-emerald-400 p-3 rounded-xl border border-slate-800 font-mono text-[11px] h-44 overflow-y-auto space-y-1 shadow-inner leading-relaxed scroll-smooth">
-          {#each currentTaskLogs as l}
+          {#each visibleTaskLogs as l (l.time + l.message)}
             <div class="flex items-start gap-2">
               <span class="text-slate-500 font-mono">[{l.time || 'NOW'}]</span>
               <span class={l.level === 'ERROR' ? 'text-rose-400' : l.level === 'SUCCESS' ? 'text-emerald-400' : l.level === 'WARN' ? 'text-amber-300' : l.level === 'TOOL' ? 'text-cyan-300 font-semibold' : 'text-slate-300'}>

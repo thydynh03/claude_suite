@@ -363,7 +363,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant/60 font-mono">
-          {#each filteredAccounts as acc (acc.id)}
+          {#each filteredAccounts as acc, i (acc.id || acc.email || i)}
             <tr class="hover:bg-surface-container-low/50 transition-all {acc.is_current ? 'bg-primary/5' : ''}">
               <!-- Checkbox -->
               <td class="p-3 text-center">

@@ -3,9 +3,12 @@
   import { t } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
+  // Reports what the orchestrator actually did rather than assuming it started.
+  // Setting this true unconditionally left the sidebar claiming a run that never
+  // began, which then disagreed with the board.
   async function handleExecutePlan() {
-    await AppBindings.StartOrchestrator();
-    orchestratorRunning.set(true);
+    const started = await AppBindings.StartOrchestrator();
+    orchestratorRunning.set(started === true);
   }
 </script>
 
