@@ -42,7 +42,12 @@ type App struct {
 
 	workspaceConfig    models.WorkspaceConfig
 	integrationsConfig models.IntegrationsConfig
+	uiConfig           models.UIConfig
 }
+
+// currentOnboardingVersion bumps when the tour content changes materially, so an
+// updated build can show the refreshed tour once again.
+const currentOnboardingVersion = "1"
 
 // NewApp creates a new App application struct
 func NewApp() *App {
@@ -103,6 +108,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.loadWorkspaceConfig()
 	a.loadIntegrationsConfig()
+	a.loadUIConfig()
 	if a.workspaceConfig.LastWorkspaceFolder != "" {
 		a.orchestrator.SetWorkspaceDir(a.workspaceConfig.LastWorkspaceFolder)
 	}
@@ -608,6 +614,37 @@ func (a *App) saveIntegrationsConfig() {
 	_ = os.WriteFile(cfgPath, data, 0644)
 }
 
+// ── First-run Onboarding State ─────────────────────────────────────────
+
+func (a *App) loadUIConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "ui_config.json")
+	if data, err := os.ReadFile(cfgPath); err == nil {
+		_ = json.Unmarshal(data, &a.uiConfig)
+	}
+}
+
+func (a *App) saveUIConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "ui_config.json")
+	data, _ := json.MarshalIndent(a.uiConfig, "", "  ")
+	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
+// ShouldShowOnboarding reports whether the welcome tour should open — true on a
+// fresh install, or when the tour content version has changed since it was seen.
+func (a *App) ShouldShowOnboarding() bool {
+	return !a.uiConfig.OnboardingSeen || a.uiConfig.OnboardingVersion != currentOnboardingVersion
+}
+
+// SetOnboardingSeen records that the user finished (or skipped) the tour.
+func (a *App) SetOnboardingSeen(seen bool) bool {
+	a.uiConfig.OnboardingSeen = seen
+	a.uiConfig.OnboardingVersion = currentOnboardingVersion
+	a.saveUIConfig()
+	return seen
+}
+
 func (a *App) GetIntegrationsConfig() models.IntegrationsConfig {
 	return a.integrationsConfig
 }
@@ -654,6 +691,22 @@ func (a *App) AddAntiAccountKey(name, apiKey string) {
 
 func (a *App) AddAntiOAuthAccountKey(name, oauthToken string) {
 	cli.GlobalAntiPool.AddOAuthKey(name, oauthToken)
+}
+
+func (a *App) DeleteAntiAccountKey(id string) bool {
+	return cli.GlobalAntiPool.DeleteKey(id)
+}
+
+func (a *App) SetCurrentAntiAccountKey(id string) bool {
+	return cli.GlobalAntiPool.SetCurrentKey(id)
+}
+
+func (a *App) ToggleAntiAccountKeyStatus(id string) string {
+	return cli.GlobalAntiPool.ToggleKeyStatus(id)
+}
+
+func (a *App) WarmupAntiAccountKeys() {
+	cli.GlobalAntiPool.WarmupKeys()
 }
 
 // oauthCreds resolves GCP OAuth credentials from (1) environment variables,

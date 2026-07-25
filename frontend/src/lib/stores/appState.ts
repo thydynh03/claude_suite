@@ -36,6 +36,9 @@ export function addTaskLog(taskId: string, msg: string, level = 'INFO', time = '
   });
 }
 
+// Set to true to (re)open the onboarding tour from anywhere (e.g. command palette).
+export const onboardingOpen = writable<boolean>(false);
+
 // Transient toast notifications.
 export type Toast = { id: number; message: string; level: string };
 export const toasts = writable<Toast[]>([]);

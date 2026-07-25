@@ -15,9 +15,26 @@
 
   import ToastHost from './components/ui/ToastHost.svelte';
   import CommandPalette from './components/ui/CommandPalette.svelte';
-  import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, setTaskScreenshot, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
+  import OnboardingTour from './components/ui/OnboardingTour.svelte';
+  import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, setTaskScreenshot, sidebarCollapsed, tasksStore, agentsStore, onboardingOpen } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
+
+  let showOnboarding = false;
+  // Allow re-opening the tour on demand (command palette / Support page).
+  const unsubOnboarding = onboardingOpen.subscribe((v) => {
+    if (v) {
+      showOnboarding = true;
+      onboardingOpen.set(false);
+    }
+  });
+
+  async function closeOnboarding() {
+    showOnboarding = false;
+    try {
+      await (AppBindings as any).SetOnboardingSeen(true);
+    } catch (_) {}
+  }
 
   let showApprovalModal = false;
   let approvalAgent = '';
@@ -62,6 +79,17 @@
     } catch (e) {
       console.warn('Wails config load error:', e);
     }
+
+    // First-run welcome tour: show once after install (and again if its content
+    // version changes). Delayed slightly so the workspace paints behind it first.
+    try {
+      if ((AppBindings as any).ShouldShowOnboarding) {
+        const should = await (AppBindings as any).ShouldShowOnboarding();
+        if (should) {
+          setTimeout(() => { showOnboarding = true; }, 550);
+        }
+      }
+    } catch (_) {}
 
     try {
       EventsOn('log_entry', (data: any) => {
@@ -171,6 +199,7 @@
 
 <ToastHost />
 <CommandPalette />
+<OnboardingTour open={showOnboarding} on:close={closeOnboarding} />
 
 {#if showApprovalModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">

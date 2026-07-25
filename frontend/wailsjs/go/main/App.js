@@ -114,6 +114,14 @@ export function GetIntegrationsConfig() {
   return window['go']['main']['App']['GetIntegrationsConfig']();
 }
 
+export function ShouldShowOnboarding() {
+  return window['go']['main']['App']['ShouldShowOnboarding']();
+}
+
+export function SetOnboardingSeen(arg1) {
+  return window['go']['main']['App']['SetOnboardingSeen'](arg1);
+}
+
 export function SaveIntegrationsConfig(arg1) {
   return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
 }

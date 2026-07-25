@@ -4,8 +4,9 @@
   import { logs, addLog, agentsStore } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import Dropdown from '../ui/Dropdown.svelte';
+  import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
 
-  let subTab: 'agents' | 'cli' | 'logs' | 'updates' | 'integrations' = 'agents';
+  let subTab: 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' = 'oauth_pool';
   // Use global store so agent list persists across tab switches
   let agents: Agent[] = [];
   const unsubscribeAgents = agentsStore.subscribe((v) => { agents = v as Agent[]; });
@@ -301,6 +302,13 @@
   <div class="flex justify-center">
     <div class="bg-surface-container-high p-1 rounded-xl flex gap-1 border border-outline-variant">
       <button
+        on:click={() => (subTab = 'oauth_pool')}
+        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5
+        {subTab === 'oauth_pool' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+      >
+        <span class="material-symbols-outlined text-sm">key</span> Multi-Account OAuth Pool
+      </button>
+      <button
         on:click={() => (subTab = 'agents')}
         class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
         {subTab === 'agents' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
@@ -338,7 +346,9 @@
     </div>
   </div>
 
-  {#if subTab === 'agents'}
+  {#if subTab === 'oauth_pool'}
+    <OAuthPoolDashboard onOpenGoogleLogin={handleOpenGoogleLogin} />
+  {:else if subTab === 'agents'}
     <!-- Agents Registry View -->
     <div class="space-y-4">
       <div class="flex items-center justify-between">

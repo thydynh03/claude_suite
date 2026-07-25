@@ -61,6 +61,10 @@ export function GetGitStatus():Promise<Record<string, any>>;
 
 export function GetIntegrationsConfig():Promise<models.IntegrationsConfig>;
 
+export function ShouldShowOnboarding():Promise<boolean>;
+
+export function SetOnboardingSeen(arg1:boolean):Promise<boolean>;
+
 export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
 
 export function GetWorkspaceDiff():Promise<string>;

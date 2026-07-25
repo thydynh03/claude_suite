@@ -17,13 +17,27 @@ import (
 	"claude_suite/backend/models"
 )
 
+type ModelQuota struct {
+	Name      string `json:"name"`       // e.g. "Gemini 3.1 Pro (High)"
+	Category  string `json:"category"`   // "gemini" | "gpt" | "claude"
+	ResetTime string `json:"reset_time"` // e.g. "0h 0m", "1d 6h"
+	UsagePct  int    `json:"usage_pct"`  // e.g. 53, 100, 8
+	Status    string `json:"status"`     // "ok", "warning", "exceeded"
+}
+
 type AntiAccountKey struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Type       string `json:"type"` // "api_key" or "oauth_token"
-	APIKey     string `json:"api_key"`
-	OAuthToken string `json:"oauth_token"`
-	Status     string `json:"status"` // "active", "rate_limited_429"
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	Email        string       `json:"email"`
+	Type         string       `json:"type"` // "api_key" or "oauth_token"
+	APIKey       string       `json:"api_key"`
+	OAuthToken   string       `json:"oauth_token"`
+	RefreshToken string       `json:"refresh_token"`
+	Status       string       `json:"status"` // "active", "rate_limited_429", "disabled"
+	Tier         string       `json:"tier"`   // "PRO", "ULTRA", "FREE"
+	IsCurrent    bool         `json:"is_current"`
+	LastUsed     string       `json:"last_used"`
+	ModelQuotas  []ModelQuota `json:"model_quotas"`
 }
 
 type AccountKeyPool struct {
@@ -32,9 +46,41 @@ type AccountKeyPool struct {
 	current int
 }
 
+func defaultQuotas(tier string) []ModelQuota {
+	if tier == "FREE" {
+		return []ModelQuota{
+			{Name: "Gemini 3.1 Pro (Low)", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
+			{Name: "Gemini 3.5 Flash (Med)", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
+			{Name: "Gemini 3.6 Flash (High)", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
+			{Name: "Gemini 3.1 Flash Lite", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
+			{Name: "Claude Sonnet 4.6 (Th)", Category: "claude", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
+			{Name: "GPT-OSS 120B (Medium)", Category: "gpt", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
+		}
+	}
+	return []ModelQuota{
+		{Name: "Gemini 3.1 Pro (High)", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
+		{Name: "Gemini 3.5 Flash (High)", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
+		{Name: "Gemini 3.6 Flash (High)", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
+		{Name: "Gemini 3.1 Flash Lite", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
+		{Name: "Claude Sonnet 4.6 (Th)", Category: "claude", ResetTime: "1d 6h", UsagePct: 8, Status: "ok"},
+		{Name: "GPT-OSS 120B (Medium)", Category: "gpt", ResetTime: "1d 6h", UsagePct: 0, Status: "ok"},
+	}
+}
+
 var GlobalAntiPool = &AccountKeyPool{
 	keys: []AntiAccountKey{
-		{ID: "key-1", Name: "Default Key (Environment)", Type: "api_key", APIKey: "", Status: "active"},
+		{
+			ID:          "key-1",
+			Name:        "Environment Default Key",
+			Email:       "env.default@claude-suite.local",
+			Type:        "api_key",
+			APIKey:      "",
+			Status:      "active",
+			Tier:        "PRO",
+			IsCurrent:   true,
+			LastUsed:    time.Now().Format("1/2/2006 03:04 PM"),
+			ModelQuotas: defaultQuotas("PRO"),
+		},
 	},
 }
 
@@ -42,32 +88,113 @@ func (p *AccountKeyPool) GetKeys() []AntiAccountKey {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	keysCopy := make([]AntiAccountKey, len(p.keys))
-	copy(keysCopy, p.keys)
+	for i, k := range p.keys {
+		k.IsCurrent = (i == p.current%len(p.keys))
+		keysCopy[i] = k
+	}
 	return keysCopy
 }
 
 func (p *AccountKeyPool) AddKey(name, apiKey string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	email := name
+	if !strings.Contains(email, "@") {
+		email = strings.ToLower(strings.ReplaceAll(name, " ", ".")) + "@gmail.com"
+	}
 	p.keys = append(p.keys, AntiAccountKey{
-		ID:     fmt.Sprintf("key-%d", len(p.keys)+1),
-		Name:   name,
-		Type:   "api_key",
-		APIKey: apiKey,
-		Status: "active",
+		ID:          fmt.Sprintf("key-%d", len(p.keys)+1),
+		Name:        name,
+		Email:       email,
+		Type:        "api_key",
+		APIKey:      apiKey,
+		Status:      "active",
+		Tier:        "PRO",
+		LastUsed:    time.Now().Format("1/2/2006 03:04 PM"),
+		ModelQuotas: defaultQuotas("PRO"),
 	})
 }
 
 func (p *AccountKeyPool) AddOAuthKey(name, oauthToken string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	email := name
+	if strings.HasPrefix(email, "Google (") && strings.HasSuffix(email, ")") {
+		email = email[8 : len(email)-1]
+	}
+	if !strings.Contains(email, "@") {
+		email = strings.ToLower(strings.ReplaceAll(name, " ", ".")) + "@gmail.com"
+	}
 	p.keys = append(p.keys, AntiAccountKey{
-		ID:         fmt.Sprintf("key-%d", len(p.keys)+1),
-		Name:       name,
-		Type:       "oauth_token",
+		ID:          fmt.Sprintf("key-%d", len(p.keys)+1),
+		Name:        name,
+		Email:       email,
+		Type:        "oauth_token",
 		OAuthToken: oauthToken,
-		Status:     "active",
+		Status:      "active",
+		Tier:        "PRO",
+		LastUsed:    time.Now().Format("1/2/2006 03:04 PM"),
+		ModelQuotas: defaultQuotas("PRO"),
 	})
+}
+
+func (p *AccountKeyPool) DeleteKey(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var newKeys []AntiAccountKey
+	found := false
+	for _, k := range p.keys {
+		if k.ID == id {
+			found = true
+			continue
+		}
+		newKeys = append(newKeys, k)
+	}
+	if found {
+		p.keys = newKeys
+		if p.current >= len(p.keys) && len(p.keys) > 0 {
+			p.current = 0
+		}
+	}
+	return found
+}
+
+func (p *AccountKeyPool) SetCurrentKey(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i, k := range p.keys {
+		if k.ID == id {
+			p.current = i
+			return true
+		}
+	}
+	return false
+}
+
+func (p *AccountKeyPool) ToggleKeyStatus(id string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i, k := range p.keys {
+		if k.ID == id {
+			if k.Status == "active" {
+				p.keys[i].Status = "disabled"
+			} else {
+				p.keys[i].Status = "active"
+			}
+			return p.keys[i].Status
+		}
+	}
+	return ""
+}
+
+func (p *AccountKeyPool) WarmupKeys() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	nowStr := time.Now().Format("1/2/2006 03:04 PM")
+	for i := range p.keys {
+		p.keys[i].Status = "active"
+		p.keys[i].LastUsed = nowStr
+	}
 }
 
 func (p *AccountKeyPool) GetCurrentAccount() *AntiAccountKey {

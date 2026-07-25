@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { activeTab, orchestratorRunning, addToast } from '../../lib/stores/appState';
+  import { activeTab, orchestratorRunning, addToast, onboardingOpen } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   let open = false;
@@ -25,6 +25,7 @@
     { label: 'Orchestrator: Dừng', icon: 'stop', run: async () => { await (AppBindings as any).StopOrchestrator(); orchestratorRunning.set(false); addToast('Orchestrator đã dừng.', 'WARN'); close(); }, keywords: 'stop pause' },
     { label: 'Xuất báo cáo Kanban (Markdown)', icon: 'description', run: async () => { const f = await (AppBindings as any).ExportKanbanReport(); addToast('Đã xuất báo cáo: ' + f, 'SUCCESS'); close(); }, keywords: 'export report' },
     { label: 'Chọn thư mục Workspace', icon: 'folder_open', run: async () => { await (AppBindings as any).SelectWorkspaceFolder(); close(); }, keywords: 'workspace folder open' },
+    { label: 'Xem lại hướng dẫn sử dụng', icon: 'auto_awesome', run: () => { onboardingOpen.set(true); close(); }, keywords: 'onboarding tour huong dan help guide' },
   ];
 
   $: filtered = commands.filter((c) => {
@@ -62,8 +63,8 @@
 </script>
 
 {#if open}
-<div class="fixed inset-0 z-[300] flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm" on:click={close} role="presentation">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl w-[560px] max-w-[92vw] overflow-hidden" on:click|stopPropagation role="dialog" aria-modal="true">
+<div class="fixed inset-0 z-[300] flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm" on:click|self={close} role="presentation">
+  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl w-[560px] max-w-[92vw] overflow-hidden" role="dialog" aria-modal="true" tabindex="-1">
     <div class="flex items-center gap-2 px-4 py-3 border-b border-outline-variant">
       <span class="material-symbols-outlined text-on-surface-variant">search</span>
       <input

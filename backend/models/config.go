@@ -12,6 +12,13 @@ type IntegrationsConfig struct {
 	MCPConnectionString string `json:"mcp_connection_string"`
 }
 
+// UIConfig persists first-run UI state, such as whether the onboarding tour has
+// already been shown (so it appears once after the app is downloaded/installed).
+type UIConfig struct {
+	OnboardingSeen    bool   `json:"onboarding_seen"`
+	OnboardingVersion string `json:"onboarding_version"`
+}
+
 // AppConfig represents global user settings
 type AppConfig struct {
 	Theme               string `json:"theme"` // "dark" or "light"
