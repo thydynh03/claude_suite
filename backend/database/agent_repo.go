@@ -113,6 +113,42 @@ func (r *AgentRepository) Update(a *models.Agent) error {
 	return err
 }
 
+// SetStatus writes only the agent's live state.
+//
+// Update rewrites the whole row from a caller's copy, which is wrong while tasks
+// run in parallel: two tasks can share an agent, each goroutine holds its own
+// copy, and the last full-row write wins — silently reverting whatever the other
+// recorded. These narrow updates touch one concern each, so concurrent tasks no
+// longer clobber each other.
+func (r *AgentRepository) SetStatus(agentID, status, lastTask, lastError string) error {
+	_, err := r.db.Exec(
+		`UPDATE agents SET status=?, last_task=?, last_error=?, updated_at=? WHERE agent_id=?`,
+		status, lastTask, lastError, time.Now(), agentID,
+	)
+	return err
+}
+
+// CompleteTask marks the agent idle and counts one finished task in a single
+// statement, so two tasks finishing together cannot lose a count between them.
+func (r *AgentRepository) CompleteTask(agentID string) error {
+	_, err := r.db.Exec(
+		`UPDATE agents SET status='idle', tasks_done = tasks_done + 1, last_error='', updated_at=? WHERE agent_id=?`,
+		time.Now(), agentID,
+	)
+	return err
+}
+
+// SetProviderModel records a provider switch — the smart fallback after a quota
+// error — without disturbing the agent's live state. Written through Update, a
+// concurrent task's stale copy would put the exhausted provider straight back.
+func (r *AgentRepository) SetProviderModel(agentID, provider, model string) error {
+	_, err := r.db.Exec(
+		`UPDATE agents SET provider=?, model=?, updated_at=? WHERE agent_id=?`,
+		provider, model, time.Now(), agentID,
+	)
+	return err
+}
+
 func (r *AgentRepository) Delete(agentID string) error {
 	_, err := r.db.Exec(`DELETE FROM agents WHERE agent_id = ?`, agentID)
 	return err

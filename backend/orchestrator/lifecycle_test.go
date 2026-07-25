@@ -254,3 +254,34 @@ func TestStopWhileAwaitingApprovalReleasesTheTask(t *testing.T) {
 		return taskStatus(t, o, task.TaskID) != "running"
 	})
 }
+
+// Two tasks can be matched to the same agent and run side by side. Each run gets
+// its own copy of the agent, so writing the whole row back lost whatever the
+// other run had recorded — one of two completions simply vanished.
+func TestConcurrentTasksOnOneAgentBothCount(t *testing.T) {
+	o, taskRepo, agentRepo, runner := newTestOrchestrator(t)
+	agent := seedAgent(t, agentRepo, "Runner")
+	seedTask(t, taskRepo, "task one", agent, nil)
+	seedTask(t, taskRepo, "task two", agent, nil)
+
+	// Hold both runs open so the two copies of the agent overlap.
+	runner.Behaviour = func(context.Context, *models.Agent, string) *cli.RunResult {
+		time.Sleep(200 * time.Millisecond)
+		return &cli.RunResult{Success: true, Output: "ok"}
+	}
+
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+
+	if got := runner.PeakInFlight(); got < 2 {
+		t.Fatalf("the runs did not overlap (peak %d), so this proves nothing", got)
+	}
+
+	agents, err := agentRepo.GetAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agents[0].TasksDone != 2 {
+		t.Errorf("tasks_done = %d after two finished tasks, want 2", agents[0].TasksDone)
+	}
+}
