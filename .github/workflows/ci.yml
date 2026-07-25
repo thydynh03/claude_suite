@@ -78,6 +78,46 @@ jobs:
       - name: Build
         run: npm run build
 
+  desktop:
+    name: Desktop app build
+    # The only job that compiles the repository root, and so the only one that
+    # can catch a break in app.go, in the //go:embed of frontend/dist, or in
+    # bindings that no longer match the Go source. Everything else deliberately
+    # skips the root, which left the shipped binary unverified until release day.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Cache Wails CLI binary
+        id: cache-wails
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/wails.exe
+          key: wails-cli-${{ runner.os }}-v2.13.0
+      - name: Install Wails CLI
+        if: steps.cache-wails.outputs.cache-hit != 'true'
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+      - name: Build
+        run: wails build -platform windows/amd64 -clean
+      # wails build regenerates frontend/wailsjs. A diff here means the committed
+      # bindings had drifted from app.go — the failure mode CLAUDE.md warns about.
+      - name: Committed bindings match the Go source
+        shell: bash
+        run: |
+          if ! git diff --quiet -- frontend/wailsjs; then
+            echo "::error::frontend/wailsjs is out of date. Run 'wails generate module' and commit the result."
+            git diff --stat -- frontend/wailsjs
+            exit 1
+          fi
+
   security:
     name: Security scan (CVE)
     runs-on: windows-latest

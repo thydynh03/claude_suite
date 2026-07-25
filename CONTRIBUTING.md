@@ -68,7 +68,10 @@ Two things about that command list are deliberate:
 - **The repository root is excluded.** `main.go` has
   `//go:embed all:frontend/dist`, which does not exist until the frontend has
   been built. `./cmd/...` *is* included — the TUI binary went uncompiled by CI
-  until someone noticed.
+  until someone noticed. The root is covered instead by the separate
+  **Desktop app build** job, which runs a real `wails build`; that job is the
+  only thing standing between a broken `app.go` and release day, and it also
+  fails if `frontend/wailsjs` has drifted from the Go source.
 - **The race detector runs on Linux in CI**, not on your machine. `-race`
   needs CGO, and Windows checkouts usually have no gcc. If you touch the
   orchestrator's goroutines, let CI check it.
