@@ -12,6 +12,7 @@ import (
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
+	"claude_suite/backend/defaults"
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
@@ -890,22 +891,12 @@ func (a *App) OpenURLInBrowser(targetURL string) {
 // ── Agent Roles (Markdown Repository) ───────────────────────────────────
 
 func (a *App) getRolesDir() string {
-	// For simplicity, we use e:\exe\roles as the root roles dir
-	// However, a better approach is to use a folder relative to the executable
 	dir := filepath.Join(filepath.Dir(database.GetDBPath()), "roles")
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		_ = os.MkdirAll(dir, 0755)
-		// Generate default roles
-		defaultRoles := map[string]string{
-			"agents.md":          "You are an AI assistant in Claude Suite. Always follow instructions carefully.",
-			"claude.md":          "You are Claude. Answer precisely.",
-			"antigravity.md":     "You are Antigravity model. Answer smartly.",
-			"front-end-agent.md": "You are a Front-End Agent. Focus on UI/UX, Svelte, and TailwindCSS.",
-			"back-end-agent.md":  "You are a Back-End Agent. Focus on Go, performance, and databases.",
-		}
-		for name, content := range defaultRoles {
-			_ = os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
-		}
+	// Seeded from the binary's own copies, so a downloaded build ships the same
+	// role definitions as a checkout. Existing files are left alone, and roles
+	// added in a later release appear without wiping the user's edits.
+	if _, err := defaults.SeedRoles(dir); err != nil {
+		fmt.Printf("Could not seed agent roles in %s: %v\n", dir, err)
 	}
 	return dir
 }

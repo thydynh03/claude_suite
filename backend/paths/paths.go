@@ -47,16 +47,23 @@ func LogDir() string {
 	return filepath.Join(DataDir(), "logs")
 }
 
-// LegacyDataDirs lists locations used by earlier builds, so their contents can
-// be adopted once instead of silently abandoned.
+// LegacyDataDirEnv points at a directory from an older install whose contents
+// should be adopted once. It exists so that no build ships someone's machine
+// layout baked into it.
+const LegacyDataDirEnv = "CLAUDE_SUITE_LEGACY_DATA_DIR"
+
+// LegacyDataDirs lists locations earlier builds could have written to, so their
+// contents can be adopted once instead of silently abandoned.
 //
-// `e:\exe` was hardcoded in GetDBPath: it is the developer's checkout, and any
-// machine that merely happened to have that path would have had its state
-// written there too.
+// Only ~/.claude_suite is listed by default, because that is the only legacy
+// location a downloaded copy of the app could ever have used. Earlier builds
+// also hardcoded a specific developer checkout, but that path means nothing on
+// anyone else's machine — someone who needs it points LegacyDataDirEnv at it
+// rather than having it compiled in.
 func LegacyDataDirs() []string {
 	var dirs []string
-	if runtime.GOOS == "windows" {
-		dirs = append(dirs, `e:\exe`)
+	if v := strings.TrimSpace(os.Getenv(LegacyDataDirEnv)); v != "" {
+		dirs = append(dirs, v)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		dirs = append(dirs, filepath.Join(home, ".claude_suite"))
