@@ -15,6 +15,8 @@ import (
 
 	"claude_suite/backend/models"
 	"claude_suite/backend/textutil"
+
+	"claude_suite/backend/provider"
 )
 
 var ShowCLIConsole bool = false
@@ -36,9 +38,9 @@ func (c *ClaudeCLI) RunAgent(agent *models.Agent, prompt string, onLog LogCallba
 }
 
 func (c *ClaudeCLI) RunAgentCtx(ctx context.Context, agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {
-	// Route Gemini & Antigravity models to AntigravityCLI
-	modelLower := strings.ToLower(agent.Model)
-	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") || agent.Provider == "anti_cli" {
+	// Route Gemini & Antigravity models to AntigravityCLI. The agent's declared
+	// provider wins when it has one; otherwise the model name decides.
+	if provider.IsAnti(provider.ResolveProvider(agent.Provider, agent.Model)) {
 		return c.antigravity.RunAgentCtx(ctx, agent, prompt, onLog, cwd)
 	}
 
@@ -46,16 +48,14 @@ func (c *ClaudeCLI) RunAgentCtx(ctx context.Context, agent *models.Agent, prompt
 }
 
 func (c *ClaudeCLI) RunOnce(prompt string, model string, system string, onLog LogCallback, cwd string) *RunResult {
-	modelLower := strings.ToLower(model)
-	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+	if provider.IsAnti(provider.ResolveProvider("", model)) {
 		return c.antigravity.RunOnce(prompt, model, system, onLog, cwd)
 	}
 	return c.execute(model, prompt, system, "", onLog, cwd)
 }
 
 func (c *ClaudeCLI) RunSession(prompt string, model string, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
-	modelLower := strings.ToLower(model)
-	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+	if provider.IsAnti(provider.ResolveProvider("", model)) {
 		return c.antigravity.RunSession(prompt, model, system, sessionID, onLog, cwd)
 	}
 	return c.execute(model, prompt, system, sessionID, onLog, cwd)

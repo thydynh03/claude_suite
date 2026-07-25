@@ -52,8 +52,8 @@ type TaskActions interface {
 	ClearActiveSession(provider string) error
 	ScanWorkspaceFiles() ([]string, error)
 	ReadFileContent(relPath string) (string, error)
-	StartOrchestrator()
-	StopOrchestrator()
+	StartOrchestrator() bool
+	StopOrchestrator() bool
 	IsOrchestratorRunning() bool
 	SetAutoApproveAll(enabled bool) bool
 	GetAutoApproveAll() bool

@@ -10,12 +10,20 @@ import (
 	"time"
 
 	"claude_suite/backend/cli"
+	"claude_suite/backend/core"
 	"claude_suite/backend/database"
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
+	"claude_suite/backend/provider"
 	"claude_suite/backend/services"
 )
+
+// The terminal UI must offer the same shared capabilities as the desktop app.
+// See core.Facade for why this is a compile-time assertion rather than a
+// convention: the two drifted to different method names for eight git and export
+// capabilities, and nothing failed until someone compared them by hand.
+var _ core.Facade = (*RepositoryTaskActions)(nil)
 
 // RepositoryTaskActions adapts the shared task repository to the TUI. Opening
 // write mode is explicit; it never creates a missing database or runs schema
@@ -88,15 +96,17 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 		browser: services.NewBrowserAgentService(),
 		events:  make(chan RuntimeEvent, 128), workspace: workspace,
 	}
-	orch.SetEventHandlers(
-		func(message, level string) {
+	// Named rather than three positional callbacks: swapping two of them compiles
+	// and produces a UI that quietly stops updating.
+	core.AttachEventSink(orch, core.EventFuncs{
+		OnLog: func(message, level string) {
 			actions.publish(RuntimeEvent{Kind: "log", Message: message, Level: level})
 		},
-		func(taskID, agentName, taskTitle string) {
+		OnApproval: func(taskID, agentName, taskTitle string) {
 			actions.publish(RuntimeEvent{Kind: "approval", TaskID: taskID, Agent: agentName, Task: taskTitle})
 		},
-		func() { actions.publish(RuntimeEvent{Kind: "board"}) },
-	)
+		OnBoard: func() { actions.publish(RuntimeEvent{Kind: "board"}) },
+	})
 	if staleTasks > 0 {
 		// The channel is buffered, so this survives until the UI starts draining it.
 		actions.publish(RuntimeEvent{
@@ -150,11 +160,8 @@ func (a *RepositoryTaskActions) ClearAllTasks() error {
 	return a.checkpoint()
 }
 
-func (a *RepositoryTaskActions) DecomposePlanWithProvider(requirement, provider, model string) error {
-	providerHint := "claude_cli"
-	if provider == "anti" {
-		providerHint = "anti_cli"
-	}
+func (a *RepositoryTaskActions) DecomposePlanWithProvider(requirement, providerName, model string) error {
+	providerHint := provider.RunnerKey(provider.ResolveProvider(providerName, model))
 	if model == "" {
 		model = "claude-opus-4-8"
 	}
@@ -179,7 +186,7 @@ func (a *RepositoryTaskActions) ExportKanbanReport() (string, error) {
 	return markdown, err
 }
 
-func (a *RepositoryTaskActions) RunQuickCLI(prompt, provider, model string, files []string) (string, error) {
+func (a *RepositoryTaskActions) RunQuickCLI(prompt, providerName, model string, files []string) (string, error) {
 	fullPrompt := prompt
 	if a.workspace != "" {
 		if contextPrompt := a.context.BuildContextPrompt(a.workspace, files); contextPrompt != "" {
@@ -190,13 +197,13 @@ func (a *RepositoryTaskActions) RunQuickCLI(prompt, provider, model string, file
 		model = "claude-sonnet-4-5"
 	}
 	runner := a.runner
-	if provider == "anti" {
+	if provider.IsAnti(provider.ResolveProvider(providerName, model)) {
 		runner = cli.NewAntigravityCLI()
 	}
 	log := func(message, level string) {
 		a.publish(RuntimeEvent{Kind: "log", Message: message, Level: level})
 	}
-	sessionID := cli.GetGlobalSession(provider)
+	sessionID := cli.GetGlobalSession(providerName)
 	var result *cli.RunResult
 	if sessionID != "" {
 		result = runner.RunSession(fullPrompt, model, "", sessionID, log, a.workspace)
@@ -207,7 +214,7 @@ func (a *RepositoryTaskActions) RunQuickCLI(prompt, provider, model string, file
 		return "", fmt.Errorf("quick CLI returned no result")
 	}
 	if result.SessionID != "" {
-		cli.SetGlobalSession(provider, result.SessionID)
+		cli.SetGlobalSession(providerName, result.SessionID)
 	}
 	if !result.Success {
 		return result.Output, fmt.Errorf("%s", emptyError(result.Error, "quick CLI execution failed"))
@@ -255,8 +262,17 @@ func emptyError(value, fallback string) string {
 	return value
 }
 
-func (a *RepositoryTaskActions) StartOrchestrator() { a.orch.Start() }
-func (a *RepositoryTaskActions) StopOrchestrator()  { a.orch.Stop() }
+// Both report the state afterwards rather than nothing, so a caller can tell a
+// start that took from one that did not without a second round trip.
+func (a *RepositoryTaskActions) StartOrchestrator() bool {
+	a.orch.Start()
+	return a.orch.IsRunning()
+}
+
+func (a *RepositoryTaskActions) StopOrchestrator() bool {
+	a.orch.Stop()
+	return a.orch.IsRunning()
+}
 func (a *RepositoryTaskActions) IsOrchestratorRunning() bool {
 	return a.orch.IsRunning()
 }

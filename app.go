@@ -12,6 +12,7 @@ import (
 
 	"claude_suite/backend/claims"
 	"claude_suite/backend/cli"
+	"claude_suite/backend/core"
 	"claude_suite/backend/database"
 	"claude_suite/backend/defaults"
 	"claude_suite/backend/models"
@@ -22,6 +23,8 @@ import (
 	"claude_suite/backend/version"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"claude_suite/backend/provider"
 )
 
 // App struct
@@ -48,6 +51,11 @@ type App struct {
 	integrationsConfig models.IntegrationsConfig
 	uiConfig           models.UIConfig
 }
+
+// The desktop app must offer every shared capability. Adding a method to
+// core.Facade breaks this line until it is implemented here too, which is what
+// stops a capability landing in one frontend and quietly missing from the other.
+var _ core.Facade = (*App)(nil)
 
 // currentOnboardingVersion bumps when the tour content changes materially, so an
 // updated build can show the refreshed tour once again.
@@ -410,11 +418,9 @@ func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles
 	}
 
 	var runner cli.CLIRunner
-	modelLower := strings.ToLower(model)
-	providerKey := "claude"
-	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+	providerKey := provider.ResolveProvider("", model)
+	if provider.IsAnti(providerKey) {
 		runner = cli.NewAntigravityCLI()
-		providerKey = "anti"
 	} else {
 		runner = a.cliRunner
 	}
@@ -791,8 +797,7 @@ func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, m
 	}
 
 	var runner cli.CLIRunner
-	modelLower := strings.ToLower(model)
-	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+	if provider.IsAnti(provider.ResolveProvider("", model)) {
 		runner = cli.NewAntigravityCLI()
 	} else {
 		runner = a.cliRunner
