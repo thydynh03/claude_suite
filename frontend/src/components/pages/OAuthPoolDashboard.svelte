@@ -34,8 +34,21 @@
   let isLoading = false;
   let selectedIds: string[] = [];
 
+  // GCP Credentials State
+  let showGcpSettings = false;
+  let gcpClientId = '';
+  let gcpClientSecret = '';
+  let isSavingGcp = false;
+  
+  // Custom API Key / OAuth Token form state
+  let showAddForm = false;
+  let newAuthType: 'api_key' | 'oauth_token' = 'oauth_token';
+  let newKeyName = '';
+  let newKeyValue = '';
+
   onMount(async () => {
     await loadAccounts();
+    await loadGcpCreds();
     let unoff: any;
     if ((window as any)?.runtime?.EventsOn) {
       unoff = (window as any).runtime.EventsOn('oauth_success', async (data: any) => {
@@ -47,6 +60,59 @@
       if (unoff && typeof unoff === 'function') unoff();
     };
   });
+
+  async function loadGcpCreds() {
+    try {
+      if ((AppBindings as any).GetGCPOAuthCredentials) {
+        const creds = await (AppBindings as any).GetGCPOAuthCredentials();
+        gcpClientId = creds.client_id || '';
+        gcpClientSecret = creds.client_secret || '';
+      }
+    } catch (e) {
+      console.error('Error loading GCP creds:', e);
+    }
+  }
+
+  async function saveGcpCreds() {
+    isSavingGcp = true;
+    try {
+      if ((AppBindings as any).SaveGCPOAuthCredentials) {
+        await (AppBindings as any).SaveGCPOAuthCredentials(gcpClientId, gcpClientSecret);
+        addLog('Đã lưu GCP OAuth Credentials vào file config!', 'SUCCESS');
+        showGcpSettings = false;
+      }
+    } catch (e) {
+      addLog(`Lỗi lưu GCP Creds: ${e}`, 'ERROR');
+    } finally {
+      isSavingGcp = false;
+    }
+  }
+
+  async function handleAddAntiKey() {
+    if (!newKeyName.trim() || !newKeyValue.trim()) {
+      addLog('Vui lòng nhập đầy đủ tên và giá trị (Key/Token).', 'ERROR');
+      return;
+    }
+    try {
+      if (newAuthType === 'api_key') {
+        if ((AppBindings as any).AddAntiAccountKey) {
+          await (AppBindings as any).AddAntiAccountKey(newKeyName, newKeyValue);
+          addLog(`Đã thêm API Key: ${newKeyName}`, 'SUCCESS');
+        }
+      } else {
+        if ((AppBindings as any).AddAntiOAuthAccountKey) {
+          await (AppBindings as any).AddAntiOAuthAccountKey(newKeyName, newKeyValue);
+          addLog(`Đã thêm OAuth Token: ${newKeyName}`, 'SUCCESS');
+        }
+      }
+      newKeyName = '';
+      newKeyValue = '';
+      showAddForm = false;
+      await loadAccounts();
+    } catch (e) {
+      addLog(`Lỗi thêm key: ${e}`, 'ERROR');
+    }
+  }
 
   async function loadAccounts() {
     isLoading = true;
@@ -171,8 +237,65 @@
       </div>
     </div>
 
+    {#if !gcpClientId || showGcpSettings}
+      <div class="p-4 bg-surface-container-low border border-amber-500/30 rounded-xl space-y-3 mt-4">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold text-amber-500 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">warning</span> 
+            {gcpClientId ? 'Cấu hình GCP OAuth Credentials' : 'Thiếu GCP OAuth Credentials'}
+          </h4>
+          <button type="button" on:click={() => showGcpSettings = false} class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-on-surface-variant">Để tính năng tự động đăng nhập Google hoạt động, bạn cần cấu hình Client ID và Client Secret. Nếu chưa có, xem <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">GCP Console</a>.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-[10px] font-bold text-on-surface block mb-1">GCP Client ID</label>
+            <input type="text" bind:value={gcpClientId} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="1234...apps.googleusercontent.com" />
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-on-surface block mb-1">GCP Client Secret</label>
+            <input type="text" bind:value={gcpClientSecret} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="GOCSPX-..." />
+          </div>
+        </div>
+        <div class="flex justify-end pt-1">
+          <button type="button" on:click={saveGcpCreds} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm" disabled={isSavingGcp}>
+            {isSavingGcp ? 'Đang lưu...' : 'Lưu Cấu Hình'}
+          </button>
+        </div>
+      </div>
+    {:else}
+      <div class="flex justify-end mt-2">
+        <button type="button" on:click={() => showGcpSettings = true} class="text-[10px] text-on-surface-variant hover:text-primary flex items-center gap-1">
+          <span class="material-symbols-outlined text-[12px]">settings</span> Đổi GCP Credentials
+        </button>
+      </div>
+    {/if}
+
+    <div class="mt-4 pt-4 border-t border-outline-variant">
+      <div class="flex items-center justify-between mb-3">
+        <h5 class="text-xs font-bold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm">add_circle</span> Thêm Tài Khoản Dự Phòng
+        </h5>
+        <div class="flex bg-surface-container-high p-0.5 rounded-lg border border-outline-variant text-[11px]">
+          <button type="button" on:click={() => newAuthType = 'api_key'} class="px-2.5 py-1 rounded font-bold transition-all {newAuthType === 'api_key' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
+            🔑 API Key
+          </button>
+          <button type="button" on:click={() => newAuthType = 'oauth_token'} class="px-2.5 py-1 rounded font-bold transition-all {newAuthType === 'oauth_token' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
+            🔐 OAuth Token
+          </button>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <input type="text" bind:value={newKeyName} placeholder={newAuthType === 'oauth_token' ? 'Tên Tài khoản OAuth' : 'Tên API Key'} class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs" />
+        <input type="text" bind:value={newKeyValue} placeholder={newAuthType === 'oauth_token' ? 'OAuth Session / Access Token' : 'API Key'} class="flex-2 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-mono" />
+        <button type="button" on:click={handleAddAntiKey} class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">Thêm</button>
+      </div>
+    </div>
+
     <!-- Filters and Search Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-outline-variant text-xs">
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-outline-variant text-xs mt-4">
       <div class="flex items-center gap-1.5 bg-surface-container-low p-1 rounded-xl border border-outline-variant">
         <button
           type="button"

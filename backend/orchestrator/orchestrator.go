@@ -339,7 +339,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		testUrl := extractTestURL(task.Prompt + " " + task.Description)
 		expects := extractExpectedTexts(task.Prompt + " " + task.Description)
 		onLog(fmt.Sprintf("🌐 Chrome CDP E2E Skill: đang mở & kiểm thử %s (%d assertion)...", testUrl, len(expects)), "INFO")
-		bRes, bErr := o.browserSvc.RunE2ETest(testUrl, expects, true)
+		bRes, bErr := o.browserSvc.RunE2ETest(testUrl, "", expects, true, true)
 		if bErr == nil && bRes != nil && bRes.Success {
 			if bRes.ScreenshotBase64 != "" {
 				o.emitTaskScreenshot(task.TaskID, bRes.ScreenshotBase64)

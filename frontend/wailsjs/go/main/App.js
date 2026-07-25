@@ -110,6 +110,10 @@ export function GetAutoApproveAll() {
   return window['go']['main']['App']['GetAutoApproveAll']();
 }
 
+export function GetGCPOAuthCredentials() {
+  return window['go']['main']['App']['GetGCPOAuthCredentials']();
+}
+
 export function GetGitBranches() {
   return window['go']['main']['App']['GetGitBranches']();
 }
@@ -218,8 +222,8 @@ export function RevertGitCommit(arg1) {
   return window['go']['main']['App']['RevertGitCommit'](arg1);
 }
 
-export function RunBrowserTask(arg1, arg2) {
-  return window['go']['main']['App']['RunBrowserTask'](arg1, arg2);
+export function RunBrowserTask(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['main']['App']['RunBrowserTask'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
 export function RunGitCommand(arg1) {
@@ -240,6 +244,10 @@ export function SaveAgent(arg1) {
 
 export function SaveFileContent(arg1, arg2) {
   return window['go']['main']['App']['SaveFileContent'](arg1, arg2);
+}
+
+export function SaveGCPOAuthCredentials(arg1, arg2) {
+  return window['go']['main']['App']['SaveGCPOAuthCredentials'](arg1, arg2);
 }
 
 export function SaveIntegrationsConfig(arg1) {

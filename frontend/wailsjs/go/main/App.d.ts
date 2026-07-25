@@ -59,6 +59,8 @@ export function GetAppVersion():Promise<string>;
 
 export function GetAutoApproveAll():Promise<boolean>;
 
+export function GetGCPOAuthCredentials():Promise<Record<string, string>>;
+
 export function GetGitBranches():Promise<services.GitBranchInfo>;
 
 export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
@@ -113,7 +115,7 @@ export function RetryTask(arg1:string):Promise<void>;
 
 export function RevertGitCommit(arg1:string):Promise<void>;
 
-export function RunBrowserTask(arg1:string,arg2:boolean):Promise<services.BrowserActionResult>;
+export function RunBrowserTask(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean,arg7:boolean,arg8:number):Promise<services.BrowserActionResult>;
 
 export function RunGitCommand(arg1:Array<string>):Promise<string>;
 
@@ -124,6 +126,8 @@ export function RunQuickCLI(arg1:string,arg2:string,arg3:string,arg4:Array<strin
 export function SaveAgent(arg1:models.Agent):Promise<void>;
 
 export function SaveFileContent(arg1:string,arg2:string):Promise<void>;
+
+export function SaveGCPOAuthCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
 

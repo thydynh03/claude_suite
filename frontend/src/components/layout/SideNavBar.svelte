@@ -13,9 +13,6 @@
   <!-- Brand Header & Collapse Toggle -->
   <div class="px-4 mb-6 flex items-center justify-between">
     <div class="flex items-center gap-2 overflow-hidden">
-      <div class="w-8 h-8 rounded-lg bg-primary flex-shrink-0 flex items-center justify-center shadow-sm">
-        <span class="material-symbols-outlined text-on-primary text-xl">smart_toy</span>
-      </div>
       {#if !$sidebarCollapsed}
         <div class="truncate">
           <h2 class="font-bold text-primary leading-tight text-sm truncate">Agent Center</h2>

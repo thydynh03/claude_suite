@@ -341,6 +341,11 @@ export namespace services {
 	    logs: string[];
 	    success: boolean;
 	    error: string;
+	    ai_response: string;
+	    status: string;
+	    current_step: number;
+	    max_steps: number;
+	    user_intervention: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new BrowserActionResult(source);
@@ -359,6 +364,11 @@ export namespace services {
 	        this.logs = source["logs"];
 	        this.success = source["success"];
 	        this.error = source["error"];
+	        this.ai_response = source["ai_response"];
+	        this.status = source["status"];
+	        this.current_step = source["current_step"];
+	        this.max_steps = source["max_steps"];
+	        this.user_intervention = source["user_intervention"];
 	    }
 	}
 	export class GitBranchInfo {

@@ -695,10 +695,21 @@ func (a *App) addRecentWorkspace(dir string) {
 	a.workspaceConfig.RecentWorkspaces = newRecent
 }
 
-// ── Native Go Chrome CDP Browser Agent ─────────────────────────────────
+func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, model string, takeScreenshot bool, headless bool, useRealProfile bool, maxSteps int) (*services.BrowserActionResult, error) {
+	systemPrompt := ""
+	if roleFile != "" {
+		systemPrompt, _ = a.GetRoleContent(roleFile)
+	}
 
-func (a *App) RunBrowserTask(targetURL string, takeScreenshot bool) (*services.BrowserActionResult, error) {
-	return a.browserService.RunBrowserTask(targetURL, takeScreenshot)
+	var runner cli.CLIRunner
+	modelLower := strings.ToLower(model)
+	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+		runner = cli.NewAntigravityCLI()
+	} else {
+		runner = a.cliRunner
+	}
+
+	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner)
 }
 
 // ── Anti CLI Multi-Account / Key Pool ──────────────────────────────────
@@ -895,4 +906,25 @@ func (a *App) GetSystemMetrics() SystemMetrics {
 		NumCPU:          runtime.NumCPU(),
 		ActiveKeysCount: len(keys),
 	}
+}
+
+func (a *App) GetGCPOAuthCredentials() map[string]string {
+	id, secret := oauthCreds()
+	return map[string]string{
+		"client_id":     id,
+		"client_secret": secret,
+	}
+}
+
+func (a *App) SaveGCPOAuthCredentials(clientID, clientSecret string) error {
+	cfgPath := filepath.Join(filepath.Dir(database.GetDBPath()), "gcp_oauth.json")
+	fileCreds := map[string]string{
+		"client_id":     clientID,
+		"client_secret": clientSecret,
+	}
+	data, err := json.MarshalIndent(fileCreds, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cfgPath, data, 0644)
 }

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -16,6 +17,7 @@ var assets embed.FS
 
 func main() {
 	fmt.Println("=== CLAUDE SUITE STARTING ===")
+	_ = godotenv.Load() // Load .env file if it exists
 	app := NewApp()
 	fmt.Println("=== APP CREATED SUCCESSFULLY ===")
 
