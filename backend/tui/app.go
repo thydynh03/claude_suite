@@ -145,6 +145,7 @@ type Model struct {
 	confirm              string
 	approvalAgent        string
 	approvalTask         string
+	approvalTaskID       string
 	status               string
 	statusErr            bool
 	reloading            bool
@@ -380,7 +381,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		event := RuntimeEvent(msg)
 		switch event.Kind {
 		case "approval":
-			m.approvalAgent, m.approvalTask = event.Agent, event.Task
+			m.approvalAgent, m.approvalTask, m.approvalTaskID = event.Agent, event.Task, event.TaskID
 			m.confirm = "approval"
 			m.status, m.statusErr = event.Agent+" is waiting for approval", false
 		case "board":
@@ -969,7 +970,7 @@ func (m Model) updateConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "n", "esc", "q":
 		if m.confirm == "approval" && m.tasks != nil {
-			m.tasks.ResolveApproval(false)
+			m.tasks.ResolveApproval(m.approvalTaskID, false)
 		}
 		m.confirm = ""
 		m.approvalAgent, m.approvalTask = "", ""
@@ -1030,7 +1031,7 @@ func (m Model) updateConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			})
 		case "approval":
 			if m.tasks != nil {
-				m.tasks.ResolveApproval(true)
+				m.tasks.ResolveApproval(m.approvalTaskID, true)
 			}
 			m.approvalAgent, m.approvalTask = "", ""
 			m.status, m.statusErr = "Task approved", false

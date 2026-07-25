@@ -19,7 +19,7 @@ type Snapshot struct {
 type Loader func(path string) (Snapshot, error)
 
 type RuntimeEvent struct {
-	Kind, Message, Level, Agent, Task string
+	Kind, Message, Level, Agent, Task, TaskID string
 }
 
 // BrowserResult mirrors services.BrowserActionResult but swaps the raw
@@ -57,7 +57,7 @@ type TaskActions interface {
 	IsOrchestratorRunning() bool
 	SetAutoApproveAll(enabled bool) bool
 	GetAutoApproveAll() bool
-	ResolveApproval(approved bool)
+	ResolveApproval(taskID string, approved bool)
 	SaveAgent(agent models.Agent) error
 	DeleteAgent(agentID string) error
 	ResetAgentsToDefaults() error

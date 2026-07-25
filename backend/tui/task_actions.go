@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +49,7 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 	if info.IsDir() {
 		return nil, fmt.Errorf("database path is a directory: %s", absolute)
 	}
-	dsn := (&url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=rw"}).String()
+	dsn := sqliteURI(absolute, "mode=rw")
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database read/write: %w", err)
@@ -72,6 +71,14 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 		runner, contextManager, services.NewGitService(), services.NewBrowserAgentService(),
 	)
 	orch.SetWorkspaceDir(workspace)
+	// A crash or forced exit leaves tasks marked "running", and the dispatcher
+	// skips those forever. The Wails frontend recovers them on startup; write-mode
+	// TUI sessions have to do the same or those tasks are stuck permanently.
+	staleTasks, err := taskRepo.ResetRunningTasks()
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("recover tasks left running: %w", err)
+	}
 	actions := &RepositoryTaskActions{
 		db: db, repo: taskRepo, agents: agentRepo,
 		plan: pipeline.NewPlanBuilder(runner), pipe: pipeline.NewPipelineEngine(agentRepo, runner),
@@ -85,11 +92,19 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 		func(message, level string) {
 			actions.publish(RuntimeEvent{Kind: "log", Message: message, Level: level})
 		},
-		func(agentName, taskTitle string) {
-			actions.publish(RuntimeEvent{Kind: "approval", Agent: agentName, Task: taskTitle})
+		func(taskID, agentName, taskTitle string) {
+			actions.publish(RuntimeEvent{Kind: "approval", TaskID: taskID, Agent: agentName, Task: taskTitle})
 		},
 		func() { actions.publish(RuntimeEvent{Kind: "board"}) },
 	)
+	if staleTasks > 0 {
+		// The channel is buffered, so this survives until the UI starts draining it.
+		actions.publish(RuntimeEvent{
+			Kind:    "log",
+			Level:   "WARN",
+			Message: fmt.Sprintf("Recovered %d task(s) left running by a previous session.", staleTasks),
+		})
+	}
 	return actions, nil
 }
 
@@ -247,8 +262,8 @@ func (a *RepositoryTaskActions) SetAutoApproveAll(enabled bool) bool {
 func (a *RepositoryTaskActions) GetAutoApproveAll() bool {
 	return a.orch.GetAutoApproveAll()
 }
-func (a *RepositoryTaskActions) ResolveApproval(approved bool) {
-	a.orch.ResolveApproval("", approved)
+func (a *RepositoryTaskActions) ResolveApproval(taskID string, approved bool) {
+	a.orch.ResolveApproval(taskID, approved)
 }
 
 func (a *RepositoryTaskActions) SaveAgent(agent models.Agent) error {

@@ -10,7 +10,10 @@ import (
 
 func newCLICommand(ctx context.Context, executable string, args []string, show bool) *exec.Cmd {
 	if show {
-		cmdArgs := append([]string{"/k", executable}, args...)
+		// /c, not /k: /k leaves the shell alive after the tool exits, so cmd.Wait()
+		// would block until the user closes the console by hand and the task would
+		// never complete. The new console still shows the output either way.
+		cmdArgs := append([]string{"/c", executable}, args...)
 		cmd := exec.CommandContext(ctx, "cmd.exe", cmdArgs...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    false,

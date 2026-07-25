@@ -34,6 +34,13 @@ func main() {
 
 	var actions tui.TaskActions
 	if *write {
+		// LoadReadOnly already rejected this database — opening it read/write anyway
+		// would let mutations run against a schema the read model refused. Read-only
+		// mode still renders loadErr in the UI, so only the write path exits here.
+		if loadErr != nil {
+			fmt.Fprintln(os.Stderr, "Claude Suite TUI: refusing --write on an unusable database:", loadErr)
+			os.Exit(1)
+		}
 		repositoryActions, err := tui.OpenRepositoryTaskActions(*dbPath, snapshot.Workspace)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Claude Suite TUI:", err)

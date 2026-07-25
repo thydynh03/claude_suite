@@ -66,6 +66,21 @@ func LoadReadOnly(path string) (Snapshot, error) {
 	}, nil
 }
 
+// sqliteURI builds a SQLite "file:" URI for an absolute path.
+//
+// url.URL{Path: absolute} is wrong on Windows: String() percent-encodes the
+// backslashes and emits file://C:%5CUsers%5C..., which SQLite reads as an
+// authority and rejects with "invalid uri authority". SQLite wants forward
+// slashes behind a leading one — file:///C:/Users/... or file:///home/... —
+// which is what prefixing the slash-converted path produces on both platforms.
+func sqliteURI(absolute, query string) string {
+	p := filepath.ToSlash(absolute)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return (&url.URL{Scheme: "file", Path: p, RawQuery: query}).String()
+}
+
 func openReadOnly(path string) (*sql.DB, string, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, "", fmt.Errorf("database path is required")
@@ -87,7 +102,7 @@ func openReadOnly(path string) (*sql.DB, string, error) {
 
 	// immutable=1 prevents SQLite from checkpointing or removing WAL/SHM
 	// sidecars when the read-only TUI opens and closes the database.
-	dsn := (&url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=ro&immutable=1"}).String()
+	dsn := sqliteURI(absolute, "mode=ro&immutable=1")
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, "", fmt.Errorf("open database read-only: %w", err)

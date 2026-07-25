@@ -42,7 +42,7 @@ type Orchestrator struct {
 	stopCh         chan struct{}
 	mu             sync.Mutex
 	onLog          func(message, level string)
-	onApproval     func(agentName, taskTitle string)
+	onApproval     func(taskID, agentName, taskTitle string)
 	onBoard        func()
 
 	approvalMu    sync.Mutex
@@ -59,7 +59,7 @@ type Orchestrator struct {
 // importing Wails bindings.
 func (o *Orchestrator) SetEventHandlers(
 	onLog func(message, level string),
-	onApproval func(agentName, taskTitle string),
+	onApproval func(taskID, agentName, taskTitle string),
 	onBoard func(),
 ) {
 	o.mu.Lock()
@@ -434,7 +434,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 				"taskTitle": task.Title,
 			})
 		}
-		o.emitApproval(agent.Name, task.Title)
+		o.emitApproval(task.TaskID, agent.Name, task.Title)
 
 		select {
 		case approved := <-approvalCh:
@@ -709,12 +709,12 @@ func (o *Orchestrator) emitLog(msg, level string) {
 	}
 }
 
-func (o *Orchestrator) emitApproval(agentName, taskTitle string) {
+func (o *Orchestrator) emitApproval(taskID, agentName, taskTitle string) {
 	o.mu.Lock()
 	onApproval := o.onApproval
 	o.mu.Unlock()
 	if onApproval != nil {
-		onApproval(agentName, taskTitle)
+		onApproval(taskID, agentName, taskTitle)
 	}
 }
 

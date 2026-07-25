@@ -598,7 +598,7 @@ func TestRuntimeApprovalCanBeResolved(t *testing.T) {
 	actions := &fakeTaskActions{events: make(chan RuntimeEvent, 1)}
 	model := NewWithTaskActions(testModel().snapshot, "agent_manager.db", nil, nil, actions)
 	updated, command := model.Update(runtimeEventMsg(RuntimeEvent{
-		Kind: "approval", Agent: "Architect", Task: "Design system",
+		Kind: "approval", TaskID: "task-42", Agent: "Architect", Task: "Design system",
 	}))
 	model = updated.(Model)
 	if model.confirm != "approval" || command == nil {
@@ -607,6 +607,12 @@ func TestRuntimeApprovalCanBeResolved(t *testing.T) {
 	model, _ = update(model, key("y"))
 	if !actions.approval || model.confirm != "" {
 		t.Fatalf("approval=%v confirm=%q", actions.approval, model.confirm)
+	}
+	// The decision must name the task it belongs to. An empty id makes the
+	// orchestrator resolve every pending approval, so with maxConcurrency > 1
+	// approving one task would authorize the others too.
+	if actions.approvalTaskID != "task-42" {
+		t.Fatalf("approval routed to taskID %q, want %q", actions.approvalTaskID, "task-42")
 	}
 }
 
@@ -693,6 +699,7 @@ type fakeTaskActions struct {
 	planModel                string
 	assignedID, assignedTo   string
 	autoApprove              bool
+	approvalTaskID           string
 	savedAgent               models.Agent
 	deletedAgentID           string
 	agentsReset              bool
@@ -755,7 +762,9 @@ func (f *fakeTaskActions) ReadFileContent(relPath string) (string, error) {
 func (f *fakeTaskActions) StartOrchestrator()            { f.running = true }
 func (f *fakeTaskActions) StopOrchestrator()             { f.running = false }
 func (f *fakeTaskActions) IsOrchestratorRunning() bool   { return f.running }
-func (f *fakeTaskActions) ResolveApproval(approved bool) { f.approval = approved }
+func (f *fakeTaskActions) ResolveApproval(taskID string, approved bool) {
+	f.approvalTaskID, f.approval = taskID, approved
+}
 func (f *fakeTaskActions) SetAutoApproveAll(enabled bool) bool {
 	f.autoApprove = enabled
 	return enabled
