@@ -99,6 +99,18 @@ func (r *TaskRepository) UpdateStatus(taskID, status string, result string, sess
 	return err
 }
 
+// RequeueWithDependency sends a task back to the backlog, makes it depend on
+// depID, and bumps its retry counter — used by the autonomous E2E fix loop so a
+// failed browser test re-runs only after its generated fix task completes.
+func (r *TaskRepository) RequeueWithDependency(taskID, depID string) error {
+	deps, _ := json.Marshal([]string{depID})
+	_, err := r.db.Exec(
+		`UPDATE tasks SET status='backlog', assigned_to='', depends_on=?, retry_count=retry_count+1 WHERE task_id=?`,
+		string(deps), taskID,
+	)
+	return err
+}
+
 // ResetRunningTasks moves any task stuck in "running" (e.g. from a previous
 // session that was killed mid-execution) back to the backlog on startup.
 func (r *TaskRepository) ResetRunningTasks() (int64, error) {

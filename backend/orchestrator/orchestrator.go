@@ -319,11 +319,35 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 				_ = o.agentRepo.Update(agent)
 				onLog(fmt.Sprintf("🎉 Chrome CDP E2E '%s' PASSED.", task.Title), "SUCCESS")
 			} else {
-				_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED\n"+summary, "chrome-cdp-auto-session")
 				agent.Status = "idle"
-				agent.LastError = "E2E assertions/console failed"
 				_ = o.agentRepo.Update(agent)
-				onLog(fmt.Sprintf("❌ Chrome CDP E2E '%s' FAILED (xem assertion/console).", task.Title), "ERROR")
+				// Autonomous fix loop: spawn a coding task seeded with the failure
+				// detail, then requeue this E2E test to re-run after the fix — up to
+				// MaxRetries times before giving up.
+				maxFix := task.MaxRetries
+				if maxFix <= 0 {
+					maxFix = 3
+				}
+				if task.RetryCount < maxFix {
+					fix := &models.Task{
+						Title:    "[CODE] Auto-fix lỗi E2E: " + strings.TrimPrefix(task.Title, "[E2E]"),
+						Priority: "high",
+						Status:   "backlog",
+						Prompt:   buildE2EFixPrompt(bRes),
+					}
+					if err := o.taskRepo.Create(fix); err == nil {
+						_ = o.taskRepo.RequeueWithDependency(task.TaskID, fix.TaskID)
+						onLog(fmt.Sprintf("🔁 E2E FAILED → tạo task tự sửa '%s'. Sẽ chạy lại E2E sau khi sửa (vòng %d/%d).", fix.Title, task.RetryCount+1, maxFix), "WARN")
+					} else {
+						_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED\n"+summary, "chrome-cdp-auto-session")
+						onLog("❌ Không tạo được task sửa lỗi, đánh dấu E2E failed.", "ERROR")
+					}
+				} else {
+					_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED (hết số vòng tự sửa)\n"+summary, "chrome-cdp-auto-session")
+					agent.LastError = "E2E assertions/console failed after auto-fix retries"
+					_ = o.agentRepo.Update(agent)
+					onLog(fmt.Sprintf("❌ Chrome CDP E2E '%s' FAILED sau %d vòng tự sửa.", task.Title, maxFix), "ERROR")
+				}
 			}
 			o.emitBoard()
 			o.emitAgents()
@@ -489,6 +513,28 @@ var (
 	urlRe    = regexp.MustCompile(`https?://[^\s"'` + "`" + `)\]]+`)
 	expectRe = regexp.MustCompile(`(?i)\[EXPECT(?:\s+TEXT)?:\s*([^\]]+)\]`)
 )
+
+// buildE2EFixPrompt seeds a coding task with the concrete E2E failure detail so
+// the agent can read the console errors / failed assertions and fix the code.
+func buildE2EFixPrompt(res *services.BrowserActionResult) string {
+	var b strings.Builder
+	b.WriteString("📌 [ACTION]: Sửa lỗi khiến bài kiểm thử E2E trên trình duyệt thất bại.\n")
+	b.WriteString(fmt.Sprintf("📑 [CONTEXT]: URL đã kiểm thử: %s (title: %s)\n", res.URL, res.Title))
+	if len(res.ConsoleErrors) > 0 {
+		b.WriteString("🐞 [CONSOLE ERRORS]:\n")
+		for _, e := range res.ConsoleErrors {
+			b.WriteString("- " + e + "\n")
+		}
+	}
+	if len(res.Assertions) > 0 {
+		b.WriteString("🎯 [ASSERTIONS]:\n")
+		for _, a := range res.Assertions {
+			b.WriteString("- " + a + "\n")
+		}
+	}
+	b.WriteString("🎯 [EXPECTED OUTPUT]: Sửa trực tiếp các file trong workspace để loại bỏ mọi lỗi console và làm mọi assertion '❌' trở thành đạt. Không hỏi lại, tự sửa.")
+	return b.String()
+}
 
 // extractTestURL pulls the first http(s) URL from the task text, defaulting to the
 // local dev server when none is specified.
