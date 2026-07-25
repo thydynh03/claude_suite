@@ -265,4 +265,3 @@ func (g *GitService) RevertCommit(cwd string, commitHash string) error {
 	cmd.Dir = cwd
 	return cmd.Run()
 }
-

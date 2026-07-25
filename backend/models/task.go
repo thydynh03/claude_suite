@@ -12,8 +12,8 @@ type Task struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Prompt      string    `json:"prompt"`
-	Priority    string    `json:"priority"`   // "high", "normal", "low"
-	Status      string    `json:"status"`     // "backlog", "queued", "running", "done", "failed"
+	Priority    string    `json:"priority"`    // "high", "normal", "low"
+	Status      string    `json:"status"`      // "backlog", "queued", "running", "done", "failed"
 	AssignedTo  string    `json:"assigned_to"` // Agent ID or Role
 	DependsOn   []string  `json:"depends_on"`  // Slice of prerequisite task_ids
 	RetryCount  int       `json:"retry_count"`

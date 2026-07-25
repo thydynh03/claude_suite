@@ -19,17 +19,17 @@ func NewPlanBuilder(cliRunner cli.CLIRunner) *PlanBuilder {
 }
 
 type DecomposedTask struct {
-	Title        string   `json:"title"`
-	Description  string   `json:"description"`
-	Prompt       string   `json:"prompt"`
-	Priority     string   `json:"priority"`
-	ModelHint    string   `json:"model_hint"`
-	ProviderHint string   `json:"provider_hint"` // "anti_cli" | "claude_cli"
-	RoleTag      string   `json:"role_tag"`      // "BA" | "ARCH" | "CODE" | "REVIEW" | "QA" | "DEVOPS"
-	TargetFiles  string   `json:"target_files"`  // Target files list
-	Action       string   `json:"action"`        // Action summary
-	Output       string   `json:"output"`        // Expected output
-	DependsOn    []int    `json:"depends_on"`    // 0-indexed dependency indices
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Prompt       string `json:"prompt"`
+	Priority     string `json:"priority"`
+	ModelHint    string `json:"model_hint"`
+	ProviderHint string `json:"provider_hint"` // "anti_cli" | "claude_cli"
+	RoleTag      string `json:"role_tag"`      // "BA" | "ARCH" | "CODE" | "REVIEW" | "QA" | "DEVOPS"
+	TargetFiles  string `json:"target_files"`  // Target files list
+	Action       string `json:"action"`        // Action summary
+	Output       string `json:"output"`        // Expected output
+	DependsOn    []int  `json:"depends_on"`    // 0-indexed dependency indices
 }
 
 type DecomposedPlan struct {

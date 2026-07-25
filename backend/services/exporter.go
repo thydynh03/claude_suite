@@ -77,9 +77,9 @@ h1 { color: #2563eb; }
 }
 
 type ProjectSnapshot struct {
-	Version   string        `json:"version"`
-	ExportedAt string       `json:"exported_at"`
-	Tasks     []models.Task `json:"tasks"`
+	Version    string        `json:"version"`
+	ExportedAt string        `json:"exported_at"`
+	Tasks      []models.Task `json:"tasks"`
 }
 
 func (e *ExporterService) ExportProjectSnapshotJSON(tasks []models.Task, outDir string) (string, error) {
