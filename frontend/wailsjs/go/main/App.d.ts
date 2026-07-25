@@ -37,6 +37,8 @@ export function DeleteAntiAccountKey(arg1:string):Promise<boolean>;
 
 export function DeleteDoneTasks():Promise<void>;
 
+export function DeleteRole(arg1:string):Promise<void>;
+
 export function DeleteTask(arg1:string):Promise<void>;
 
 export function DownloadAndInstallUpdate(arg1:string):Promise<void>;
@@ -69,6 +71,8 @@ export function GetMaxConcurrency():Promise<number>;
 
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
 
+export function GetRoleContent(arg1:string):Promise<string>;
+
 export function GetScheduledJobs():Promise<Array<services.ScheduledJob>>;
 
 export function GetShowCLIConsole():Promise<boolean>;
@@ -88,6 +92,8 @@ export function GetWorkspaceDiff():Promise<string>;
 export function IsOrchestratorRunning():Promise<boolean>;
 
 export function IsWebhookRunning():Promise<boolean>;
+
+export function ListRoles():Promise<Array<string>>;
 
 export function OpenGoogleOAuthLogin(arg1:string):Promise<string>;
 
@@ -120,6 +126,8 @@ export function SaveAgent(arg1:models.Agent):Promise<void>;
 export function SaveFileContent(arg1:string,arg2:string):Promise<void>;
 
 export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
+
+export function SaveRoleContent(arg1:string,arg2:string):Promise<void>;
 
 export function ScanWorkspaceFiles():Promise<Array<string>>;
 

@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -454,7 +456,33 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		fullPrompt = fmt.Sprintf("[DIRECTIVE: CREATE OR MODIFY FILES DIRECTLY IN WORKSPACE %s]\n\n%s", workspaceDir, fullPrompt)
 	}
 
-	result := o.cliRunner.RunAgentCtx(ctx, agent, fullPrompt, onLog, workspaceDir)
+	// ── Inject Markdown Roles ──────────────────────────────────────────────
+	rolesDir := filepath.Join(filepath.Dir(database.GetDBPath()), "roles")
+	var roleContexts []string
+	
+	readRoleFile := func(filename string) {
+		path := filepath.Join(rolesDir, filename)
+		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+			roleContexts = append(roleContexts, fmt.Sprintf("--- ROLE CONFIG: %s ---\n%s", filename, string(data)))
+		}
+	}
+	
+	readRoleFile("agents.md") // global rules
+	if strings.Contains(strings.ToLower(agent.Provider), "anti") {
+		readRoleFile("antigravity.md")
+	} else {
+		readRoleFile("claude.md")
+	}
+	roleFileName := strings.ToLower(strings.ReplaceAll(agent.Role, " ", "-")) + ".md"
+	readRoleFile(roleFileName)
+	
+	runAgent := *agent
+	if len(roleContexts) > 0 {
+		runAgent.System = strings.Join(roleContexts, "\n\n") + "\n\n" + runAgent.System
+	}
+	// ───────────────────────────────────────────────────────────────────────
+
+	result := o.cliRunner.RunAgentCtx(ctx, &runAgent, fullPrompt, onLog, workspaceDir)
 
 	// If the task was stopped by the user mid-flight, mark it and bail out.
 	if ctx.Err() != nil {

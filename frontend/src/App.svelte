@@ -12,6 +12,7 @@
   import CodeStudioPage from './components/pages/CodeStudioPage.svelte';
   import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
   import GitPanel from './components/pages/GitPanel.svelte';
+  import AgentRolesPage from './components/pages/AgentRolesPage.svelte';
 
   import ToastHost from './components/ui/ToastHost.svelte';
   import CommandPalette from './components/ui/CommandPalette.svelte';
@@ -188,6 +189,8 @@
         <BrowserAgentPage />
       {:else if $activeTab === 'git'}
         <GitPanel />
+      {:else if $activeTab === 'roles'}
+        <AgentRolesPage />
       {:else if $activeTab === 'docs'}
         <DocsPage />
       {:else if $activeTab === 'support'}

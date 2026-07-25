@@ -781,6 +781,69 @@ func (a *App) OpenURLInBrowser(targetURL string) {
 	}
 }
 
+// ── Agent Roles (Markdown Repository) ───────────────────────────────────
+
+func (a *App) getRolesDir() string {
+	// For simplicity, we use e:\exe\roles as the root roles dir
+	// However, a better approach is to use a folder relative to the executable
+	dir := filepath.Join(filepath.Dir(database.GetDBPath()), "roles")
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		_ = os.MkdirAll(dir, 0755)
+		// Generate default roles
+		defaultRoles := map[string]string{
+			"agents.md":          "You are an AI assistant in Claude Suite. Always follow instructions carefully.",
+			"claude.md":          "You are Claude. Answer precisely.",
+			"antigravity.md":     "You are Antigravity model. Answer smartly.",
+			"front-end-agent.md": "You are a Front-End Agent. Focus on UI/UX, Svelte, and TailwindCSS.",
+			"back-end-agent.md":  "You are a Back-End Agent. Focus on Go, performance, and databases.",
+		}
+		for name, content := range defaultRoles {
+			_ = os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
+		}
+	}
+	return dir
+}
+
+func (a *App) ListRoles() ([]string, error) {
+	dir := a.getRolesDir()
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var roles []string
+	for _, f := range files {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".md") {
+			roles = append(roles, f.Name())
+		}
+	}
+	return roles, nil
+}
+
+func (a *App) GetRoleContent(filename string) (string, error) {
+	dir := a.getRolesDir()
+	path := filepath.Join(dir, filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func (a *App) SaveRoleContent(filename string, content string) error {
+	dir := a.getRolesDir()
+	if !strings.HasSuffix(filename, ".md") {
+		filename += ".md"
+	}
+	path := filepath.Join(dir, filename)
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func (a *App) DeleteRole(filename string) error {
+	dir := a.getRolesDir()
+	path := filepath.Join(dir, filename)
+	return os.Remove(path)
+}
+
 type SystemMetrics struct {
 	AllocMemoryMB   uint64 `json:"alloc_memory_mb"`
 	SysMemoryMB     uint64 `json:"sys_memory_mb"`

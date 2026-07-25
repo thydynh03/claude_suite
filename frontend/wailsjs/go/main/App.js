@@ -66,6 +66,10 @@ export function DeleteDoneTasks() {
   return window['go']['main']['App']['DeleteDoneTasks']();
 }
 
+export function DeleteRole(arg1) {
+  return window['go']['main']['App']['DeleteRole'](arg1);
+}
+
 export function DeleteTask(arg1) {
   return window['go']['main']['App']['DeleteTask'](arg1);
 }
@@ -130,6 +134,10 @@ export function GetPipelineSteps() {
   return window['go']['main']['App']['GetPipelineSteps']();
 }
 
+export function GetRoleContent(arg1) {
+  return window['go']['main']['App']['GetRoleContent'](arg1);
+}
+
 export function GetScheduledJobs() {
   return window['go']['main']['App']['GetScheduledJobs']();
 }
@@ -168,6 +176,10 @@ export function IsOrchestratorRunning() {
 
 export function IsWebhookRunning() {
   return window['go']['main']['App']['IsWebhookRunning']();
+}
+
+export function ListRoles() {
+  return window['go']['main']['App']['ListRoles']();
 }
 
 export function OpenGoogleOAuthLogin(arg1) {
@@ -232,6 +244,10 @@ export function SaveFileContent(arg1, arg2) {
 
 export function SaveIntegrationsConfig(arg1) {
   return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
+}
+
+export function SaveRoleContent(arg1, arg2) {
+  return window['go']['main']['App']['SaveRoleContent'](arg1, arg2);
 }
 
 export function ScanWorkspaceFiles() {
