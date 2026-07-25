@@ -3,6 +3,7 @@
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { tick } from 'svelte';
+  import { models } from '../../../wailsjs/go/models';
   import { addLog, tasksStore, agentsStore, taskLogsStore, taskScreenshotsStore, clearTaskLog } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
@@ -134,7 +135,7 @@
     showAddModal = false;
 
     try {
-      await AppBindings.CreateTask({
+      await AppBindings.CreateTask(models.Task.createFrom({
         task_id: '',
         title: title,
         description: desc,
@@ -148,7 +149,9 @@
         result: '',
         session_id: '',
         parent_id: '',
-      });
+      }));
+      newTaskTitle = '';
+      newTaskDescription = '';
       addLog(`Đã tạo Task mới: ${title}`, 'SUCCESS');
       if (onRefresh) await onRefresh();
     } catch (e) {

@@ -41,6 +41,9 @@ type Orchestrator struct {
 	autoApproveAll bool
 	stopCh         chan struct{}
 	mu             sync.Mutex
+	onLog          func(message, level string)
+	onApproval     func(agentName, taskTitle string)
+	onBoard        func()
 
 	approvalMu    sync.Mutex
 	approvalChans map[string]chan bool // taskID -> approval channel (per-task)
@@ -49,6 +52,19 @@ type Orchestrator struct {
 	runMu          sync.Mutex
 	activeRuns     map[string]context.CancelFunc // taskID -> cancel func for in-flight tasks
 	wg             sync.WaitGroup
+}
+
+// SetEventHandlers connects a frontend-neutral event sink. Wails runtime
+// events remain available; terminal and other frontends can subscribe without
+// importing Wails bindings.
+func (o *Orchestrator) SetEventHandlers(
+	onLog func(message, level string),
+	onApproval func(agentName, taskTitle string),
+	onBoard func(),
+) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.onLog, o.onApproval, o.onBoard = onLog, onApproval, onBoard
 }
 
 func NewOrchestrator(
@@ -418,6 +434,8 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 				"taskTitle": task.Title,
 			})
 		}
+		o.emitApproval(agent.Name, task.Title)
+
 		select {
 		case approved := <-approvalCh:
 			if !approved {
@@ -459,14 +477,14 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	// ── Inject Markdown Roles ──────────────────────────────────────────────
 	rolesDir := filepath.Join(filepath.Dir(database.GetDBPath()), "roles")
 	var roleContexts []string
-	
+
 	readRoleFile := func(filename string) {
 		path := filepath.Join(rolesDir, filename)
 		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
 			roleContexts = append(roleContexts, fmt.Sprintf("--- ROLE CONFIG: %s ---\n%s", filename, string(data)))
 		}
 	}
-	
+
 	readRoleFile("agents.md") // global rules
 	if strings.Contains(strings.ToLower(agent.Provider), "anti") {
 		readRoleFile("antigravity.md")
@@ -475,7 +493,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	}
 	roleFileName := strings.ToLower(strings.ReplaceAll(agent.Role, " ", "-")) + ".md"
 	readRoleFile(roleFileName)
-	
+
 	runAgent := *agent
 	if len(roleContexts) > 0 {
 		runAgent.System = strings.Join(roleContexts, "\n\n") + "\n\n" + runAgent.System
@@ -658,6 +676,12 @@ func (o *Orchestrator) emitTaskScreenshot(taskID, dataURL string) {
 }
 
 func (o *Orchestrator) emitBoard() {
+	o.mu.Lock()
+	onBoard := o.onBoard
+	o.mu.Unlock()
+	if onBoard != nil {
+		onBoard()
+	}
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "board_updated", nil)
 	}
@@ -670,12 +694,27 @@ func (o *Orchestrator) emitAgents() {
 }
 
 func (o *Orchestrator) emitLog(msg, level string) {
+	o.mu.Lock()
+	onLog := o.onLog
+	o.mu.Unlock()
+	if onLog != nil {
+		onLog(msg, level)
+	}
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "log_entry", map[string]string{
 			"message": msg,
 			"level":   level,
 			"time":    time.Now().Format("15:04:05"),
 		})
+	}
+}
+
+func (o *Orchestrator) emitApproval(agentName, taskTitle string) {
+	o.mu.Lock()
+	onApproval := o.onApproval
+	o.mu.Unlock()
+	if onApproval != nil {
+		onApproval(agentName, taskTitle)
 	}
 }
 

@@ -197,4 +197,3 @@ del "%%~f0"
 	os.Exit(0)
 	return nil
 }
-

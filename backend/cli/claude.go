@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"claude_suite/backend/models"
@@ -87,21 +85,7 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
-	var cmd *exec.Cmd
-	if ShowCLIConsole {
-		cmdArgs := append([]string{"/k", c.executablePath}, args...)
-		cmd = exec.CommandContext(ctx, "cmd.exe", cmdArgs...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    false,
-			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
-		}
-	} else {
-		cmd = exec.CommandContext(ctx, c.executablePath, args...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-		}
-	}
+	cmd := newCLICommand(ctx, c.executablePath, args, ShowCLIConsole)
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}

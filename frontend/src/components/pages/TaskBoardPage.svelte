@@ -32,16 +32,21 @@
   $: orchestratorLoad = totalCount === 0 ? 0
       : Math.round(((runningCount + doneCount) / totalCount) * 100);
 
-  onMount(async () => {
+  let unoffAgents: any;
+
+  async function initTaskBoard() {
     await loadTasks();
     await loadAgents();
     // board_updated is handled centrally in App.svelte (refreshes tasksStore).
-    let unoffAgents: any;
     if ((window as any)?.runtime?.EventsOn) {
       unoffAgents = (window as any).runtime.EventsOn('agent_updated', () => {
         loadAgents();
       });
     }
+  }
+
+  onMount(() => {
+    initTaskBoard();
     return () => {
       unsubscribeTasks();
       if (unoffAgents && typeof unoffAgents === 'function') unoffAgents();

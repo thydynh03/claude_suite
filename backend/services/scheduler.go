@@ -89,13 +89,13 @@ func (s *SchedulerService) checkJobs() {
 			if s.onTrigger != nil {
 				go s.onTrigger(job.Prompt)
 			}
-			
+
 			// Handle repeat or delete
 			if job.Repeat {
 				job.TargetTime = job.TargetTime.Add(24 * time.Hour)
 				if s.ctx != nil {
 					runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
-						"msg": fmt.Sprintf("Repeating job %s scheduled for %s", id, job.TargetTime.Format("15:04:05")),
+						"msg":   fmt.Sprintf("Repeating job %s scheduled for %s", id, job.TargetTime.Format("15:04:05")),
 						"level": "INFO",
 					})
 				}
@@ -130,7 +130,7 @@ func (s *SchedulerService) SchedulePrompt(prompt string, targetTimeStr string, r
 	if s.ctx != nil {
 		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
 		runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
-			"msg": fmt.Sprintf("Job scheduled for %s", targetTime.Format("15:04:05")),
+			"msg":   fmt.Sprintf("Job scheduled for %s", targetTime.Format("15:04:05")),
 			"level": "SUCCESS",
 		})
 	}
@@ -142,11 +142,11 @@ func (s *SchedulerService) CancelJob(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.jobs, id)
-	
+
 	if s.ctx != nil {
 		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
 		runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
-			"msg": fmt.Sprintf("Job %s cancelled", id),
+			"msg":   fmt.Sprintf("Job %s cancelled", id),
 			"level": "WARN",
 		})
 	}
@@ -155,7 +155,7 @@ func (s *SchedulerService) CancelJob(id string) {
 func (s *SchedulerService) GetJobs() []ScheduledJob {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	var list []ScheduledJob
 	for _, j := range s.jobs {
 		list = append(list, *j)

@@ -26,14 +26,14 @@ type Agent struct {
 
 // TokenLimits contains default token limits for models
 var TokenLimits = map[string]int64{
-	"claude-opus-4-8":             1000000,
-	"claude-sonnet-4-5":           1000000,
-	"claude-haiku-4-5":            1000000,
-	"gemini-3.6-flash-high":       2000000,
-	"gemini-3.6-flash-medium":     2000000,
-	"gemini-3.6-flash-low":        2000000,
-	"gemini-3.5-flash-high":       1000000,
-	"gemini-3.1-pro-high":         1000000,
+	"claude-opus-4-8":            1000000,
+	"claude-sonnet-4-5":          1000000,
+	"claude-haiku-4-5":           1000000,
+	"gemini-3.6-flash-high":      2000000,
+	"gemini-3.6-flash-medium":    2000000,
+	"gemini-3.6-flash-low":       2000000,
+	"gemini-3.5-flash-high":      1000000,
+	"gemini-3.1-pro-high":        1000000,
 	"claude-sonnet-4.6-thinking": 1000000,
 	"claude-opus-4.6-thinking":   1000000,
 }
