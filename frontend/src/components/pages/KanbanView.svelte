@@ -23,16 +23,10 @@
       } catch (e) {}
     })();
 
-    let unoff: any;
-    if ((window as any)?.runtime?.EventsOn) {
-      unoff = (window as any).runtime.EventsOn('board_updated', async () => {
-        if (onRefresh) await onRefresh();
-      });
-    }
-
+    // board_updated is handled centrally in App.svelte (single source of truth
+    // that refreshes tasksStore); KanbanView reacts via its tasksStore subscription.
     return () => {
       unsub();
-      if (unoff && typeof unoff === 'function') unoff();
     };
   });
 

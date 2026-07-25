@@ -35,19 +35,15 @@
   onMount(async () => {
     await loadTasks();
     await loadAgents();
-    let unoffBoard: any;
+    // board_updated is handled centrally in App.svelte (refreshes tasksStore).
     let unoffAgents: any;
     if ((window as any)?.runtime?.EventsOn) {
-      unoffBoard = (window as any).runtime.EventsOn('board_updated', () => {
-        loadTasks();
-      });
       unoffAgents = (window as any).runtime.EventsOn('agent_updated', () => {
         loadAgents();
       });
     }
     return () => {
       unsubscribeTasks();
-      if (unoffBoard && typeof unoffBoard === 'function') unoffBoard();
       if (unoffAgents && typeof unoffAgents === 'function') unoffAgents();
     };
   });
