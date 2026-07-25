@@ -158,10 +158,24 @@ func (o *Orchestrator) Start() {
 	}
 	o.running = true
 	o.stopCh = make(chan struct{})
+	// Hand this run's channel to the loop rather than letting it read the field.
+	// A later Start replaces the field, and an old loop still reading it is a data
+	// race — one the race detector catches on the Stop-then-Start path a user
+	// takes with two button presses.
+	stop := o.stopCh
 	o.mu.Unlock()
 
 	o.emitLog(fmt.Sprintf("🚀 Orchestrator ACTIVE: Quét Backlog & phân công song song (tối đa %d agent).", o.GetMaxConcurrency()), "INFO")
-	go o.loop()
+	go o.loop(stop)
+}
+
+// stopChannel returns the channel for the current run under the lock. A caller
+// holds on to what it is given: a task that started under one run should keep
+// watching that run's channel even if the orchestrator is started again.
+func (o *Orchestrator) stopChannel() <-chan struct{} {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.stopCh
 }
 
 func (o *Orchestrator) Stop() {
@@ -219,13 +233,13 @@ func (o *Orchestrator) GetAutoApproveAll() bool {
 	return o.autoApproveAll
 }
 
-func (o *Orchestrator) loop() {
+func (o *Orchestrator) loop(stop <-chan struct{}) {
 	ticker := time.NewTicker(1500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-o.stopCh:
+		case <-stop:
 			return
 		case <-ticker.C:
 			o.dispatchAvailable()
@@ -417,6 +431,10 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	if !o.GetAutoApproveAll() && (strings.Contains(nameLower, "architect") || strings.Contains(nameLower, "(ba)")) {
 		onLog("Waiting for user approval...", "WARN")
 
+		// Read the stop channel once, under the lock, and watch that one: reading
+		// the field inside the select races with a later Start replacing it.
+		stop := o.stopChannel()
+
 		approvalCh := make(chan bool, 1)
 		o.approvalMu.Lock()
 		o.approvalChans[task.TaskID] = approvalCh
@@ -450,7 +468,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		case <-ctx.Done():
 			o.markStopped(task, agent)
 			return
-		case <-o.stopCh:
+		case <-stop:
 			// The orchestrator was paused while this task sat at the prompt. Put it
 			// back in the backlog so the next Start picks it up: leaving the row as
 			// "running" stranded it, because only backlog and queued rows are ever
