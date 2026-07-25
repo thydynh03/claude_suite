@@ -111,6 +111,11 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.schedulerSvc.Start()
 
+	// The day's spending is kept on disk too: a cap a restart clears is not a cap.
+	if err := a.orchestrator.UseBudgetStore(filepath.Join(filepath.Dir(database.GetDBPath()), "budget.json")); err != nil {
+		fmt.Printf("Budget store warning: %v\n", err)
+	}
+
 	a.loadWorkspaceConfig()
 	a.loadIntegrationsConfig()
 	a.loadUIConfig()
@@ -1153,4 +1158,23 @@ func (a *App) ScheduleKind(kind, prompt, targetTime string, repeat bool, provide
 // GetJobKinds lists the kinds the scheduler accepts, for the UI to offer.
 func (a *App) GetJobKinds() []string {
 	return services.KnownJobKinds
+}
+
+// SetDailyBudgetUSD caps what the agents may spend in a day. Zero removes the cap.
+func (a *App) SetDailyBudgetUSD(limit float64) float64 {
+	a.orchestrator.SetDailyBudgetUSD(limit)
+	_, _, applied := a.orchestrator.BudgetSnapshot()
+	return applied
+}
+
+// BudgetStatus reports the day, what has been spent so far, and the ceiling.
+type BudgetStatus struct {
+	Day      string  `json:"day"`
+	SpentUSD float64 `json:"spent_usd"`
+	LimitUSD float64 `json:"limit_usd"`
+}
+
+func (a *App) GetBudgetStatus() BudgetStatus {
+	day, spent, limit := a.orchestrator.BudgetSnapshot()
+	return BudgetStatus{Day: day, SpentUSD: spent, LimitUSD: limit}
 }

@@ -346,3 +346,53 @@ func TestAFailedTaskWriteIsReported(t *testing.T) {
 	}
 	t.Errorf("a failed task write was never reported; errors seen: %v", reported)
 }
+
+// The orchestrator retries on its own and a scheduled job can start it at 2am,
+// so a runaway costs real money with nobody watching. Past the day's ceiling,
+// nothing new is dispatched.
+func TestNoNewWorkOnceTheDailyBudgetIsSpent(t *testing.T) {
+	o, taskRepo, agentRepo, runner := newTestOrchestrator(t)
+	agent := seedAgent(t, agentRepo, "Runner")
+	seedTask(t, taskRepo, "first", agent, nil)
+	seedTask(t, taskRepo, "second", agent, nil)
+
+	o.SetMaxConcurrency(1)
+	o.SetDailyBudgetUSD(0.50)
+
+	// One run that costs more than the whole day's allowance.
+	runner.Behaviour = func(context.Context, *models.Agent, string) *cli.RunResult {
+		return &cli.RunResult{Success: true, Output: "done", CostUSD: 0.75}
+	}
+
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+
+	// The second task must not start now the ceiling has been passed.
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+
+	if got := runner.CallCount(); got != 1 {
+		t.Errorf("the agent ran %d times after passing the budget, want 1", got)
+	}
+	if _, spent, limit := o.BudgetSnapshot(); spent < 0.74 || limit != 0.50 {
+		t.Errorf("budget reports spent=%v limit=%v, want about 0.75 and 0.50", spent, limit)
+	}
+}
+
+// A budget nobody set must not stop anything.
+func TestWorkRunsFreelyWithNoBudgetSet(t *testing.T) {
+	o, taskRepo, agentRepo, runner := newTestOrchestrator(t)
+	agent := seedAgent(t, agentRepo, "Runner")
+	seedTask(t, taskRepo, "costly", agent, nil)
+
+	runner.Behaviour = func(context.Context, *models.Agent, string) *cli.RunResult {
+		return &cli.RunResult{Success: true, Output: "done", CostUSD: 999}
+	}
+
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+
+	if runner.CallCount() != 1 {
+		t.Errorf("the task did not run with no budget configured")
+	}
+}

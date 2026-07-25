@@ -114,6 +114,10 @@ export function GetAutoApproveAll() {
   return window['go']['main']['App']['GetAutoApproveAll']();
 }
 
+export function GetBudgetStatus() {
+  return window['go']['main']['App']['GetBudgetStatus']();
+}
+
 export function GetGCPOAuthCredentials() {
   return window['go']['main']['App']['GetGCPOAuthCredentials']();
 }
@@ -300,6 +304,10 @@ export function SetAutoApproveAll(arg1) {
 
 export function SetCurrentAntiAccountKey(arg1) {
   return window['go']['main']['App']['SetCurrentAntiAccountKey'](arg1);
+}
+
+export function SetDailyBudgetUSD(arg1) {
+  return window['go']['main']['App']['SetDailyBudgetUSD'](arg1);
 }
 
 export function SetMaxConcurrency(arg1) {

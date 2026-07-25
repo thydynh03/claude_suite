@@ -22,20 +22,22 @@ import (
 const defaultMaxConcurrency = 3
 
 type Orchestrator struct {
-	ctx          context.Context
-	agentRepo    *database.AgentRepository
-	taskRepo     *database.TaskRepository
-	memoryRepo   *database.MemoryRepository
-	cliRunner    cli.CLIRunner
-	contextMgr   *services.ContextManager
-	gitService   *services.GitService
-	browserSvc   *services.BrowserAgentService
-	verifySvc    *services.VerifyService
-	notifierSvc  *services.NotifierService
-	dispatcher   *AgentDispatcher
-	fallback     *FallbackHandler
-	workspaceDir string
-	verifyBuild  bool
+	ctx            context.Context
+	agentRepo      *database.AgentRepository
+	taskRepo       *database.TaskRepository
+	memoryRepo     *database.MemoryRepository
+	cliRunner      cli.CLIRunner
+	contextMgr     *services.ContextManager
+	gitService     *services.GitService
+	browserSvc     *services.BrowserAgentService
+	verifySvc      *services.VerifyService
+	budget         *services.BudgetGuard
+	notifierSvc    *services.NotifierService
+	dispatcher     *AgentDispatcher
+	fallback       *FallbackHandler
+	workspaceDir   string
+	verifyBuild    bool
+	budgetNoticeAt float64
 
 	running        bool
 	autoApproveAll bool
@@ -85,6 +87,7 @@ func NewOrchestrator(
 		gitService:     gitSvc,
 		browserSvc:     browserSvc,
 		verifySvc:      services.NewVerifyService(),
+		budget:         services.NewBudgetGuard(),
 		notifierSvc:    services.NewNotifierService(),
 		verifyBuild:    true,
 		dispatcher:     NewAgentDispatcher(),
@@ -274,6 +277,14 @@ func (o *Orchestrator) baseCtx() context.Context {
 // dispatchAvailable launches as many dependency-satisfied tasks as there are
 // free concurrency slots, each in its own goroutine (true parallel execution).
 func (o *Orchestrator) dispatchAvailable() {
+	// Nothing new starts once the day's ceiling is reached. Work already running
+	// is left to finish: killing an agent mid-edit would leave the workspace in a
+	// worse state than the cost of letting it end.
+	if allowed, spent, limit := o.budget.Allow(); !allowed {
+		o.reportBudgetStop(spent, limit)
+		return
+	}
+
 	for {
 		o.runMu.Lock()
 		slots := o.maxConcurrency - len(o.activeRuns)
@@ -559,6 +570,11 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	if result.TokensUsed > 0 {
 		_ = o.agentRepo.AddTokens(agent.AgentID, result.TokensUsed)
 	}
+	// Count the run against the day's budget. Only the Claude runner reports a
+	// real figure, from the CLI's own usage event; a run that reports nothing
+	// adds nothing, so the ceiling guards what it can measure rather than
+	// guessing.
+	o.budget.Record(result.CostUSD)
 
 	// Smart fallback on quota exhaustion.
 	if !result.Success && o.fallback.IsQuotaExhausted(agent, result.Error) {
@@ -795,4 +811,42 @@ func (o *Orchestrator) emitTaskLog(taskID, msg, level string) {
 // use, so the daily digest arrives wherever the user already gets notifications.
 func (o *Orchestrator) NotifyDigest(summary string) {
 	go o.notifierSvc.NotifyTaskEvent("digest", "Tổng kết hằng ngày", "ok", summary)
+}
+
+// SetDailyBudgetUSD caps what may be spent in a day. Zero or less removes the cap.
+func (o *Orchestrator) SetDailyBudgetUSD(limit float64) {
+	o.budget.SetLimit(limit)
+	if limit > 0 {
+		o.emitLog(fmt.Sprintf("💰 Trần chi phí mỗi ngày: $%.2f", limit), "INFO")
+	} else {
+		o.emitLog("💰 Đã bỏ trần chi phí mỗi ngày.", "WARN")
+	}
+}
+
+// BudgetSnapshot reports the day, what has been spent, and the ceiling.
+func (o *Orchestrator) BudgetSnapshot() (string, float64, float64) {
+	return o.budget.Snapshot()
+}
+
+// UseBudgetStore keeps the running total on disk, so restarting the app does not
+// hand the agents a fresh budget.
+func (o *Orchestrator) UseBudgetStore(path string) error {
+	return o.budget.UseStore(path)
+}
+
+// reportBudgetStop says why nothing is being dispatched, but only when the
+// number changes — the scan runs every 1.5 seconds and would otherwise fill the
+// log with the same line.
+func (o *Orchestrator) reportBudgetStop(spent, limit float64) {
+	o.mu.Lock()
+	already := o.budgetNoticeAt == spent
+	o.budgetNoticeAt = spent
+	o.mu.Unlock()
+	if already {
+		return
+	}
+	o.emitLog(fmt.Sprintf(
+		"🛑 Đã dùng $%.2f trong ngày, chạm trần $%.2f — tạm ngưng giao việc mới. Task đang chạy vẫn tiếp tục.",
+		spent, limit,
+	), "WARN")
 }

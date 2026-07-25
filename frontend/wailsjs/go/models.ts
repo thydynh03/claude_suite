@@ -102,6 +102,22 @@ export namespace cli {
 
 export namespace main {
 	
+	export class BudgetStatus {
+	    day: string;
+	    spent_usd: number;
+	    limit_usd: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BudgetStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.day = source["day"];
+	        this.spent_usd = source["spent_usd"];
+	        this.limit_usd = source["limit_usd"];
+	    }
+	}
 	export class SystemMetrics {
 	    alloc_memory_mb: number;
 	    sys_memory_mb: number;

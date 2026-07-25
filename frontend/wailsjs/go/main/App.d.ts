@@ -61,6 +61,8 @@ export function GetAppVersion():Promise<string>;
 
 export function GetAutoApproveAll():Promise<boolean>;
 
+export function GetBudgetStatus():Promise<main.BudgetStatus>;
+
 export function GetGCPOAuthCredentials():Promise<Record<string, string>>;
 
 export function GetGitBranches():Promise<services.GitBranchInfo>;
@@ -154,6 +156,8 @@ export function SelectWorkspaceFolder():Promise<string>;
 export function SetAutoApproveAll(arg1:boolean):Promise<boolean>;
 
 export function SetCurrentAntiAccountKey(arg1:string):Promise<boolean>;
+
+export function SetDailyBudgetUSD(arg1:number):Promise<number>;
 
 export function SetMaxConcurrency(arg1:number):Promise<number>;
 
