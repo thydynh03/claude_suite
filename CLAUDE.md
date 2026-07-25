@@ -39,10 +39,19 @@ CI runs the first block on every push/PR (`.github/workflows/ci.yml`).
 
 ## Critical conventions & gotchas
 
-- **Wails bindings are NOT auto-generated here.** When you add/change an `App`
-  method in `app.go`, you MUST manually mirror it in BOTH
-  `frontend/wailsjs/go/main/App.js` and `App.d.ts`, or the frontend call fails at
-  runtime. (`wails generate module` regenerates them if the CLI is available.)
+- **Wails bindings must stay in sync with `app.go`.** After adding/changing an
+  `App` method or a struct crossing the boundary, run:
+
+  ```bash
+  wails generate module
+  ```
+
+  This regenerates `frontend/wailsjs/go/main/App.js`, `App.d.ts` and
+  `wailsjs/go/models.ts` from the Go source. Prefer this over hand-editing —
+  hand-maintained bindings have repeatedly drifted (missing methods/struct
+  fields), which breaks the frontend build or fails silently at runtime. Note
+  that a running `wails dev` may briefly delete these generated files while it
+  rebuilds; regenerate rather than restoring stale copies.
 - **Event bus** (Wails `EventsEmit`/`EventsOn`): `board_updated`, `agent_updated`,
   `log_entry`, `task_log` (per-task, carries `task_id`), `ask_approval` (carries
   `taskId`). `board_updated` is handled centrally in `App.svelte` (single source
