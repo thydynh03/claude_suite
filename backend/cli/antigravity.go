@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -268,13 +269,54 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 		}
 	}
 
-	tokens := int64(len(outStr)+len(prompt)) / 4
+	// Prefer REAL usage/cost if the CLI reported it; fall back to a length estimate.
+	tokens, cost := parseAntiUsage(outStr)
+	if tokens == 0 {
+		tokens = int64(len(outStr)+len(prompt)) / 4
+	}
 
 	return &RunResult{
 		Success:     true,
 		Output:      outStr,
 		Error:       errStr,
 		TokensUsed:  tokens,
+		CostUSD:     cost,
 		DurationSec: duration,
 	}
+}
+
+var (
+	antiInTokRe  = regexp.MustCompile(`"input_tokens"\s*:\s*(\d+)`)
+	antiOutTokRe = regexp.MustCompile(`"output_tokens"\s*:\s*(\d+)`)
+	antiTotTokRe = regexp.MustCompile(`(?i)total[_ ]tokens?\s*[:=]\s*(\d+)`)
+	antiCostRe   = regexp.MustCompile(`"total_cost_usd"\s*:\s*([0-9.]+)`)
+)
+
+// parseAntiUsage best-effort extracts token usage and cost from Antigravity/Gemini
+// CLI output (JSON usage block or a "total_tokens: N" line). Returns (0,0) if none
+// found so the caller can fall back to an estimate.
+func parseAntiUsage(out string) (int64, float64) {
+	var tokens int64
+	if m := antiInTokRe.FindStringSubmatch(out); m != nil {
+		tokens += atoi64(m[1])
+	}
+	if m := antiOutTokRe.FindStringSubmatch(out); m != nil {
+		tokens += atoi64(m[1])
+	}
+	if tokens == 0 {
+		if m := antiTotTokRe.FindStringSubmatch(out); m != nil {
+			tokens = atoi64(m[1])
+		}
+	}
+	var cost float64
+	if m := antiCostRe.FindStringSubmatch(out); m != nil {
+		fmt.Sscanf(m[1], "%f", &cost)
+	}
+	return tokens, cost
+}
+
+func atoi64(s string) int64 {
+	var n int64
+	fmt.Sscanf(s, "%d", &n)
+	return n
 }

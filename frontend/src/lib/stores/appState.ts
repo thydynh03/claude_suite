@@ -29,6 +29,23 @@ export function addTaskLog(taskId: string, msg: string, level = 'INFO', time = '
   });
 }
 
+// Transient toast notifications.
+export type Toast = { id: number; message: string; level: string };
+export const toasts = writable<Toast[]>([]);
+let toastSeq = 0;
+
+export function addToast(message: string, level = 'INFO', ttlMs = 4000) {
+  const id = ++toastSeq;
+  toasts.update((t) => [...t, { id, message, level }]);
+  setTimeout(() => {
+    toasts.update((t) => t.filter((x) => x.id !== id));
+  }, ttlMs);
+}
+
+export function dismissToast(id: number) {
+  toasts.update((t) => t.filter((x) => x.id !== id));
+}
+
 export function clearTaskLog(taskId: string) {
   taskLogsStore.update((m) => {
     const next = { ...m };

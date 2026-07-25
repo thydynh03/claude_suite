@@ -50,3 +50,16 @@ func TestParseStreamEvent_ErrorResult(t *testing.T) {
 		t.Error("expected isError=true for error subtype")
 	}
 }
+
+func TestParseAntiUsage(t *testing.T) {
+	tok, cost := parseAntiUsage(`{"usage":{"input_tokens":80,"output_tokens":20},"total_cost_usd":0.004}`)
+	if tok != 100 {
+		t.Errorf("tokens = %d, want 100", tok)
+	}
+	if cost != 0.004 {
+		t.Errorf("cost = %v, want 0.004", cost)
+	}
+	if tok2, _ := parseAntiUsage("no usage here"); tok2 != 0 {
+		t.Errorf("expected 0 tokens when none present, got %d", tok2)
+	}
+}

@@ -12,7 +12,8 @@
   import CodeStudioPage from './components/pages/CodeStudioPage.svelte';
   import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
 
-  import { activeTab, workspaceFolder, addLog, addTaskLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
+  import ToastHost from './components/ui/ToastHost.svelte';
+  import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -64,6 +65,11 @@
       EventsOn('log_entry', (data: any) => {
         if (data && data.message) {
           addLog(data.message, data.level || 'INFO', data.time || '');
+          // Surface important outcomes as toasts (not every log line).
+          const msg = String(data.message);
+          if (data.level === 'ERROR' || /\bDONE\b|FAILED|rejected|Orchestrator/i.test(msg)) {
+            addToast(msg, data.level || 'INFO');
+          }
         }
       });
       EventsOn('task_log', (data: any) => {
@@ -145,6 +151,8 @@
     </main>
   </div>
 </div>
+
+<ToastHost />
 
 {#if showApprovalModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
