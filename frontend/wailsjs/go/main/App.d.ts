@@ -59,6 +59,8 @@ export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
 
 export function GetGitStatus():Promise<Record<string, any>>;
 
+export function GetWorkspaceDiff():Promise<string>;
+
 export function GetMaxConcurrency():Promise<number>;
 
 export function SetTaskTimeoutMinutes(arg1:number):Promise<number>;

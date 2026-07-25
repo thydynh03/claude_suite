@@ -110,6 +110,10 @@ export function GetGitStatus() {
   return window['go']['main']['App']['GetGitStatus']();
 }
 
+export function GetWorkspaceDiff() {
+  return window['go']['main']['App']['GetWorkspaceDiff']();
+}
+
 export function GetMaxConcurrency() {
   return window['go']['main']['App']['GetMaxConcurrency']();
 }

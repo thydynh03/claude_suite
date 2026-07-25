@@ -49,6 +49,43 @@ func (g *GitService) AutoSnapshot(cwd string) error {
 	return cmdCommit.Run()
 }
 
+// GetWorkspaceDiff returns the current uncommitted diff (tracked changes plus a
+// listing of new untracked files) so the UI can show what an agent just changed.
+func (g *GitService) GetWorkspaceDiff(cwd string) (string, error) {
+	if cwd == "" {
+		return "", nil
+	}
+	check := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	check.Dir = cwd
+	if err := check.Run(); err != nil {
+		return "", nil // not a git repo — nothing to diff
+	}
+
+	var out bytes.Buffer
+	diff := exec.Command("git", "diff", "HEAD", "--stat", "--patch")
+	diff.Dir = cwd
+	diff.Stdout = &out
+	_ = diff.Run()
+
+	// Append untracked (new) files, which don't appear in `git diff HEAD`.
+	untracked := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	untracked.Dir = cwd
+	var uout bytes.Buffer
+	untracked.Stdout = &uout
+	_ = untracked.Run()
+	if files := strings.TrimSpace(uout.String()); files != "" {
+		out.WriteString("\n# Untracked (new) files:\n")
+		for _, f := range strings.Split(files, "\n") {
+			out.WriteString("+ " + f + "\n")
+		}
+	}
+
+	if strings.TrimSpace(out.String()) == "" {
+		return "Không có thay đổi nào trong workspace.", nil
+	}
+	return out.String(), nil
+}
+
 func (g *GitService) GetStatus(cwd string) (map[string]interface{}, error) {
 	if cwd == "" {
 		return map[string]interface{}{"is_repo": false}, nil

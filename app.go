@@ -502,6 +502,10 @@ func (a *App) GetGitStatus() (map[string]interface{}, error) {
 	return a.gitService.GetStatus(a.workspaceConfig.LastWorkspaceFolder)
 }
 
+func (a *App) GetWorkspaceDiff() (string, error) {
+	return a.gitService.GetWorkspaceDiff(a.workspaceConfig.LastWorkspaceFolder)
+}
+
 func (a *App) GetGitBranches() (*services.GitBranchInfo, error) {
 	return a.gitService.GetBranches(a.workspaceConfig.LastWorkspaceFolder)
 }

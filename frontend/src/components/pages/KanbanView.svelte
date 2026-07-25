@@ -59,6 +59,23 @@
     try { await (AppBindings as any).SetMaxConcurrency(n); addLog(`Số agent song song tối đa: ${n}`, 'INFO'); } catch (e) { console.error(e); }
   }
 
+  // Git diff viewer — shows what the agent changed in the workspace.
+  let showDiff = false;
+  let diffText = '';
+  let loadingDiff = false;
+  async function loadDiff() {
+    showDiff = !showDiff;
+    if (!showDiff) return;
+    loadingDiff = true;
+    try {
+      diffText = await (AppBindings as any).GetWorkspaceDiff();
+    } catch (e) {
+      diffText = 'Không tải được diff: ' + e;
+    } finally {
+      loadingDiff = false;
+    }
+  }
+
   function copyTaskLog() {
     const text = currentTaskLogs.map((l) => `[${l.time}] ${l.message}`).join('\n');
     navigator.clipboard.writeText(text);
@@ -611,6 +628,28 @@
         </div>
       </div>
       {/if}
+
+      <!-- Git Diff — what the agent changed in the workspace -->
+      <div class="space-y-1">
+        <button type="button" on:click={loadDiff}
+          class="w-full flex items-center justify-between bg-surface-container-low hover:bg-surface-container px-3 py-2 rounded-xl border border-outline-variant transition-all cursor-pointer">
+          <span class="font-bold text-on-surface flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm text-secondary">difference</span> Thay đổi mã (Git Diff)
+          </span>
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">{showDiff ? 'expand_less' : 'expand_more'}</span>
+        </button>
+        {#if showDiff}
+          <div class="bg-black/90 p-3 rounded-xl border border-slate-800 font-mono text-[11px] max-h-60 overflow-auto leading-relaxed">
+            {#if loadingDiff}
+              <span class="text-slate-400 italic">Đang tải diff...</span>
+            {:else}
+              {#each diffText.split('\n') as line}
+                <div class={line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-400' : line.startsWith('@@') ? 'text-cyan-300' : 'text-slate-300'}>{line || ' '}</div>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
 
     </div>
 
