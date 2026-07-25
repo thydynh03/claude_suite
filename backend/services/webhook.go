@@ -3,16 +3,22 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"sync"
 
 	"claude_suite/backend/database"
 	"claude_suite/backend/models"
 )
 
 type WebhookService struct {
-	server   *http.Server
 	taskRepo *database.TaskRepository
-	running  bool
+
+	// running and server are read by the UI thread and written by the serve
+	// goroutine, so every access goes through mu.
+	mu      sync.Mutex
+	server  *http.Server
+	running bool
 }
 
 type WebhookPayload struct {
@@ -27,6 +33,8 @@ func NewWebhookService(taskRepo *database.TaskRepository) *WebhookService {
 }
 
 func (w *WebhookService) Start(port int) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.running {
 		return nil
 	}
@@ -76,21 +84,30 @@ func (w *WebhookService) Start(port int) error {
 		})
 	})
 
-	w.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
+	// Bind before returning. ListenAndServe inside the goroutine reported success
+	// even when the port was already taken, so the UI showed the webhook as
+	// listening while nothing was bound.
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return fmt.Errorf("webhook cannot listen on port %d: %w", port, err)
 	}
 
+	server := &http.Server{Handler: mux}
+	w.server = server
 	w.running = true
 	go func() {
-		_ = w.server.ListenAndServe()
+		_ = server.Serve(listener)
+		w.mu.Lock()
 		w.running = false
+		w.mu.Unlock()
 	}()
 
 	return nil
 }
 
 func (w *WebhookService) Stop() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.server != nil && w.running {
 		w.running = false
 		return w.server.Close()
@@ -99,5 +116,7 @@ func (w *WebhookService) Stop() error {
 }
 
 func (w *WebhookService) IsRunning() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	return w.running
 }
