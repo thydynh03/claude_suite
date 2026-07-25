@@ -13,10 +13,10 @@ concurrency:
 
 jobs:
   backend:
-    name: Go build & test
-    # Runs on Windows: the CLI runners use Windows-only syscall.SysProcAttr fields
-    # (HideWindow/CreationFlags), so the backend only compiles on Windows. SQLite
-    # uses modernc.org/sqlite (pure Go), so no CGO/gcc is required.
+    name: Go build & test (Windows)
+    # Windows is the shipping platform: the CLI runners set Windows-only
+    # syscall.SysProcAttr fields, and process_other.go covers everything else.
+    # SQLite uses modernc.org/sqlite (pure Go), so no CGO/gcc is required here.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +33,24 @@ jobs:
       - name: Test
         run: go test ./backend/... ./cmd/...
 
+  race:
+    name: Race detector (Linux)
+    # The race detector needs CGO, which Windows developer machines rarely have.
+    # backend/cli/process_other.go provides the non-Windows process variant, so
+    # the whole backend compiles here — this is the only place data races in the
+    # orchestrator's per-task goroutines can actually be caught.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test with race detector
+        env:
+          CGO_ENABLED: '1'
+        run: go test -race ./backend/... ./cmd/...
+
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest
@@ -48,6 +66,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
+      # svelte-check catches type errors in .svelte files that vite build happily
+      # ignores — including bindings drifting out of sync with the Go source.
+      - name: Type check
+        run: npm run check
       - name: Build
         run: npm run build
 

@@ -259,12 +259,12 @@
         <p class="text-[11px] text-on-surface-variant">Để tính năng tự động đăng nhập Google hoạt động, bạn cần cấu hình Client ID và Client Secret. Nếu chưa có, xem <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">GCP Console</a>.</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-[10px] font-bold text-on-surface block mb-1">GCP Client ID</label>
-            <input type="text" bind:value={gcpClientId} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="1234...apps.googleusercontent.com" />
+            <label for="gcp-client-id" class="text-[10px] font-bold text-on-surface block mb-1">GCP Client ID</label>
+            <input id="gcp-client-id" type="text" bind:value={gcpClientId} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="1234...apps.googleusercontent.com" />
           </div>
           <div>
-            <label class="text-[10px] font-bold text-on-surface block mb-1">GCP Client Secret</label>
-            <input type="text" bind:value={gcpClientSecret} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="GOCSPX-..." />
+            <label for="gcp-client-secret" class="text-[10px] font-bold text-on-surface block mb-1">GCP Client Secret</label>
+            <input id="gcp-client-secret" type="text" bind:value={gcpClientSecret} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="GOCSPX-..." />
           </div>
         </div>
         <div class="flex justify-end pt-1">

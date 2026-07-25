@@ -141,10 +141,12 @@
         <!-- Role list -->
         <div class="flex-1 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
           {#each roles as role}
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <div 
+            <div
+              role="button"
+              tabindex="0"
               class="group flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all border {selectedRole === role ? 'bg-primary/10 border-primary text-primary' : 'border-transparent hover:bg-surface-variant text-on-surface'}"
               on:click={() => selectRole(role)}
+              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRole(role); } }}
             >
               <div class="flex items-center gap-2 overflow-hidden">
                 <svg class="w-4 h-4 flex-shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
