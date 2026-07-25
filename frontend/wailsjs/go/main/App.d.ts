@@ -59,6 +59,10 @@ export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
 
 export function GetGitStatus():Promise<Record<string, any>>;
 
+export function GetIntegrationsConfig():Promise<models.IntegrationsConfig>;
+
+export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
+
 export function GetWorkspaceDiff():Promise<string>;
 
 export function RunGitCommand(arg1:Array<string>):Promise<string>;

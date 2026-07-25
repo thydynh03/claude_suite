@@ -237,7 +237,7 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 		for scanner.Scan() {
 			line := scanner.Text()
 			if onLog != nil {
-				onLog(line, "INFO")
+				onLog(line, classifyAntiLogLine(line))
 			}
 		}
 	}()
@@ -283,6 +283,21 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 		CostUSD:     cost,
 		DurationSec: duration,
 	}
+}
+
+// antiToolLineRe matches common tool-call announcement patterns emitted by CLI
+// coding agents (Antigravity/Gemini CLI has no documented structured stream
+// format, unlike Claude CLI's --output-format stream-json, so this is a
+// best-effort text heuristic rather than a real event parser).
+var antiToolLineRe = regexp.MustCompile(`(?i)^\s*(?:🔧|⚙️|\$)?\s*(running|executing|reading file|writing file|editing file|creating file|deleting file|calling tool|tool call|invoking|shell command|exec)\b`)
+
+// classifyAntiLogLine tags a raw Antigravity/Gemini CLI stdout line as "TOOL"
+// when it looks like a tool invocation, else "INFO".
+func classifyAntiLogLine(line string) string {
+	if antiToolLineRe.MatchString(line) {
+		return "TOOL"
+	}
+	return "INFO"
 }
 
 var (

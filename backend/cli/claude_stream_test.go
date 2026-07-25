@@ -63,3 +63,18 @@ func TestParseAntiUsage(t *testing.T) {
 		t.Errorf("expected 0 tokens when none present, got %d", tok2)
 	}
 }
+
+func TestClassifyAntiLogLine(t *testing.T) {
+	cases := []struct{ line, want string }{
+		{"Running: go build ./...", "TOOL"},
+		{"🔧 Executing shell command", "TOOL"},
+		{"Reading file: main.go", "TOOL"},
+		{"Here is a normal response line", "INFO"},
+		{"", "INFO"},
+	}
+	for _, c := range cases {
+		if got := classifyAntiLogLine(c.line); got != c.want {
+			t.Errorf("classifyAntiLogLine(%q) = %q, want %q", c.line, got, c.want)
+		}
+	}
+}

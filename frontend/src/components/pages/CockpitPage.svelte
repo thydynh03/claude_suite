@@ -28,8 +28,6 @@
   let isRunning = false;
   let selectedModel = 'claude-sonnet-4-5';
   $: activeAgent = selectedModel.includes('gemini') ? 'Antigravity (Gemini 3.6 Flash)' : selectedModel.includes('opus') ? 'Claude 4.8 Opus' : 'Claude 4.5 Sonnet';
-  let thinkingPercent = 75;
-
   let topTab = 'active'; // 'active' | 'history'
   let cliOutput = '';
   let showCLIConsole = false;
@@ -348,11 +346,11 @@
 
           <div class="space-y-3">
             <div class="flex justify-between text-xs">
-              <span class="text-on-surface font-medium">Thinking Process</span>
-              <span class="text-primary font-bold">{thinkingPercent}%</span>
+              <span class="text-on-surface font-medium">Trạng thái</span>
+              <span class="font-bold {isRunning ? 'text-primary' : 'text-emerald-600'}">{isRunning ? 'Đang chạy...' : 'Sẵn sàng'}</span>
             </div>
             <div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
-              <div class="bg-primary h-full transition-all" style="width: {thinkingPercent}%"></div>
+              <div class="bg-primary h-full transition-all {isRunning ? 'animate-pulse w-full' : 'w-0'}"></div>
             </div>
           </div>
         </div>

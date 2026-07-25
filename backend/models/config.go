@@ -6,6 +6,12 @@ type WorkspaceConfig struct {
 	RecentWorkspaces    []string `json:"recent_workspaces"`
 }
 
+// IntegrationsConfig holds outbound integration settings (persisted to disk).
+type IntegrationsConfig struct {
+	OutboundWebhookURL  string `json:"outbound_webhook_url"` // POSTed on task completion (Slack/Discord/custom)
+	MCPConnectionString string `json:"mcp_connection_string"`
+}
+
 // AppConfig represents global user settings
 type AppConfig struct {
 	Theme               string `json:"theme"` // "dark" or "light"

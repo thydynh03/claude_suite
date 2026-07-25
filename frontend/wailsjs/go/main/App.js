@@ -110,6 +110,14 @@ export function GetGitStatus() {
   return window['go']['main']['App']['GetGitStatus']();
 }
 
+export function GetIntegrationsConfig() {
+  return window['go']['main']['App']['GetIntegrationsConfig']();
+}
+
+export function SaveIntegrationsConfig(arg1) {
+  return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
+}
+
 export function GetWorkspaceDiff() {
   return window['go']['main']['App']['GetWorkspaceDiff']();
 }

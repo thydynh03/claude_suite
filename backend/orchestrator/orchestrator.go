@@ -29,6 +29,7 @@ type Orchestrator struct {
 	gitService   *services.GitService
 	browserSvc   *services.BrowserAgentService
 	verifySvc    *services.VerifyService
+	notifierSvc  *services.NotifierService
 	dispatcher   *AgentDispatcher
 	fallback     *FallbackHandler
 	workspaceDir string
@@ -66,6 +67,7 @@ func NewOrchestrator(
 		gitService:     gitSvc,
 		browserSvc:     browserSvc,
 		verifySvc:      services.NewVerifyService(),
+		notifierSvc:    services.NewNotifierService(),
 		verifyBuild:    true,
 		dispatcher:     NewAgentDispatcher(),
 		fallback:       NewFallbackHandler(),
@@ -83,6 +85,14 @@ func (o *Orchestrator) SetWorkspaceDir(dir string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.workspaceDir = dir
+}
+
+// GetWorkspaceDir returns the current workspace directory under lock — used by
+// task goroutines, which run concurrently with SetWorkspaceDir on the main thread.
+func (o *Orchestrator) GetWorkspaceDir() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.workspaceDir
 }
 
 func (o *Orchestrator) SetMaxConcurrency(n int) {
@@ -112,6 +122,14 @@ func (o *Orchestrator) GetVerifyBuild() bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.verifyBuild
+}
+
+func (o *Orchestrator) SetNotifierURL(url string) {
+	o.notifierSvc.SetWebhookURL(url)
+}
+
+func (o *Orchestrator) GetNotifierURL() string {
+	return o.notifierSvc.GetWebhookURL()
 }
 
 func (o *Orchestrator) Start() {
@@ -420,19 +438,23 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 
 	onLog(fmt.Sprintf("Executing task: '%s'", task.Title), "SEND")
 
-	if o.workspaceDir != "" {
-		_ = o.gitService.AutoSnapshot(o.workspaceDir)
+	// Snapshot the workspace dir once for this task run — SetWorkspaceDir can be
+	// called concurrently from the main goroutine while this task is executing.
+	workspaceDir := o.GetWorkspaceDir()
+
+	if workspaceDir != "" {
+		_ = o.gitService.AutoSnapshot(workspaceDir)
 	}
 
 	fullPrompt := task.Prompt
 	if fullPrompt == "" {
 		fullPrompt = task.Description
 	}
-	if o.workspaceDir != "" {
-		fullPrompt = fmt.Sprintf("[DIRECTIVE: CREATE OR MODIFY FILES DIRECTLY IN WORKSPACE %s]\n\n%s", o.workspaceDir, fullPrompt)
+	if workspaceDir != "" {
+		fullPrompt = fmt.Sprintf("[DIRECTIVE: CREATE OR MODIFY FILES DIRECTLY IN WORKSPACE %s]\n\n%s", workspaceDir, fullPrompt)
 	}
 
-	result := o.cliRunner.RunAgentCtx(ctx, agent, fullPrompt, onLog, o.workspaceDir)
+	result := o.cliRunner.RunAgentCtx(ctx, agent, fullPrompt, onLog, workspaceDir)
 
 	// If the task was stopped by the user mid-flight, mark it and bail out.
 	if ctx.Err() != nil {
@@ -459,7 +481,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		agent.Model = newModel
 		_ = o.agentRepo.Update(agent)
 		onLog(fmt.Sprintf("⚠️ Smart Fallback: Switched to %s (%s)", newProvider, newModel), "WARN")
-		result = o.cliRunner.RunAgentCtx(ctx, agent, fullPrompt, onLog, o.workspaceDir)
+		result = o.cliRunner.RunAgentCtx(ctx, agent, fullPrompt, onLog, workspaceDir)
 		if ctx.Err() != nil {
 			o.markStopped(task, agent)
 			return
@@ -469,9 +491,9 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	// Build verification: an agent's task is only "done" if the workspace still
 	// builds. A failed build is turned into a task failure so the retry loop makes
 	// the agent fix it.
-	if result.Success && o.GetVerifyBuild() && o.workspaceDir != "" {
+	if result.Success && o.GetVerifyBuild() && workspaceDir != "" {
 		onLog("🔧 Đang verify build workspace (go build / npm build)...", "SEND")
-		vr := o.verifySvc.Verify(o.workspaceDir)
+		vr := o.verifySvc.Verify(workspaceDir)
 		if vr.Ran && !vr.Passed {
 			result.Success = false
 			result.Error = "Build verification FAILED:\n" + vr.Report
@@ -491,6 +513,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 			costStr = fmt.Sprintf(" · $%.4f", result.CostUSD)
 		}
 		onLog(fmt.Sprintf("DONE '%s' (%.1fs · %d tokens%s)", task.Title, result.DurationSec, result.TokensUsed, costStr), "SUCCESS")
+		go o.notifierSvc.NotifyTaskEvent("task_done", task.Title, "done", fmt.Sprintf("Agent %s hoàn thành trong %.1fs", agent.Name, result.DurationSec))
 	} else {
 		task.RetryCount++
 		if task.RetryCount < task.MaxRetries {
@@ -500,6 +523,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		} else {
 			_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", result.Error, "")
 			onLog(fmt.Sprintf("FAILED '%s' after max retries", task.Title), "ERROR")
+			go o.notifierSvc.NotifyTaskEvent("task_failed", task.Title, "failed", result.Error)
 		}
 		agent.Status = "idle"
 		agent.LastError = result.Error

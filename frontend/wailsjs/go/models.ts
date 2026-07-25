@@ -259,6 +259,20 @@ export namespace models {
 	        this.recent_workspaces = source["recent_workspaces"];
 	    }
 	}
+	export class IntegrationsConfig {
+	    outbound_webhook_url: string;
+	    mcp_connection_string: string;
+
+	    static createFrom(source: any = {}) {
+	        return new IntegrationsConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.outbound_webhook_url = source["outbound_webhook_url"];
+	        this.mcp_connection_string = source["mcp_connection_string"];
+	    }
+	}
 
 }
 

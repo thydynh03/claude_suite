@@ -40,7 +40,8 @@ type App struct {
 	pipelineEngine  *pipeline.PipelineEngine
 	oauthListener   *services.OAuthListenerService
 
-	workspaceConfig models.WorkspaceConfig
+	workspaceConfig    models.WorkspaceConfig
+	integrationsConfig models.IntegrationsConfig
 }
 
 // NewApp creates a new App application struct
@@ -101,6 +102,7 @@ func (a *App) startup(ctx context.Context) {
 	a.schedulerSvc.Start()
 
 	a.loadWorkspaceConfig()
+	a.loadIntegrationsConfig()
 	if a.workspaceConfig.LastWorkspaceFolder != "" {
 		a.orchestrator.SetWorkspaceDir(a.workspaceConfig.LastWorkspaceFolder)
 	}
@@ -585,6 +587,36 @@ func (a *App) saveWorkspaceConfig() {
 	cfgPath := filepath.Join(dbDir, "workspace_config.json")
 	data, _ := json.MarshalIndent(a.workspaceConfig, "", "  ")
 	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
+// ── Integrations Config (outbound webhook + MCP) ───────────────────────
+
+func (a *App) loadIntegrationsConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "integrations_config.json")
+	data, err := os.ReadFile(cfgPath)
+	if err == nil {
+		_ = json.Unmarshal(data, &a.integrationsConfig)
+	}
+	a.orchestrator.SetNotifierURL(a.integrationsConfig.OutboundWebhookURL)
+}
+
+func (a *App) saveIntegrationsConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "integrations_config.json")
+	data, _ := json.MarshalIndent(a.integrationsConfig, "", "  ")
+	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
+func (a *App) GetIntegrationsConfig() models.IntegrationsConfig {
+	return a.integrationsConfig
+}
+
+func (a *App) SaveIntegrationsConfig(cfg models.IntegrationsConfig) models.IntegrationsConfig {
+	a.integrationsConfig = cfg
+	a.saveIntegrationsConfig()
+	a.orchestrator.SetNotifierURL(cfg.OutboundWebhookURL)
+	return a.integrationsConfig
 }
 
 func (a *App) addRecentWorkspace(dir string) {

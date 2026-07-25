@@ -39,6 +39,13 @@
     await loadAgents();
     await loadAntiKeys();
     try {
+      if ((AppBindings as any).GetIntegrationsConfig) {
+        const cfg = await (AppBindings as any).GetIntegrationsConfig();
+        webhookUrl = cfg?.outbound_webhook_url || '';
+        mcpConnectionString = cfg?.mcp_connection_string || '';
+      }
+    } catch (e) {}
+    try {
       if ((AppBindings as any).GetAppVersion) {
         currentAppVersion = await (AppBindings as any).GetAppVersion();
       }
@@ -185,10 +192,17 @@
 
   async function handleSaveIntegrations() {
     isIntegrationsSaving = true;
-    setTimeout(() => {
+    try {
+      await (AppBindings as any).SaveIntegrationsConfig({
+        outbound_webhook_url: webhookUrl.trim(),
+        mcp_connection_string: mcpConnectionString.trim(),
+      });
+      addLog('Đã lưu cấu hình Webhook & MCP. Sự kiện task done/failed sẽ được gửi tới URL này.', 'SUCCESS');
+    } catch (e) {
+      addLog(`Lỗi lưu cấu hình integrations: ${e}`, 'ERROR');
+    } finally {
       isIntegrationsSaving = false;
-      addLog('Webhooks & MCP configuration saved.', 'SUCCESS');
-    }, 1000);
+    }
   }
 
   async function handleRunQuickCLI() {
@@ -595,8 +609,8 @@
       </div>
       
       <div class="space-y-2">
-        <label for="global-webhook-url" class="text-sm font-bold text-on-surface">Global Webhook URL</label>
-        <p class="text-xs text-on-surface-variant">Used to send automated events and task completion notifications to external services like Slack, Discord, or custom backends.</p>
+        <label for="global-webhook-url" class="text-sm font-bold text-on-surface">Outbound Notification Webhook</label>
+        <p class="text-xs text-on-surface-variant">Khi một task hoàn thành hoặc thất bại, hệ thống sẽ POST JSON tới URL này (Slack Incoming Webhook, Discord, hoặc endpoint tùy chỉnh).</p>
         <input 
           id="global-webhook-url"
           type="text" 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { activeTab, orchestratorRunning, sidebarCollapsed } from '../../lib/stores/appState';
+  import { t } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   async function handleExecutePlan() {
@@ -43,7 +44,7 @@
     >
       <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">rocket_launch</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">AI COCKPIT</span>
+        <span class="truncate">{$t('cockpit')}</span>
       {/if}
     </button>
 
@@ -56,7 +57,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">assignment</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">TASK BOARD & PLANNING</span>
+        <span class="truncate">{$t('kanban')}</span>
       {/if}
     </button>
 
@@ -69,7 +70,7 @@
     >
       <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">code</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">AGENT IDE STUDIO</span>
+        <span class="truncate">{$t('code_studio')}</span>
       {/if}
     </button>
 
@@ -82,7 +83,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">settings</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">STUDIO & SETTINGS</span>
+        <span class="truncate">{$t('settings')}</span>
       {/if}
     </button>
 
@@ -95,7 +96,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">apartment</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">VIRTUAL OFFICE</span>
+        <span class="truncate">{$t('virtual_office')}</span>
       {/if}
     </button>
 
@@ -108,7 +109,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">schedule</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">SCHEDULER</span>
+        <span class="truncate">{$t('scheduler')}</span>
       {/if}
     </button>
 
@@ -121,7 +122,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">language</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">BROWSER AGENT</span>
+        <span class="truncate">{$t('browser_agent')}</span>
       {/if}
     </button>
 
