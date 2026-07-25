@@ -49,6 +49,84 @@ func (g *GitService) AutoSnapshot(cwd string) error {
 	return cmdCommit.Run()
 }
 
+// allowedGitSubcommands are the git subcommands the in-app command box may run.
+// Destructive history rewrites and force pushes are intentionally excluded.
+var allowedGitSubcommands = map[string]bool{
+	"status": true, "add": true, "commit": true, "log": true, "diff": true,
+	"branch": true, "checkout": true, "switch": true, "restore": true, "reset": true,
+	"revert": true, "stash": true, "show": true, "remote": true, "fetch": true,
+	"pull": true, "tag": true, "rm": true, "mv": true, "config": true,
+}
+
+// RunCommand runs a whitelisted git command inside the workspace and returns its
+// combined output. Rejects non-git input and disallowed/destructive subcommands.
+func (g *GitService) RunCommand(cwd string, args []string) (string, error) {
+	if cwd == "" {
+		return "", fmt.Errorf("chưa chọn workspace")
+	}
+	// Accept an optional leading "git" token for convenience.
+	if len(args) > 0 && args[0] == "git" {
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		return "", fmt.Errorf("lệnh git rỗng")
+	}
+	sub := args[0]
+	if !allowedGitSubcommands[sub] {
+		return "", fmt.Errorf("lệnh git '%s' không được phép trong panel này", sub)
+	}
+	// Block force pushes explicitly.
+	joined := strings.Join(args, " ")
+	if sub == "push" || strings.Contains(joined, "--force") || strings.Contains(joined, "-f ") {
+		return "", fmt.Errorf("push/--force bị chặn trong panel vì an toàn")
+	}
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = cwd
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("git %s: %v", sub, err)
+	}
+	return string(out), nil
+}
+
+// GetWorkspaceDiff returns the current uncommitted diff (tracked changes plus a
+// listing of new untracked files) so the UI can show what an agent just changed.
+func (g *GitService) GetWorkspaceDiff(cwd string) (string, error) {
+	if cwd == "" {
+		return "", nil
+	}
+	check := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	check.Dir = cwd
+	if err := check.Run(); err != nil {
+		return "", nil // not a git repo — nothing to diff
+	}
+
+	var out bytes.Buffer
+	diff := exec.Command("git", "diff", "HEAD", "--stat", "--patch")
+	diff.Dir = cwd
+	diff.Stdout = &out
+	_ = diff.Run()
+
+	// Append untracked (new) files, which don't appear in `git diff HEAD`.
+	untracked := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	untracked.Dir = cwd
+	var uout bytes.Buffer
+	untracked.Stdout = &uout
+	_ = untracked.Run()
+	if files := strings.TrimSpace(uout.String()); files != "" {
+		out.WriteString("\n# Untracked (new) files:\n")
+		for _, f := range strings.Split(files, "\n") {
+			out.WriteString("+ " + f + "\n")
+		}
+	}
+
+	if strings.TrimSpace(out.String()) == "" {
+		return "Không có thay đổi nào trong workspace.", nil
+	}
+	return out.String(), nil
+}
+
 func (g *GitService) GetStatus(cwd string) (map[string]interface{}, error) {
 	if cwd == "" {
 		return map[string]interface{}{"is_repo": false}, nil

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
@@ -39,8 +40,14 @@ type App struct {
 	pipelineEngine  *pipeline.PipelineEngine
 	oauthListener   *services.OAuthListenerService
 
-	workspaceConfig models.WorkspaceConfig
+	workspaceConfig    models.WorkspaceConfig
+	integrationsConfig models.IntegrationsConfig
+	uiConfig           models.UIConfig
 }
+
+// currentOnboardingVersion bumps when the tour content changes materially, so an
+// updated build can show the refreshed tour once again.
+const currentOnboardingVersion = "1"
 
 // NewApp creates a new App application struct
 func NewApp() *App {
@@ -100,8 +107,20 @@ func (a *App) startup(ctx context.Context) {
 	a.schedulerSvc.Start()
 
 	a.loadWorkspaceConfig()
+	a.loadIntegrationsConfig()
+	a.loadUIConfig()
+	a.loadAntiKeys()
 	if a.workspaceConfig.LastWorkspaceFolder != "" {
 		a.orchestrator.SetWorkspaceDir(a.workspaceConfig.LastWorkspaceFolder)
+	}
+
+	// Recover tasks left "running" by a previous session that was killed mid-flight.
+	if n, err := a.taskRepo.ResetRunningTasks(); err == nil && n > 0 {
+		wailsRuntime.EventsEmit(ctx, "log_entry", map[string]string{
+			"message": fmt.Sprintf("♻️ Đã khôi phục %d task đang chạy dở về Backlog sau khi khởi động lại.", n),
+			"level":   "WARN",
+			"time":    time.Now().Format("15:04:05"),
+		})
 	}
 }
 
@@ -160,31 +179,49 @@ func (a *App) GetAgents() ([]models.Agent, error) {
 	return a.agentRepo.GetAll()
 }
 
-func (a *App) SaveAgent(agent models.Agent) error {
-	if agent.AgentID == "" {
-		return a.agentRepo.Create(&agent)
+func (a *App) emitAgentsUpdated() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "agent_updated", nil)
 	}
-	return a.agentRepo.Update(&agent)
+}
+
+func (a *App) SaveAgent(agent models.Agent) error {
+	var err error
+	if agent.AgentID == "" {
+		err = a.agentRepo.Create(&agent)
+	} else {
+		err = a.agentRepo.Update(&agent)
+	}
+	if err == nil {
+		a.emitAgentsUpdated()
+	}
+	return err
 }
 
 func (a *App) DeleteAgent(agentID string) error {
-	return a.agentRepo.Delete(agentID)
+	err := a.agentRepo.Delete(agentID)
+	if err == nil {
+		a.emitAgentsUpdated()
+	}
+	return err
 }
 
 func (a *App) ResetAgentsToDefaults() error {
-	return a.agentRepo.ResetToDefaults()
-}
-
-// ── Tasks CRUD ─────────────────────────────────────────────────────────
-
-func (a *App) GetTasks() ([]models.Task, error) {
-	return a.taskRepo.GetAll()
+	err := a.agentRepo.ResetToDefaults()
+	if err == nil {
+		a.emitAgentsUpdated()
+	}
+	return err
 }
 
 func (a *App) emitBoardUpdated() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "board_updated", nil)
 	}
+}
+
+func (a *App) GetTasks() ([]models.Task, error) {
+	return a.taskRepo.GetAll()
 }
 
 func (a *App) CreateTask(task models.Task) error {
@@ -255,8 +292,43 @@ func (a *App) Ping() bool {
 	return true
 }
 
-func (a *App) ResolveApproval(approved bool) {
-	a.orchestrator.ResolveApproval(approved)
+func (a *App) ResolveApproval(taskID string, approved bool) {
+	a.orchestrator.ResolveApproval(taskID, approved)
+}
+
+func (a *App) StopTask(taskID string) bool {
+	return a.orchestrator.StopTask(taskID)
+}
+
+func (a *App) RetryTask(taskID string) error {
+	return a.orchestrator.RetryTask(taskID)
+}
+
+func (a *App) SetMaxConcurrency(n int) int {
+	a.orchestrator.SetMaxConcurrency(n)
+	return a.orchestrator.GetMaxConcurrency()
+}
+
+func (a *App) GetMaxConcurrency() int {
+	return a.orchestrator.GetMaxConcurrency()
+}
+
+func (a *App) SetVerifyBuild(enabled bool) bool {
+	a.orchestrator.SetVerifyBuild(enabled)
+	return enabled
+}
+
+func (a *App) GetVerifyBuild() bool {
+	return a.orchestrator.GetVerifyBuild()
+}
+
+func (a *App) SetTaskTimeoutMinutes(minutes int) int {
+	cli.SetTaskTimeout(time.Duration(minutes) * time.Minute)
+	return int(cli.TaskTimeout() / time.Minute)
+}
+
+func (a *App) GetTaskTimeoutMinutes() int {
+	return int(cli.TaskTimeout() / time.Minute)
 }
 
 func (a *App) SetAutoApproveAll(enabled bool) bool {
@@ -448,6 +520,40 @@ func (a *App) GetGitStatus() (map[string]interface{}, error) {
 	return a.gitService.GetStatus(a.workspaceConfig.LastWorkspaceFolder)
 }
 
+func (a *App) GetWorkspaceDiff() (string, error) {
+	return a.gitService.GetWorkspaceDiff(a.workspaceConfig.LastWorkspaceFolder)
+}
+
+func (a *App) RunGitCommand(args []string) (string, error) {
+	return a.gitService.RunCommand(a.workspaceConfig.LastWorkspaceFolder, args)
+}
+
+// GenerateCommitMessage asks the AI to write a Conventional Commits message from
+// the current workspace diff.
+func (a *App) GenerateCommitMessage() (string, error) {
+	diff, err := a.gitService.GetWorkspaceDiff(a.workspaceConfig.LastWorkspaceFolder)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(diff) == "" || strings.Contains(diff, "Không có thay đổi") {
+		return "", fmt.Errorf("không có thay đổi để tạo commit message")
+	}
+	if len(diff) > 12000 {
+		diff = diff[:12000]
+	}
+	system := "You are a senior engineer writing a Conventional Commits message. Reply with ONLY the commit message: a concise type(scope): subject line under 72 chars, optionally a blank line and short bullet body. No code fences, no explanation."
+	prompt := "Write a commit message for this diff:\n\n" + diff
+	result := a.cliRunner.RunOnce(prompt, "claude-haiku-4-5", system, nil, a.workspaceConfig.LastWorkspaceFolder)
+	if result == nil || !result.Success {
+		msg := "unknown error"
+		if result != nil {
+			msg = result.Error
+		}
+		return "", fmt.Errorf("AI lỗi khi tạo commit message: %s", msg)
+	}
+	return strings.TrimSpace(result.Output), nil
+}
+
 func (a *App) GetGitBranches() (*services.GitBranchInfo, error) {
 	return a.gitService.GetBranches(a.workspaceConfig.LastWorkspaceFolder)
 }
@@ -490,17 +596,120 @@ func (a *App) saveWorkspaceConfig() {
 	_ = os.WriteFile(cfgPath, data, 0644)
 }
 
-func (a *App) addRecentWorkspace(dir string) {
-	var newRecent []string
-	newRecent = append(newRecent, dir)
+// ── Integrations Config (outbound webhook + MCP) ───────────────────────
 
+func (a *App) loadIntegrationsConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "integrations_config.json")
+	data, err := os.ReadFile(cfgPath)
+	if err == nil {
+		_ = json.Unmarshal(data, &a.integrationsConfig)
+	}
+	a.orchestrator.SetNotifierURL(a.integrationsConfig.OutboundWebhookURL)
+}
+
+func (a *App) saveIntegrationsConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "integrations_config.json")
+	data, _ := json.MarshalIndent(a.integrationsConfig, "", "  ")
+	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
+// ── Anti Keys Config ───────────────────────────────────────────────────
+
+func (a *App) loadAntiKeys() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
+	data, err := os.ReadFile(cfgPath)
+	if err == nil {
+		var keys []cli.AntiAccountKey
+		if json.Unmarshal(data, &keys) == nil {
+			cli.GlobalAntiPool.SetKeys(keys)
+		}
+	}
+}
+
+func (a *App) saveAntiKeys() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
+	data, _ := json.MarshalIndent(cli.GlobalAntiPool.GetKeys(), "", "  ")
+	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
+// ── First-run Onboarding State ─────────────────────────────────────────
+
+func (a *App) loadUIConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "ui_config.json")
+	if data, err := os.ReadFile(cfgPath); err == nil {
+		_ = json.Unmarshal(data, &a.uiConfig)
+	}
+}
+
+func (a *App) saveUIConfig() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "ui_config.json")
+	data, _ := json.MarshalIndent(a.uiConfig, "", "  ")
+	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
+// ShouldShowOnboarding reports whether the welcome tour should open — true on a
+// fresh install, or when the tour content version has changed since it was seen.
+func (a *App) ShouldShowOnboarding() bool {
+	return !a.uiConfig.OnboardingSeen || a.uiConfig.OnboardingVersion != currentOnboardingVersion
+}
+
+// SetOnboardingSeen records that the user finished (or skipped) the tour.
+func (a *App) SetOnboardingSeen(seen bool) bool {
+	a.uiConfig.OnboardingSeen = seen
+	a.uiConfig.OnboardingVersion = currentOnboardingVersion
+	a.saveUIConfig()
+	return seen
+}
+
+func (a *App) GetIntegrationsConfig() models.IntegrationsConfig {
+	return a.integrationsConfig
+}
+
+func (a *App) SaveIntegrationsConfig(cfg models.IntegrationsConfig) models.IntegrationsConfig {
+	a.integrationsConfig = cfg
+	a.saveIntegrationsConfig()
+	a.orchestrator.SetNotifierURL(cfg.OutboundWebhookURL)
+	return a.integrationsConfig
+}
+
+func (a *App) addRecentWorkspace(dir string) {
+	if dir == "" {
+		return
+	}
+	// Most-recent-first, de-duplicated, capped at 8 entries.
+	newRecent := []string{dir}
+	for _, prev := range a.workspaceConfig.RecentWorkspaces {
+		if prev != dir {
+			newRecent = append(newRecent, prev)
+		}
+	}
+	if len(newRecent) > 8 {
+		newRecent = newRecent[:8]
+	}
 	a.workspaceConfig.RecentWorkspaces = newRecent
 }
 
-// ── Native Go Chrome CDP Browser Agent ─────────────────────────────────
+func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, model string, takeScreenshot bool, headless bool, useRealProfile bool, maxSteps int) (*services.BrowserActionResult, error) {
+	systemPrompt := ""
+	if roleFile != "" {
+		systemPrompt, _ = a.GetRoleContent(roleFile)
+	}
 
-func (a *App) RunBrowserTask(targetURL string, takeScreenshot bool) (*services.BrowserActionResult, error) {
-	return a.browserService.RunBrowserTask(targetURL, takeScreenshot)
+	var runner cli.CLIRunner
+	modelLower := strings.ToLower(model)
+	if strings.Contains(modelLower, "gemini") || strings.Contains(modelLower, "thinking") {
+		runner = cli.NewAntigravityCLI()
+	} else {
+		runner = a.cliRunner
+	}
+
+	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner)
 }
 
 // ── Anti CLI Multi-Account / Key Pool ──────────────────────────────────
@@ -511,32 +720,83 @@ func (a *App) GetAntiAccountKeys() []cli.AntiAccountKey {
 
 func (a *App) AddAntiAccountKey(name, apiKey string) {
 	cli.GlobalAntiPool.AddKey(name, apiKey)
+	a.saveAntiKeys()
 }
 
 func (a *App) AddAntiOAuthAccountKey(name, oauthToken string) {
 	cli.GlobalAntiPool.AddOAuthKey(name, oauthToken)
+	a.saveAntiKeys()
 }
 
-func getDefClientID() string {
-	p1 := "1072006483967-"
-	p2 := "hi79hmm245ftvfq5k77jqevjr0oq359k."
-	p3 := "apps.googleusercontent.com"
-	return p1 + p2 + p3
+func (a *App) DeleteAntiAccountKey(id string) bool {
+	res := cli.GlobalAntiPool.DeleteKey(id)
+	a.saveAntiKeys()
+	return res
 }
 
-func getDefClientSecret() string {
-	p1 := "GOCSPX-"
-	p2 := "j5DCcC2X_aNf9Vn-"
-	p3 := "H1zmTrGiTJku"
-	return p1 + p2 + p3
+func (a *App) SetCurrentAntiAccountKey(id string) bool {
+	res := cli.GlobalAntiPool.SetCurrentKey(id)
+	a.saveAntiKeys()
+	return res
+}
+
+func (a *App) ToggleAntiAccountKeyStatus(id string) string {
+	res := cli.GlobalAntiPool.ToggleKeyStatus(id)
+	a.saveAntiKeys()
+	return res
+}
+
+func (a *App) WarmupAntiAccountKeys() {
+	cli.GlobalAntiPool.WarmupKeys()
+	a.saveAntiKeys()
+}
+
+// oauthCreds resolves GCP OAuth credentials from (1) environment variables,
+// (2) a local gcp_oauth.json config next to the DB, else empty. Secrets must NOT
+// be committed to source — set CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET or
+// drop a gcp_oauth.json ({"client_id":"...","client_secret":"..."}) in the data dir.
+func oauthCreds() (string, string) {
+	id := os.Getenv("CLAUDE_SUITE_GCP_CLIENT_ID")
+	secret := os.Getenv("CLAUDE_SUITE_GCP_CLIENT_SECRET")
+	if id != "" && secret != "" {
+		return id, secret
+	}
+
+	cfgPath := filepath.Join(filepath.Dir(database.GetDBPath()), "gcp_oauth.json")
+	if data, err := os.ReadFile(cfgPath); err == nil {
+		var fileCreds struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+		}
+		if json.Unmarshal(data, &fileCreds) == nil {
+			if id == "" {
+				id = fileCreds.ClientID
+			}
+			if secret == "" {
+				secret = fileCreds.ClientSecret
+			}
+		}
+	}
+	return id, secret
 }
 
 func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
-	clientID := customClientID
-	clientSecret := getDefClientSecret()
+	defID, clientSecret := oauthCreds()
 
+	clientID := customClientID
 	if clientID == "" {
-		clientID = getDefClientID()
+		clientID = defID
+	}
+
+	if clientID == "" || clientSecret == "" {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+				"message": "⚠️ Thiếu GCP OAuth credentials. Đặt biến môi trường CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET hoặc tạo file gcp_oauth.json trong thư mục dữ liệu.",
+				"level":   "ERROR",
+				"time":    time.Now().Format("15:04:05"),
+			})
+		}
+		return ""
 	}
 
 	if a.oauthListener != nil {
@@ -563,6 +823,69 @@ func (a *App) OpenURLInBrowser(targetURL string) {
 	}
 }
 
+// ── Agent Roles (Markdown Repository) ───────────────────────────────────
+
+func (a *App) getRolesDir() string {
+	// For simplicity, we use e:\exe\roles as the root roles dir
+	// However, a better approach is to use a folder relative to the executable
+	dir := filepath.Join(filepath.Dir(database.GetDBPath()), "roles")
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		_ = os.MkdirAll(dir, 0755)
+		// Generate default roles
+		defaultRoles := map[string]string{
+			"agents.md":          "You are an AI assistant in Claude Suite. Always follow instructions carefully.",
+			"claude.md":          "You are Claude. Answer precisely.",
+			"antigravity.md":     "You are Antigravity model. Answer smartly.",
+			"front-end-agent.md": "You are a Front-End Agent. Focus on UI/UX, Svelte, and TailwindCSS.",
+			"back-end-agent.md":  "You are a Back-End Agent. Focus on Go, performance, and databases.",
+		}
+		for name, content := range defaultRoles {
+			_ = os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
+		}
+	}
+	return dir
+}
+
+func (a *App) ListRoles() ([]string, error) {
+	dir := a.getRolesDir()
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var roles []string
+	for _, f := range files {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".md") {
+			roles = append(roles, f.Name())
+		}
+	}
+	return roles, nil
+}
+
+func (a *App) GetRoleContent(filename string) (string, error) {
+	dir := a.getRolesDir()
+	path := filepath.Join(dir, filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func (a *App) SaveRoleContent(filename string, content string) error {
+	dir := a.getRolesDir()
+	if !strings.HasSuffix(filename, ".md") {
+		filename += ".md"
+	}
+	path := filepath.Join(dir, filename)
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func (a *App) DeleteRole(filename string) error {
+	dir := a.getRolesDir()
+	path := filepath.Join(dir, filename)
+	return os.Remove(path)
+}
+
 type SystemMetrics struct {
 	AllocMemoryMB   uint64 `json:"alloc_memory_mb"`
 	SysMemoryMB     uint64 `json:"sys_memory_mb"`
@@ -583,4 +906,25 @@ func (a *App) GetSystemMetrics() SystemMetrics {
 		NumCPU:          runtime.NumCPU(),
 		ActiveKeysCount: len(keys),
 	}
+}
+
+func (a *App) GetGCPOAuthCredentials() map[string]string {
+	id, secret := oauthCreds()
+	return map[string]string{
+		"client_id":     id,
+		"client_secret": secret,
+	}
+}
+
+func (a *App) SaveGCPOAuthCredentials(clientID, clientSecret string) error {
+	cfgPath := filepath.Join(filepath.Dir(database.GetDBPath()), "gcp_oauth.json")
+	fileCreds := map[string]string{
+		"client_id":     clientID,
+		"client_secret": clientSecret,
+	}
+	data, err := json.MarshalIndent(fileCreds, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cfgPath, data, 0644)
 }

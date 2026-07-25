@@ -1,5 +1,6 @@
 <script lang="ts">
   import { activeTab, orchestratorRunning, sidebarCollapsed } from '../../lib/stores/appState';
+  import { t } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   async function handleExecutePlan() {
@@ -12,9 +13,6 @@
   <!-- Brand Header & Collapse Toggle -->
   <div class="px-4 mb-6 flex items-center justify-between">
     <div class="flex items-center gap-2 overflow-hidden">
-      <div class="w-8 h-8 rounded-lg bg-primary flex-shrink-0 flex items-center justify-center shadow-sm">
-        <span class="material-symbols-outlined text-on-primary text-xl">smart_toy</span>
-      </div>
       {#if !$sidebarCollapsed}
         <div class="truncate">
           <h2 class="font-bold text-primary leading-tight text-sm truncate">Agent Center</h2>
@@ -43,7 +41,7 @@
     >
       <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">rocket_launch</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">AI COCKPIT</span>
+        <span class="truncate">{$t('cockpit')}</span>
       {/if}
     </button>
 
@@ -56,7 +54,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">assignment</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">TASK BOARD & PLANNING</span>
+        <span class="truncate">{$t('kanban')}</span>
       {/if}
     </button>
 
@@ -69,7 +67,7 @@
     >
       <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">code</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">AGENT IDE STUDIO</span>
+        <span class="truncate">{$t('code_studio')}</span>
       {/if}
     </button>
 
@@ -82,7 +80,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">settings</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">STUDIO & SETTINGS</span>
+        <span class="truncate">{$t('settings')}</span>
       {/if}
     </button>
 
@@ -95,7 +93,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">apartment</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">VIRTUAL OFFICE</span>
+        <span class="truncate">{$t('virtual_office')}</span>
       {/if}
     </button>
 
@@ -108,7 +106,7 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">schedule</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">SCHEDULER</span>
+        <span class="truncate">{$t('scheduler')}</span>
       {/if}
     </button>
 
@@ -121,7 +119,32 @@
     >
       <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">language</span>
       {#if !$sidebarCollapsed}
-        <span class="truncate">BROWSER AGENT</span>
+        <span class="truncate">{$t('browser_agent')}</span>
+      {/if}
+    </button>
+
+    <button
+      type="button"
+      on:click|preventDefault={() => activeTab.set('git')}
+      title="Source Control"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'git' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+    >
+      <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">account_tree</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">SOURCE CONTROL</span>
+      {/if}
+    </button>
+    <button
+      type="button"
+      on:click|preventDefault={() => activeTab.set('roles')}
+      title="Agent Roles"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'roles' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+    >
+      <span class="material-symbols-outlined text-tertiary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">group</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">AGENT ROLES</span>
       {/if}
     </button>
   </nav>

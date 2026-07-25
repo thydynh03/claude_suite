@@ -3,7 +3,7 @@
   import type { Task } from '../../lib/types';
   import KanbanView from './KanbanView.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, orchestratorRunning, tasksStore } from '../../lib/stores/appState';
+  import { addLog, orchestratorRunning, tasksStore, agentsStore } from '../../lib/stores/appState';
 
   let subTab: 'kanban' | 'builder' | 'reports' = 'kanban';
   let requirementText = '';
@@ -25,26 +25,49 @@
   $: estimatedTokens = Math.round((requirementText.length * 3.5) + ((tasks || []).reduce((acc, t) => acc + (t.prompt?.length || 100), 0) * 2.5) + 500);
   $: tokenText = estimatedTokens > 999 ? `~${(estimatedTokens / 1000).toFixed(1)}k` : `~${estimatedTokens}`;
   $: confidence = (tasks || []).length > 3 ? 98 : (tasks || []).length > 0 ? 88 : 0;
+  // Real orchestrator load derived from live task statuses (not a hardcoded number)
+  $: runningCount = (tasks || []).filter((t) => t.status === 'running').length;
+  $: doneCount = (tasks || []).filter((t) => t.status === 'done').length;
+  $: totalCount = (tasks || []).length;
+  $: orchestratorLoad = totalCount === 0 ? 0
+      : Math.round(((runningCount + doneCount) / totalCount) * 100);
 
-  let unoff: any;
+  let unoffAgents: any;
 
-  onMount(() => {
-    loadTasks();
-    if ((window as any)?.runtime) {
-      unoff = (window as any).runtime.EventsOn('board_updated', () => {
-        loadTasks();
+  async function initTaskBoard() {
+    await loadTasks();
+    await loadAgents();
+    // board_updated is handled centrally in App.svelte (refreshes tasksStore).
+    if ((window as any)?.runtime?.EventsOn) {
+      unoffAgents = (window as any).runtime.EventsOn('agent_updated', () => {
+        loadAgents();
       });
     }
+  }
+
+  onMount(() => {
+    initTaskBoard();
     return () => {
       unsubscribeTasks();
-      if (unoff && typeof unoff === 'function') unoff();
+      if (unoffAgents && typeof unoffAgents === 'function') unoffAgents();
     };
   });
+
+  async function loadAgents() {
+    try {
+      if ((AppBindings as any).GetAgents) {
+        const res = await (AppBindings as any).GetAgents();
+        if (Array.isArray(res)) {
+          agentsStore.set(res);
+        }
+      }
+    } catch (e) {}
+  }
 
   async function loadTasks() {
     try {
       if ((window as any)?.go?.main?.App) {
-        const res = await AppBindings.GetTasks();
+        const res = await (AppBindings as any).GetTasks();
         const loaded = Array.isArray(res) ? res : [];
         tasksStore.set(loaded);
       }
@@ -124,6 +147,8 @@
 
   async function handleExecutePlan() {
     subTab = 'kanban'; // Auto-switch to Interactive Kanban view
+    await loadTasks();
+    await loadAgents();
     await AppBindings.StartOrchestrator();
     addLog('Orchestrator started! Switched to Interactive Kanban.', 'SUCCESS');
   }
@@ -322,17 +347,18 @@
     </div>
     <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
       <span class="text-[10px] font-bold uppercase text-outline">ORCHESTRATOR LOAD</span>
-      <span class="text-2xl font-bold {$orchestratorRunning ? 'text-primary' : 'text-on-surface'}">{$orchestratorRunning ? '85%' : '0%'}</span>
+      <span class="text-2xl font-bold {runningCount > 0 ? 'text-primary' : 'text-on-surface'}">{orchestratorLoad}%</span>
       <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden mt-2">
-        <div class="h-full bg-primary transition-all duration-500" style="width: {$orchestratorRunning ? '85%' : '0%'}"></div>
+        <div class="h-full bg-primary transition-all duration-500" style="width: {orchestratorLoad}%"></div>
       </div>
+      <span class="text-[9px] text-outline mt-1">{runningCount} running · {doneCount}/{totalCount} done</span>
     </div>
     <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
       <span class="text-[10px] font-bold uppercase text-outline">SYSTEM STATUS</span>
       <div class="flex items-center gap-2 mt-auto">
-        <div class="w-3 h-3 rounded-full {$orchestratorRunning ? 'bg-primary animate-ping' : 'bg-emerald-500 animate-pulse'}"></div>
-        <span class="text-base font-bold {$orchestratorRunning ? 'text-primary' : 'text-emerald-600'}">
-          {$orchestratorRunning ? 'DISPATCHING' : 'READY'}
+        <div class="w-3 h-3 rounded-full {runningCount > 0 ? 'bg-primary animate-ping' : $orchestratorRunning ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}"></div>
+        <span class="text-base font-bold {runningCount > 0 ? 'text-primary' : $orchestratorRunning ? 'text-amber-600' : 'text-emerald-600'}">
+          {runningCount > 0 ? 'DISPATCHING' : $orchestratorRunning ? 'SCANNING' : 'READY'}
         </span>
       </div>
     </div>

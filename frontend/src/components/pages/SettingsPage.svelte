@@ -4,8 +4,9 @@
   import { logs, addLog, agentsStore } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import Dropdown from '../ui/Dropdown.svelte';
+  import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
 
-  let subTab: 'agents' | 'cli' | 'logs' | 'updates' | 'integrations' = 'agents';
+  let subTab: 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' = 'oauth_pool';
   // Use global store so agent list persists across tab switches
   let agents: Agent[] = [];
   const unsubscribeAgents = agentsStore.subscribe((v) => { agents = v as Agent[]; });
@@ -38,6 +39,13 @@
   async function initSettings() {
     await loadAgents();
     await loadAntiKeys();
+    try {
+      if ((AppBindings as any).GetIntegrationsConfig) {
+        const cfg = await (AppBindings as any).GetIntegrationsConfig();
+        webhookUrl = cfg?.outbound_webhook_url || '';
+        mcpConnectionString = cfg?.mcp_connection_string || '';
+      }
+    } catch (e) {}
     try {
       if ((AppBindings as any).GetAppVersion) {
         currentAppVersion = await (AppBindings as any).GetAppVersion();
@@ -138,16 +146,68 @@
   }
 
   async function handleSaveAgent(agent: Agent) {
-    // In a real app, call a Go binding like AppBindings.SaveAgent(agent)
-    addLog(`Agent ${agent.name} saved.`, 'SUCCESS');
+    try {
+      await AppBindings.SaveAgent(agent as any);
+      addLog(`Đã lưu Agent ${agent.name}.`, 'SUCCESS');
+      // agent_updated event refreshes agentsStore globally (3D office, kanban, cockpit).
+    } catch (e) {
+      addLog(`Lỗi lưu agent: ${e}`, 'ERROR');
+    }
+  }
+
+  let newAgentName = '';
+  let newAgentRole = '';
+  async function handleAddAgent() {
+    const name = newAgentName.trim();
+    if (!name) return;
+    const agent: any = {
+      agent_id: '',
+      name,
+      role: newAgentRole.trim() || 'Custom Agent',
+      provider: 'claude_cli',
+      model: 'claude-sonnet-4-5',
+      system: `You are ${name}, ${newAgentRole.trim() || 'a specialized AI agent'}.`,
+      icon: 'smart_toy',
+      status: 'idle',
+      tasks_done: 0,
+      tokens_used: 0,
+      token_limit: 0,
+      token_remaining: 0,
+    };
+    try {
+      await AppBindings.SaveAgent(agent);
+      newAgentName = '';
+      newAgentRole = '';
+      addLog(`Đã tạo Agent mới: ${name}.`, 'SUCCESS');
+    } catch (e) {
+      addLog(`Lỗi tạo agent: ${e}`, 'ERROR');
+    }
+  }
+
+  async function handleDeleteAgent(agent: Agent) {
+    if (!(agent as any).agent_id) return;
+    if (!confirm(`Xóa agent "${agent.name}"?`)) return;
+    try {
+      await AppBindings.DeleteAgent((agent as any).agent_id);
+      addLog(`Đã xóa Agent ${agent.name}.`, 'WARN');
+    } catch (e) {
+      addLog(`Lỗi xóa agent: ${e}`, 'ERROR');
+    }
   }
 
   async function handleSaveIntegrations() {
     isIntegrationsSaving = true;
-    setTimeout(() => {
+    try {
+      await (AppBindings as any).SaveIntegrationsConfig({
+        outbound_webhook_url: webhookUrl.trim(),
+        mcp_connection_string: mcpConnectionString.trim(),
+      });
+      addLog('Đã lưu cấu hình Webhook & MCP. Sự kiện task done/failed sẽ được gửi tới URL này.', 'SUCCESS');
+    } catch (e) {
+      addLog(`Lỗi lưu cấu hình integrations: ${e}`, 'ERROR');
+    } finally {
       isIntegrationsSaving = false;
-      addLog('Webhooks & MCP configuration saved.', 'SUCCESS');
-    }, 1000);
+    }
   }
 
   async function handleRunQuickCLI() {
@@ -246,6 +306,13 @@
   <div class="flex justify-center">
     <div class="bg-surface-container-high p-1 rounded-xl flex gap-1 border border-outline-variant">
       <button
+        on:click={() => (subTab = 'oauth_pool')}
+        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5
+        {subTab === 'oauth_pool' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+      >
+        <span class="material-symbols-outlined text-sm">key</span> Multi-Account OAuth Pool
+      </button>
+      <button
         on:click={() => (subTab = 'agents')}
         class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
         {subTab === 'agents' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
@@ -283,13 +350,30 @@
     </div>
   </div>
 
-  {#if subTab === 'agents'}
+  {#if subTab === 'oauth_pool'}
+    <OAuthPoolDashboard onOpenGoogleLogin={handleOpenGoogleLogin} />
+  {:else if subTab === 'agents'}
     <!-- Agents Registry View -->
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="font-bold text-sm text-on-surface">Corporate Agent Roles ({agents.length})</h3>
         <button on:click={handleResetAgents} class="bg-surface-container-highest border border-outline-variant px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-surface-container-high transition-all flex items-center gap-1">
           <span class="material-symbols-outlined text-sm">restart_alt</span> Reset Defaults
+        </button>
+      </div>
+
+      <!-- Add new agent (persists + syncs to 3D office, Kanban, Cockpit) -->
+      <div class="flex flex-wrap items-center gap-2 bg-surface-container-low/50 border border-outline-variant rounded-xl p-3">
+        <span class="material-symbols-outlined text-primary text-lg">person_add</span>
+        <input bind:value={newAgentName} placeholder="Tên agent mới..."
+          on:keydown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
+          class="flex-1 min-w-[140px] bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary" />
+        <input bind:value={newAgentRole} placeholder="Vai trò (role)..."
+          on:keydown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
+          class="flex-1 min-w-[140px] bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary" />
+        <button on:click={handleAddAgent} disabled={!newAgentName.trim()}
+          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">add</span> Tạo Agent
         </button>
       </div>
 
@@ -330,10 +414,11 @@
                 <div class="w-32">
                   <Dropdown
                     options={[
-                      { value: 'claude-cli', label: 'Claude CLI' },
-                      { value: 'anti-cli', label: 'Anti CLI' }
+                      { value: 'claude_cli', label: 'Claude CLI' },
+                      { value: 'anti_cli', label: 'Anti CLI' }
                     ]}
-                    value="claude-cli"
+                    value={agent.provider || 'claude_cli'}
+                    on:change={(e) => agent.provider = e.detail}
                   />
                 </div>
               </div>
@@ -348,6 +433,7 @@
                       { value: 'gemini-3.6-flash-high', label: 'Gemini Flash' }
                     ]}
                     value={agent.model}
+                    on:change={(e) => agent.model = e.detail}
                   />
                 </div>
               </div>
@@ -356,8 +442,11 @@
                 <span>Tokens Used:</span>
                 <span>{agent.tokens_used.toLocaleString()}</span>
               </div>
-              <div class="flex justify-end pt-2">
-                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90">
+              <div class="flex justify-end gap-2 pt-2">
+                <button on:click={() => handleDeleteAgent(agent)} class="bg-rose-500/10 text-rose-600 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm">delete</span> Xóa
+                </button>
+                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer">
                   Save
                 </button>
               </div>
@@ -534,8 +623,8 @@
       </div>
       
       <div class="space-y-2">
-        <label for="global-webhook-url" class="text-sm font-bold text-on-surface">Global Webhook URL</label>
-        <p class="text-xs text-on-surface-variant">Used to send automated events and task completion notifications to external services like Slack, Discord, or custom backends.</p>
+        <label for="global-webhook-url" class="text-sm font-bold text-on-surface">Outbound Notification Webhook</label>
+        <p class="text-xs text-on-surface-variant">Khi một task hoàn thành hoặc thất bại, hệ thống sẽ POST JSON tới URL này (Slack Incoming Webhook, Discord, hoặc endpoint tùy chỉnh).</p>
         <input 
           id="global-webhook-url"
           type="text" 
@@ -567,142 +656,7 @@
         </button>
       </div>
 
-      <!-- Antigravity Multi-Account / Key Pool Card -->
-      <div class="pt-6 border-t border-outline-variant space-y-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-xl">vpn_key</span>
-            <div>
-              <h4 class="font-bold text-sm text-on-surface">Antigravity Multi-Account / Key Pool</h4>
-              <p class="text-xs text-on-surface-variant">Tự động xoay vòng (Rotate) API Key khi bị dính lỗi Rate Limit 429 hoặc Quota Limit.</p>
-            </div>
-          </div>
-          <span class="text-[10px] bg-primary/10 text-primary px-2.5 py-1 rounded-full font-bold">Auto 429 Protection</span>
-        </div>
 
-        <div class="space-y-2">
-          <h5 class="text-xs font-bold text-on-surface uppercase tracking-wider">Bể chứa Tài khoản / Keys ({antiAccountKeys.length})</h5>
-          <div class="space-y-1.5">
-            {#each antiAccountKeys as k}
-              <div class="flex items-center justify-between p-2.5 bg-surface-container-low rounded-lg border border-outline-variant text-xs">
-                <div class="flex items-center gap-2 font-mono">
-                  <span class="material-symbols-outlined text-base {k.status === 'active' ? 'text-emerald-500' : 'text-amber-500'}">
-                    {k.status === 'active' ? 'check_circle' : 'error'}
-                  </span>
-                  <span class="font-bold text-on-surface">{k.name}</span>
-                  <span class="px-1.5 py-0.2 text-[9px] font-bold rounded uppercase {k.type === 'oauth_token' ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20' : 'bg-blue-500/10 text-blue-600 border border-blue-500/20'}">
-                    {k.type === 'oauth_token' ? 'OAuth' : 'API Key'}
-                  </span>
-                  {#if k.api_key || k.oauth_token}
-                    <span class="text-on-surface-variant text-[11px]">({(k.oauth_token || k.api_key).substring(0, 8)}...)</span>
-                  {/if}
-                </div>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase {k.status === 'active' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}">
-                  {k.status}
-                </span>
-              </div>
-            {/each}
-          </div>
-        </div>
-
-        <!-- Add New Backup Key / OAuth Form -->
-        <div class="pt-3 space-y-3 border-t border-outline-variant">
-          <div class="flex items-center justify-between">
-            <h5 class="text-xs font-bold text-on-surface">Thêm Tài Khoản Dự Phòng</h5>
-            <div class="flex bg-surface-container-high p-0.5 rounded-lg border border-outline-variant text-[11px]">
-              <button 
-                type="button"
-                on:click={() => newAuthType = 'api_key'}
-                class="px-2.5 py-1 rounded font-bold transition-all cursor-pointer {newAuthType === 'api_key' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-                🔑 API Key
-              </button>
-              <button 
-                type="button"
-                on:click={() => newAuthType = 'oauth_token'}
-                class="px-2.5 py-1 rounded font-bold transition-all cursor-pointer {newAuthType === 'oauth_token' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-                🔐 OAuth Token (Manager)
-              </button>
-            </div>
-          </div>
-
-          {#if newAuthType === 'oauth_token'}
-            <div class="p-3.5 bg-primary/10 border border-primary/20 rounded-xl space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-base">security</span> Antigravity Manager OAuth Setup
-                </span>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    on:click={() => handleOpenExternalUrl('https://aistudio.google.com/app/apikey')}
-                    class="bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-2.5 py-1 rounded-lg text-[11px] font-bold border border-outline-variant transition-all flex items-center gap-1 cursor-pointer">
-                    <span class="material-symbols-outlined text-xs text-amber-500">key</span> AI Studio Key
-                  </button>
-                  <button
-                    type="button"
-                    on:click={handleOpenGoogleLogin}
-                    class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs">
-                    <span class="material-symbols-outlined text-sm">open_in_new</span> 🌐 Đăng nhập bằng Google
-                  </button>
-                </div>
-              </div>
-
-              <!-- Optional Custom Client ID Input -->
-              <div class="space-y-1">
-                <div class="flex items-center justify-between text-[11px]">
-                  <span class="font-bold text-on-surface">Custom Google OAuth Client ID:</span>
-                  <div class="flex gap-2">
-                    <button 
-                      type="button"
-                      on:click={() => handleOpenExternalUrl('https://console.cloud.google.com/apis/credentials/consent')}
-                      class="text-rose-500 font-bold hover:underline text-[10px]">
-                      ⚠️ Sửa lỗi 403 Access Denied (Thêm Email vào Test Users)
-                    </button>
-                    <button 
-                      type="button"
-                      on:click={() => handleOpenExternalUrl('https://console.cloud.google.com/apis/credentials')}
-                      class="text-primary hover:underline text-[10px]">
-                      ☁️ GCP Credentials
-                    </button>
-                  </div>
-                </div>
-                <input 
-                  type="text" 
-                  bind:value={customClientId}
-                  placeholder="1072006483967-hi79hmm245ftvfq5k77jqevjr0oq359k.apps.googleusercontent.com (Mặc định đã cấu hình)"
-                  class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs focus:ring-1 focus:ring-primary outline-none font-mono"
-                />
-              </div>
-
-              <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold leading-normal flex items-center gap-1">
-                <span class="material-symbols-outlined text-sm">auto_mode</span>
-                🎉 <b>OAuth Tự Động 100%:</b> Bấm nút <b>🌐 Đăng nhập bằng Google</b> ➔ Đăng nhập thành công, hệ thống sẽ <b>TỰ ĐỘNG LƯU TOKEN VÀO BỂ CHỨA</b> mà bạn không cần phải copy hay dán gì cả!
-              </p>
-            </div>
-          {/if}
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <input 
-              type="text" 
-              bind:value={newKeyName}
-              placeholder={newAuthType === 'oauth_token' ? 'Tên Tài khoản OAuth (vd: Account Google #2)' : 'Tên Key (vd: Key Gemini Dự Phòng #2)'}
-              class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs focus:ring-1 focus:ring-primary outline-none"
-            />
-            <input 
-              type="text" 
-              bind:value={newKeyValue}
-              placeholder={newAuthType === 'oauth_token' ? 'OAuth Session / Access Token (ya29...)' : 'API Key / Token (AIzaSy...)'}
-              class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs focus:ring-1 focus:ring-primary outline-none font-mono"
-            />
-          </div>
-          <button 
-            type="button"
-            on:click={handleAddAntiKey}
-            class="bg-primary text-on-primary px-3.5 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1 cursor-pointer">
-            <span class="material-symbols-outlined text-sm">add</span> {newAuthType === 'oauth_token' ? 'Thêm OAuth Token vào Pool' : 'Thêm API Key vào Pool'}
-          </button>
-        </div>
-      </div>
     </div>
   {/if}
 </div>

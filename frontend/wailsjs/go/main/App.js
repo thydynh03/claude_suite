@@ -58,8 +58,16 @@ export function DeleteAgent(arg1) {
   return window['go']['main']['App']['DeleteAgent'](arg1);
 }
 
+export function DeleteAntiAccountKey(arg1) {
+  return window['go']['main']['App']['DeleteAntiAccountKey'](arg1);
+}
+
 export function DeleteDoneTasks() {
   return window['go']['main']['App']['DeleteDoneTasks']();
+}
+
+export function DeleteRole(arg1) {
+  return window['go']['main']['App']['DeleteRole'](arg1);
 }
 
 export function DeleteTask(arg1) {
@@ -76,6 +84,10 @@ export function DownloadAndUpdate(arg1) {
 
 export function ExportKanbanReport() {
   return window['go']['main']['App']['ExportKanbanReport']();
+}
+
+export function GenerateCommitMessage() {
+  return window['go']['main']['App']['GenerateCommitMessage']();
 }
 
 export function GetActiveSession(arg1) {
@@ -98,6 +110,10 @@ export function GetAutoApproveAll() {
   return window['go']['main']['App']['GetAutoApproveAll']();
 }
 
+export function GetGCPOAuthCredentials() {
+  return window['go']['main']['App']['GetGCPOAuthCredentials']();
+}
+
 export function GetGitBranches() {
   return window['go']['main']['App']['GetGitBranches']();
 }
@@ -110,8 +126,20 @@ export function GetGitStatus() {
   return window['go']['main']['App']['GetGitStatus']();
 }
 
+export function GetIntegrationsConfig() {
+  return window['go']['main']['App']['GetIntegrationsConfig']();
+}
+
+export function GetMaxConcurrency() {
+  return window['go']['main']['App']['GetMaxConcurrency']();
+}
+
 export function GetPipelineSteps() {
   return window['go']['main']['App']['GetPipelineSteps']();
+}
+
+export function GetRoleContent(arg1) {
+  return window['go']['main']['App']['GetRoleContent'](arg1);
 }
 
 export function GetScheduledJobs() {
@@ -126,12 +154,24 @@ export function GetSystemMetrics() {
   return window['go']['main']['App']['GetSystemMetrics']();
 }
 
+export function GetTaskTimeoutMinutes() {
+  return window['go']['main']['App']['GetTaskTimeoutMinutes']();
+}
+
 export function GetTasks() {
   return window['go']['main']['App']['GetTasks']();
 }
 
+export function GetVerifyBuild() {
+  return window['go']['main']['App']['GetVerifyBuild']();
+}
+
 export function GetWorkspaceConfig() {
   return window['go']['main']['App']['GetWorkspaceConfig']();
+}
+
+export function GetWorkspaceDiff() {
+  return window['go']['main']['App']['GetWorkspaceDiff']();
 }
 
 export function IsOrchestratorRunning() {
@@ -140,6 +180,10 @@ export function IsOrchestratorRunning() {
 
 export function IsWebhookRunning() {
   return window['go']['main']['App']['IsWebhookRunning']();
+}
+
+export function ListRoles() {
+  return window['go']['main']['App']['ListRoles']();
 }
 
 export function OpenGoogleOAuthLogin(arg1) {
@@ -166,16 +210,24 @@ export function ResetAgentsToDefaults() {
   return window['go']['main']['App']['ResetAgentsToDefaults']();
 }
 
-export function ResolveApproval(arg1) {
-  return window['go']['main']['App']['ResolveApproval'](arg1);
+export function ResolveApproval(arg1, arg2) {
+  return window['go']['main']['App']['ResolveApproval'](arg1, arg2);
+}
+
+export function RetryTask(arg1) {
+  return window['go']['main']['App']['RetryTask'](arg1);
 }
 
 export function RevertGitCommit(arg1) {
   return window['go']['main']['App']['RevertGitCommit'](arg1);
 }
 
-export function RunBrowserTask(arg1, arg2) {
-  return window['go']['main']['App']['RunBrowserTask'](arg1, arg2);
+export function RunBrowserTask(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['main']['App']['RunBrowserTask'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+}
+
+export function RunGitCommand(arg1) {
+  return window['go']['main']['App']['RunGitCommand'](arg1);
 }
 
 export function RunPipeline(arg1) {
@@ -194,6 +246,18 @@ export function SaveFileContent(arg1, arg2) {
   return window['go']['main']['App']['SaveFileContent'](arg1, arg2);
 }
 
+export function SaveGCPOAuthCredentials(arg1, arg2) {
+  return window['go']['main']['App']['SaveGCPOAuthCredentials'](arg1, arg2);
+}
+
+export function SaveIntegrationsConfig(arg1) {
+  return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
+}
+
+export function SaveRoleContent(arg1, arg2) {
+  return window['go']['main']['App']['SaveRoleContent'](arg1, arg2);
+}
+
 export function ScanWorkspaceFiles() {
   return window['go']['main']['App']['ScanWorkspaceFiles']();
 }
@@ -210,8 +274,32 @@ export function SetAutoApproveAll(arg1) {
   return window['go']['main']['App']['SetAutoApproveAll'](arg1);
 }
 
+export function SetCurrentAntiAccountKey(arg1) {
+  return window['go']['main']['App']['SetCurrentAntiAccountKey'](arg1);
+}
+
+export function SetMaxConcurrency(arg1) {
+  return window['go']['main']['App']['SetMaxConcurrency'](arg1);
+}
+
+export function SetOnboardingSeen(arg1) {
+  return window['go']['main']['App']['SetOnboardingSeen'](arg1);
+}
+
 export function SetShowCLIConsole(arg1) {
   return window['go']['main']['App']['SetShowCLIConsole'](arg1);
+}
+
+export function SetTaskTimeoutMinutes(arg1) {
+  return window['go']['main']['App']['SetTaskTimeoutMinutes'](arg1);
+}
+
+export function SetVerifyBuild(arg1) {
+  return window['go']['main']['App']['SetVerifyBuild'](arg1);
+}
+
+export function ShouldShowOnboarding() {
+  return window['go']['main']['App']['ShouldShowOnboarding']();
 }
 
 export function StartOrchestrator() {
@@ -222,10 +310,22 @@ export function StopOrchestrator() {
   return window['go']['main']['App']['StopOrchestrator']();
 }
 
+export function StopTask(arg1) {
+  return window['go']['main']['App']['StopTask'](arg1);
+}
+
+export function ToggleAntiAccountKeyStatus(arg1) {
+  return window['go']['main']['App']['ToggleAntiAccountKeyStatus'](arg1);
+}
+
 export function ToggleWebhook(arg1) {
   return window['go']['main']['App']['ToggleWebhook'](arg1);
 }
 
 export function UpdateTaskStatus(arg1, arg2) {
   return window['go']['main']['App']['UpdateTaskStatus'](arg1, arg2);
+}
+
+export function WarmupAntiAccountKeys() {
+  return window['go']['main']['App']['WarmupAntiAccountKeys']();
 }

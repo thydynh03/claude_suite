@@ -248,7 +248,7 @@ func (a *RepositoryTaskActions) GetAutoApproveAll() bool {
 	return a.orch.GetAutoApproveAll()
 }
 func (a *RepositoryTaskActions) ResolveApproval(approved bool) {
-	a.orch.ResolveApproval(approved)
+	a.orch.ResolveApproval("", approved)
 }
 
 func (a *RepositoryTaskActions) SaveAgent(agent models.Agent) error {
@@ -316,7 +316,7 @@ func (a *RepositoryTaskActions) IsWebhookRunning() bool {
 }
 
 func (a *RepositoryTaskActions) RunBrowserTask(url string, screenshot bool) (BrowserResult, error) {
-	result, err := a.browser.RunBrowserTask(url, screenshot)
+	result, err := a.browser.RunBrowserTask(url, "", screenshot, true)
 	if result == nil {
 		return BrowserResult{Success: false, Error: emptyError(err.Error(), "browser task failed")}, err
 	}

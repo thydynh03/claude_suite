@@ -190,7 +190,6 @@
 <header class="flex justify-between items-center px-6 w-full fixed top-0 z-50 bg-surface border-b border-outline-variant h-[60px]">
   <div class="flex items-center gap-6">
     <div class="flex items-center gap-2">
-      <span class="material-symbols-outlined text-primary text-2xl font-bold">webhook</span>
       <span class="text-lg font-bold text-on-surface">Claude Suite</span>
     </div>
 

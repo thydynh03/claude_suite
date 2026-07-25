@@ -99,6 +99,46 @@ func (r *TaskRepository) UpdateStatus(taskID, status string, result string, sess
 	return err
 }
 
+// RequeueWithDependency sends a task back to the backlog, makes it depend on
+// depID, and bumps its retry counter — used by the autonomous E2E fix loop so a
+// failed browser test re-runs only after its generated fix task completes.
+func (r *TaskRepository) RequeueWithDependency(taskID, depID string) error {
+	deps, _ := json.Marshal([]string{depID})
+	_, err := r.db.Exec(
+		`UPDATE tasks SET status='backlog', assigned_to='', depends_on=?, retry_count=retry_count+1 WHERE task_id=?`,
+		string(deps), taskID,
+	)
+	return err
+}
+
+// ResetRunningTasks moves any task stuck in "running" (e.g. from a previous
+// session that was killed mid-execution) back to the backlog on startup.
+func (r *TaskRepository) ResetRunningTasks() (int64, error) {
+	res, err := r.db.Exec(`UPDATE tasks SET status='backlog', assigned_to='' WHERE status='running'`)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// ResetForRetry moves a finished/failed task back to the backlog and clears its
+// retry counter, result and timestamps so the orchestrator re-dispatches it.
+func (r *TaskRepository) ResetForRetry(taskID string) error {
+	_, err := r.db.Exec(
+		`UPDATE tasks SET status='backlog', retry_count=0, result='', last_error='', started_at=NULL, finished_at=NULL WHERE task_id=?`,
+		taskID,
+	)
+	if err != nil {
+		// Fallback for schemas without a last_error column.
+		_, err = r.db.Exec(
+			`UPDATE tasks SET status='backlog', retry_count=0, result='' WHERE task_id=?`,
+			taskID,
+		)
+	}
+	return err
+}
+
 func (r *TaskRepository) AssignTask(taskID string, assignedTo string) error {
 	_, err := r.db.Exec(`UPDATE tasks SET assigned_to=? WHERE task_id=?`, assignedTo, taskID)
 	return err

@@ -1,7 +1,26 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { workspaceFolder, logs, addLog } from '../../lib/stores/appState';
+  import { workspaceFolder, logs, addLog, tasksStore, agentsStore, orchestratorRunning } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+
+  // Aggregated live metrics derived from real task/agent state.
+  $: tAll = ($tasksStore || []) as any[];
+  $: mRunning = tAll.filter((t) => t.status === 'running').length;
+  $: mQueued = tAll.filter((t) => t.status === 'backlog' || t.status === 'queued').length;
+  $: mDone = tAll.filter((t) => t.status === 'done').length;
+  $: mFailed = tAll.filter((t) => t.status === 'failed').length;
+  $: mAgentsActive = ($agentsStore || []).filter((a: any) => a.status === 'running').length;
+  $: mTokens = ($agentsStore || []).reduce((s: number, a: any) => s + (a.tokens_used || 0), 0);
+  $: mTokensText = mTokens > 999999 ? `${(mTokens / 1e6).toFixed(2)}M` : mTokens > 999 ? `${(mTokens / 1000).toFixed(1)}k` : `${mTokens}`;
+
+  const metricCards = () => [
+    { label: 'Running', value: mRunning, icon: 'bolt', cls: 'text-primary' },
+    { label: 'Queue', value: mQueued, icon: 'hourglass_empty', cls: 'text-secondary' },
+    { label: 'Done', value: mDone, icon: 'check_circle', cls: 'text-emerald-600' },
+    { label: 'Failed', value: mFailed, icon: 'cancel', cls: 'text-rose-600' },
+    { label: 'Agents Active', value: mAgentsActive, icon: 'smart_toy', cls: 'text-tertiary' },
+    { label: 'Tokens', value: mTokensText, icon: 'toll', cls: 'text-on-surface' },
+  ];
 
   let promptInput = '';
   let workspaceFiles: string[] = [];
@@ -9,8 +28,6 @@
   let isRunning = false;
   let selectedModel = 'claude-sonnet-4-5';
   $: activeAgent = selectedModel.includes('gemini') ? 'Antigravity (Gemini 3.6 Flash)' : selectedModel.includes('opus') ? 'Claude 4.8 Opus' : 'Claude 4.5 Sonnet';
-  let thinkingPercent = 75;
-
   let topTab = 'active'; // 'active' | 'history'
   let cliOutput = '';
   let showCLIConsole = false;
@@ -130,6 +147,25 @@
         <span class="material-symbols-outlined text-sm">history</span> HISTORY ({$logs.length})
       </button>
     </div>
+  </div>
+
+  <!-- Aggregated live metrics -->
+  <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+    {#each metricCards() as m}
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex flex-col gap-1 shadow-sm">
+        <div class="flex items-center gap-1.5 text-[10px] uppercase font-bold text-on-surface-variant">
+          <span class="material-symbols-outlined text-sm {m.cls}">{m.icon}</span> {m.label}
+        </div>
+        <span class="text-2xl font-bold {m.cls}">{m.value}</span>
+      </div>
+    {/each}
+  </div>
+  <div class="flex items-center gap-2 text-xs -mt-2">
+    <span class="w-2.5 h-2.5 rounded-full {$orchestratorRunning ? 'bg-primary animate-pulse' : 'bg-emerald-500'}"></span>
+    <span class="font-bold {$orchestratorRunning ? 'text-primary' : 'text-emerald-600'}">
+      Orchestrator: {$orchestratorRunning ? 'ĐANG CHẠY' : 'SẴN SÀNG'}
+    </span>
+    <span class="text-on-surface-variant">· Workspace: {$workspaceFolder || 'chưa chọn'}</span>
   </div>
 
   {#if topTab === 'active'}
@@ -310,11 +346,11 @@
 
           <div class="space-y-3">
             <div class="flex justify-between text-xs">
-              <span class="text-on-surface font-medium">Thinking Process</span>
-              <span class="text-primary font-bold">{thinkingPercent}%</span>
+              <span class="text-on-surface font-medium">Trạng thái</span>
+              <span class="font-bold {isRunning ? 'text-primary' : 'text-emerald-600'}">{isRunning ? 'Đang chạy...' : 'Sẵn sàng'}</span>
             </div>
             <div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
-              <div class="bg-primary h-full transition-all" style="width: {thinkingPercent}%"></div>
+              <div class="bg-primary h-full transition-all {isRunning ? 'animate-pulse w-full' : 'w-0'}"></div>
             </div>
           </div>
         </div>

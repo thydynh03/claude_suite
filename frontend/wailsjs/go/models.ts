@@ -1,12 +1,38 @@
 export namespace cli {
 	
+	export class ModelQuota {
+	    name: string;
+	    category: string;
+	    reset_time: string;
+	    usage_pct: number;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelQuota(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.category = source["category"];
+	        this.reset_time = source["reset_time"];
+	        this.usage_pct = source["usage_pct"];
+	        this.status = source["status"];
+	    }
+	}
 	export class AntiAccountKey {
 	    id: string;
 	    name: string;
+	    email: string;
 	    type: string;
 	    api_key: string;
 	    oauth_token: string;
+	    refresh_token: string;
 	    status: string;
+	    tier: string;
+	    is_current: boolean;
+	    last_used: string;
+	    model_quotas: ModelQuota[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AntiAccountKey(source);
@@ -16,18 +42,44 @@ export namespace cli {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.email = source["email"];
 	        this.type = source["type"];
 	        this.api_key = source["api_key"];
 	        this.oauth_token = source["oauth_token"];
+	        this.refresh_token = source["refresh_token"];
 	        this.status = source["status"];
+	        this.tier = source["tier"];
+	        this.is_current = source["is_current"];
+	        this.last_used = source["last_used"];
+	        this.model_quotas = this.convertValues(source["model_quotas"], ModelQuota);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
+	
 	export class RunResult {
 	    success: boolean;
 	    output: string;
 	    error: string;
 	    session_id: string;
 	    tokens_used: number;
+	    cost_usd: number;
 	    duration_sec: number;
 	
 	    static createFrom(source: any = {}) {
@@ -41,6 +93,7 @@ export namespace cli {
 	        this.error = source["error"];
 	        this.session_id = source["session_id"];
 	        this.tokens_used = source["tokens_used"];
+	        this.cost_usd = source["cost_usd"];
 	        this.duration_sec = source["duration_sec"];
 	    }
 	}
@@ -153,6 +206,20 @@ export namespace models {
 		    }
 		    return a;
 		}
+	}
+	export class IntegrationsConfig {
+	    outbound_webhook_url: string;
+	    mcp_connection_string: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IntegrationsConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.outbound_webhook_url = source["outbound_webhook_url"];
+	        this.mcp_connection_string = source["mcp_connection_string"];
+	    }
 	}
 	export class PipelineStep {
 	    step_id: number;
@@ -268,9 +335,17 @@ export namespace services {
 	    html_snippet: string;
 	    text_content: string;
 	    screenshot_base64: string;
+	    console_errors: string[];
+	    assertions: string[];
+	    passed: boolean;
 	    logs: string[];
 	    success: boolean;
 	    error: string;
+	    ai_response: string;
+	    status: string;
+	    current_step: number;
+	    max_steps: number;
+	    user_intervention: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new BrowserActionResult(source);
@@ -283,9 +358,17 @@ export namespace services {
 	        this.html_snippet = source["html_snippet"];
 	        this.text_content = source["text_content"];
 	        this.screenshot_base64 = source["screenshot_base64"];
+	        this.console_errors = source["console_errors"];
+	        this.assertions = source["assertions"];
+	        this.passed = source["passed"];
 	        this.logs = source["logs"];
 	        this.success = source["success"];
 	        this.error = source["error"];
+	        this.ai_response = source["ai_response"];
+	        this.status = source["status"];
+	        this.current_step = source["current_step"];
+	        this.max_steps = source["max_steps"];
+	        this.user_intervention = source["user_intervention"];
 	    }
 	}
 	export class GitBranchInfo {

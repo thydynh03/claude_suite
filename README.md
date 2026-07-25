@@ -26,7 +26,7 @@
 - 🏢 **Photorealistic PBR 3D Virtual Office Engine** — Expanded 35-seat floorplan featuring dual curved monitors, mechanical RGB keyboards, ergonomic gaming chairs, Burgundy velvet & Carrara marble PBR materials, corporate role assignments, and a 4-phase simulated corporate workflow.
 - 🌐 **Native Chrome CDP Browser Agent** — Built-in Chrome DevTools Protocol E2E browser automation agent written natively in Go. Supports automated web testing, DOM element inspection, screenshot galleries, and HTTP network logging.
 - ⚡️ **High-Performance Go Core Backend** — Ultra-fast Go application engine utilizing SQLite WAL journaling, automated task decomposition pipelines, cron-based automated scheduling, and real-time WebSocket IPC event streaming.
-- 🌐 **Internationalization (i18n)** — Instant runtime bilingual switching between **Tiếng Việt (🇻🇳 VI)** and **English (🇺🇸 EN)** across all control center tabs.
+- 🌐 **Internationalization (i18n)** — Runtime bilingual switching between **Tiếng Việt (🇻🇳 VI)** and **English (🇺🇸 EN)** for the primary sidebar navigation, with more UI surfaces being translated over time.
 - 📊 **Real-time System Telemetry & Cost Analytics** — Live monitoring of RAM allocation (MB), CPU usage, active Goroutines, active API keys, and an estimated AI token cost estimator.
 - 🛠 **Integrated Code Studio & Prompt Architect** — Pre-built prompt engineering template library (Refactor, Security Audit, Performance Boost, Unit Tests) and multi-language code studio.
 

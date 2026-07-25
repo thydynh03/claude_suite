@@ -11,14 +11,36 @@
   import SupportPage from './components/pages/SupportPage.svelte';
   import CodeStudioPage from './components/pages/CodeStudioPage.svelte';
   import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
+  import GitPanel from './components/pages/GitPanel.svelte';
+  import AgentRolesPage from './components/pages/AgentRolesPage.svelte';
 
-  import { activeTab, workspaceFolder, addLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
+  import ToastHost from './components/ui/ToastHost.svelte';
+  import CommandPalette from './components/ui/CommandPalette.svelte';
+  import OnboardingTour from './components/ui/OnboardingTour.svelte';
+  import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, setTaskScreenshot, sidebarCollapsed, tasksStore, agentsStore, onboardingOpen } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
+
+  let showOnboarding = false;
+  // Allow re-opening the tour on demand (command palette / Support page).
+  const unsubOnboarding = onboardingOpen.subscribe((v) => {
+    if (v) {
+      showOnboarding = true;
+      onboardingOpen.set(false);
+    }
+  });
+
+  async function closeOnboarding() {
+    showOnboarding = false;
+    try {
+      await (AppBindings as any).SetOnboardingSeen(true);
+    } catch (_) {}
+  }
 
   let showApprovalModal = false;
   let approvalAgent = '';
   let approvalTask = '';
+  let approvalTaskId = '';
 
   onMount(async () => {
     // Wait until Wails IPC & Go bindings are fully injected by WebView2
@@ -59,16 +81,43 @@
       console.warn('Wails config load error:', e);
     }
 
+    // First-run welcome tour: show once after install (and again if its content
+    // version changes). Delayed slightly so the workspace paints behind it first.
+    try {
+      if ((AppBindings as any).ShouldShowOnboarding) {
+        const should = await (AppBindings as any).ShouldShowOnboarding();
+        if (should) {
+          setTimeout(() => { showOnboarding = true; }, 550);
+        }
+      }
+    } catch (_) {}
+
     try {
       EventsOn('log_entry', (data: any) => {
         if (data && data.message) {
           addLog(data.message, data.level || 'INFO', data.time || '');
+          // Surface important outcomes as toasts (not every log line).
+          const msg = String(data.message);
+          if (data.level === 'ERROR' || /\bDONE\b|FAILED|rejected|Orchestrator/i.test(msg)) {
+            addToast(msg, data.level || 'INFO');
+          }
+        }
+      });
+      EventsOn('task_log', (data: any) => {
+        if (data && data.task_id) {
+          addTaskLog(data.task_id, data.message || '', data.level || 'INFO', data.time || '');
+        }
+      });
+      EventsOn('task_screenshot', (data: any) => {
+        if (data && data.task_id && data.data) {
+          setTaskScreenshot(data.task_id, data.data);
         }
       });
       EventsOn('ask_approval', (data: any) => {
         if (data) {
           approvalAgent = data.agentName || 'Agent';
           approvalTask = data.taskTitle || 'Unknown task';
+          approvalTaskId = data.taskId || '';
           showApprovalModal = true;
         }
       });
@@ -83,6 +132,14 @@
           agentsStore.set(ag || []);
         } catch (_) {}
       });
+      // Keep the agent list in sync everywhere (Settings, 3D office, Kanban,
+      // Cockpit) whenever an agent is created/updated/deleted anywhere.
+      EventsOn('agent_updated', async () => {
+        try {
+          const ag = await AppBindings.GetAgents();
+          agentsStore.set(ag || []);
+        } catch (_) {}
+      });
     } catch (e) {
       console.warn('Wails events error:', e);
     }
@@ -91,7 +148,7 @@
   function resolveApproval(approved: boolean) {
     showApprovalModal = false;
     if ((window as any)?.go?.main?.App?.ResolveApproval) {
-      (window as any).go.main.App.ResolveApproval(approved);
+      (window as any).go.main.App.ResolveApproval(approvalTaskId, approved);
     }
   }
 
@@ -101,7 +158,7 @@
       await (window as any).go.main.App.SetAutoApproveAll(true);
     }
     if ((window as any)?.go?.main?.App?.ResolveApproval) {
-      (window as any).go.main.App.ResolveApproval(true);
+      (window as any).go.main.App.ResolveApproval(approvalTaskId, true);
     }
   }
 </script>
@@ -130,6 +187,10 @@
         <SchedulerPage />
       {:else if $activeTab === 'browser'}
         <BrowserAgentPage />
+      {:else if $activeTab === 'git'}
+        <GitPanel />
+      {:else if $activeTab === 'roles'}
+        <AgentRolesPage />
       {:else if $activeTab === 'docs'}
         <DocsPage />
       {:else if $activeTab === 'support'}
@@ -138,6 +199,10 @@
     </main>
   </div>
 </div>
+
+<ToastHost />
+<CommandPalette />
+<OnboardingTour open={showOnboarding} on:close={closeOnboarding} />
 
 {#if showApprovalModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">

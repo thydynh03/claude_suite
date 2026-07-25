@@ -49,6 +49,47 @@ func TestFindMatchingAgent_TagBasedMatch(t *testing.T) {
 	}
 }
 
+// Regression: a task mentioning "DATABASE" must go to the Back-end Developer,
+// not the Business Analyst (whose "BA" keyword is a substring of "DATABASE").
+func TestFindMatchingAgent_NoSubstringFalseMatch(t *testing.T) {
+	dispatcher := NewAgentDispatcher()
+	agents := []models.Agent{
+		{AgentID: "agent-ba", Name: "Business Analyst (BA)", Role: "Requirements"},
+		{AgentID: "agent-code", Name: "Back-end Developer", Role: "Backend logic"},
+	}
+
+	task := &models.Task{
+		Title:  "Design the DATABASE schema and API",
+		Prompt: "Create SQL tables",
+	}
+
+	matched := dispatcher.FindMatchingAgent(task, agents)
+	if matched == nil {
+		t.Fatalf("expected matched agent, got nil")
+	}
+	if matched.Name == "Business Analyst (BA)" {
+		t.Errorf("DATABASE task wrongly matched Business Analyst via substring 'BA'")
+	}
+}
+
+func TestKeywordMatch(t *testing.T) {
+	cases := []struct {
+		text, kw string
+		want     bool
+	}{
+		{"DESIGN THE DATABASE SCHEMA", "BA", false},
+		{"USE GOOGLE CLOUD", "GO", false},
+		{"[BA] ANALYZE", "BA", true},
+		{"RUN WEB TEST SUITE", "WEB TEST", true},
+		{"BUILD THE UI", "UI", true},
+	}
+	for _, c := range cases {
+		if got := keywordMatch(c.text, c.kw); got != c.want {
+			t.Errorf("keywordMatch(%q,%q)=%v want %v", c.text, c.kw, got, c.want)
+		}
+	}
+}
+
 func TestFindMatchingAgent_AutoCreateRoleWhenEmpty(t *testing.T) {
 	dispatcher := NewAgentDispatcher()
 	var agents []models.Agent
