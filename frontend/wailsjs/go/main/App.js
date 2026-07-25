@@ -345,3 +345,11 @@ export function UpdateTaskStatus(arg1, arg2) {
 export function WarmupAntiAccountKeys() {
   return window['go']['main']['App']['WarmupAntiAccountKeys']();
 }
+
+export function ScheduleJob(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['ScheduleJob'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function SetScheduledJobEnabled(arg1, arg2) {
+  return window['go']['main']['App']['SetScheduledJobEnabled'](arg1, arg2);
+}

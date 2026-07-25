@@ -92,8 +92,21 @@ func NewApp() *App {
 		oauthListener:   services.NewOAuthListenerService(),
 	}
 
-	app.schedulerSvc.SetTriggerCallback(func(prompt string) {
-		app.RunQuickCLI(prompt, "claude-sonnet-4-5", "", nil)
+	app.schedulerSvc.SetTriggerCallback(func(job services.JobRequest) error {
+		model := job.Model
+		if model == "" {
+			// A job that did not pick one follows the provider it did pick, so a
+			// Gemini-scheduled run does not quietly execute on Claude.
+			model = defaultModelFor(job.Provider)
+		}
+		result, err := app.RunQuickCLI(job.Prompt, model, "", nil)
+		if err != nil {
+			return err
+		}
+		if result != nil && !result.Success {
+			return fmt.Errorf("%s", result.Error)
+		}
+		return nil
 	})
 
 	return app
@@ -106,6 +119,11 @@ func (a *App) startup(ctx context.Context) {
 	a.orchestrator.SetContext(ctx)
 	a.pipelineEngine.SetContext(ctx)
 	a.schedulerSvc.SetContext(ctx)
+	// Scheduled jobs live in a file beside the database, so closing the app no
+	// longer throws away every schedule the user set up.
+	if err := a.schedulerSvc.UseStore(filepath.Join(filepath.Dir(database.GetDBPath()), "scheduled_jobs.json")); err != nil {
+		fmt.Printf("Scheduler store warning: %v\n", err)
+	}
 	a.schedulerSvc.Start()
 
 	a.loadWorkspaceConfig()
@@ -981,4 +999,24 @@ func (a *App) SaveGCPOAuthCredentials(clientID, clientSecret string) error {
 		return err
 	}
 	return os.WriteFile(cfgPath, data, 0644)
+}
+
+// defaultModelFor picks a model for a scheduled job that named a provider but no
+// model. RunQuickCLI routes on the model name, so returning the wrong family
+// here would send a Gemini job to Claude.
+func defaultModelFor(provider string) string {
+	if provider == "anti" || provider == "anti_cli" {
+		return "gemini-3.6-flash-high"
+	}
+	return "claude-sonnet-4-5"
+}
+
+// ScheduleJob schedules a prompt against a specific provider and model.
+func (a *App) ScheduleJob(prompt, targetTime string, repeat bool, provider, model string) (string, error) {
+	return a.schedulerSvc.ScheduleJob(prompt, targetTime, repeat, provider, model)
+}
+
+// SetScheduledJobEnabled pauses or resumes a repeating job.
+func (a *App) SetScheduledJobEnabled(id string, enabled bool) bool {
+	return a.schedulerSvc.SetJobEnabled(id, enabled)
 }

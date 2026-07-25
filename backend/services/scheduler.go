@@ -2,7 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,6 +19,29 @@ type ScheduledJob struct {
 	Prompt     string    `json:"prompt"`
 	TargetTime time.Time `json:"target_time"`
 	Repeat     bool      `json:"repeat"`
+
+	// Provider and Model pick who runs the job. Empty means the caller's default;
+	// scheduling overnight work against a specific model is the whole point of
+	// having two providers with separate quotas.
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+
+	// Enabled lets a repeating job be paused without losing its schedule.
+	Enabled bool `json:"enabled"`
+
+	// The outcome of the last run, so the UI can show whether a nightly job has
+	// been quietly failing.
+	LastRunAt  time.Time `json:"last_run_at"`
+	LastStatus string    `json:"last_status"` // "ok" | "failed"
+	LastError  string    `json:"last_error"`
+	RunCount   int       `json:"run_count"`
+}
+
+// JobRequest is what the scheduler hands the application when a job comes due.
+type JobRequest struct {
+	Prompt   string
+	Provider string
+	Model    string
 }
 
 type SchedulerService struct {
@@ -23,7 +50,12 @@ type SchedulerService struct {
 	mu        sync.Mutex
 	running   bool
 	stopCh    chan struct{}
-	onTrigger func(prompt string)
+	onTrigger func(JobRequest) error
+
+	// storePath is where jobs are persisted. Without it a scheduled job lived
+	// only in memory: setting up a nightly run and closing the app lost it, with
+	// nothing to say so.
+	storePath string
 }
 
 func NewSchedulerService() *SchedulerService {
@@ -36,13 +68,91 @@ func NewSchedulerService() *SchedulerService {
 // `go` statement itself orders the write ahead of the loop's reads. They take the
 // lock anyway: checkJobs reads both fields from the loop goroutine, so a caller
 // that ever sets one afterwards would be racing.
+// UseStore points the scheduler at a file to keep its jobs in and loads whatever
+// is already there. Call it before Start. Jobs survive a restart from then on;
+// a due job whose time passed while the app was closed runs on the next tick.
+func (s *SchedulerService) UseStore(path string) error {
+	s.mu.Lock()
+	s.storePath = path
+	s.mu.Unlock()
+	return s.load()
+}
+
+func (s *SchedulerService) load() error {
+	s.mu.Lock()
+	path := s.storePath
+	s.mu.Unlock()
+	if path == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // nothing scheduled yet
+	}
+	if err != nil {
+		return fmt.Errorf("read scheduled jobs: %w", err)
+	}
+
+	var stored []ScheduledJob
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return fmt.Errorf("parse scheduled jobs: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range stored {
+		job := stored[i]
+		if job.ID == "" {
+			continue
+		}
+		s.jobs[job.ID] = &job
+	}
+	return nil
+}
+
+// save writes the jobs out. Callers hold the lock; the write itself is
+// best-effort and reported rather than returned, because losing a schedule
+// matters more than the caller's return value.
+func (s *SchedulerService) saveLocked() {
+	if s.storePath == "" {
+		return
+	}
+
+	jobs := make([]ScheduledJob, 0, len(s.jobs))
+	for _, job := range s.jobs {
+		jobs = append(jobs, *job)
+	}
+	sort.Slice(jobs, func(i, j int) bool { return jobs[i].TargetTime.Before(jobs[j].TargetTime) })
+
+	data, err := json.MarshalIndent(jobs, "", "  ")
+	if err != nil {
+		s.logLocked(fmt.Sprintf("Không lưu được lịch: %v", err), "ERROR")
+		return
+	}
+	if err := os.WriteFile(s.storePath, data, 0o600); err != nil {
+		s.logLocked(fmt.Sprintf("Không lưu được lịch vào %s: %v", s.storePath, err), "ERROR")
+	}
+}
+
+// logLocked emits a scheduler log line. Callers hold the lock.
+func (s *SchedulerService) logLocked(message, level string) {
+	if s.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{"msg": message, "level": level})
+}
+
 func (s *SchedulerService) SetContext(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ctx = ctx
 }
 
-func (s *SchedulerService) SetTriggerCallback(cb func(prompt string)) {
+// SetTriggerCallback installs what runs when a job comes due. Returning an error
+// records the run as failed on the job, so a nightly task that has been broken
+// for a week says so instead of looking untouched.
+func (s *SchedulerService) SetTriggerCallback(cb func(JobRequest) error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onTrigger = cb
@@ -94,34 +204,96 @@ func (s *SchedulerService) checkJobs() {
 	defer s.mu.Unlock()
 
 	now := time.Now()
+	fired := false
+
 	for id, job := range s.jobs {
-		if now.After(job.TargetTime) {
-			// Trigger
-			if s.onTrigger != nil {
-				go s.onTrigger(job.Prompt)
-			}
+		if job.Enabled == false && job.RunCount == 0 && job.LastStatus == "" {
+			// Jobs written before Enabled existed default to false on load; treat
+			// an untouched one as on rather than silently never running it.
+			job.Enabled = true
+		}
+		if !job.Enabled || !now.After(job.TargetTime) {
+			continue
+		}
+		fired = true
 
-			// Handle repeat or delete
-			if job.Repeat {
+		if s.onTrigger != nil {
+			request := JobRequest{Prompt: job.Prompt, Provider: job.Provider, Model: job.Model}
+			// The callback runs an agent, which takes minutes. Doing it inline would
+			// hold the lock and stall every other job.
+			go s.runJob(id, request)
+		}
+
+		if job.Repeat {
+			// Skip forward past any occurrences missed while the app was closed, so
+			// a daily job does not fire once per missed day on the next launch.
+			for !job.TargetTime.After(now) {
 				job.TargetTime = job.TargetTime.Add(24 * time.Hour)
-				if s.ctx != nil {
-					runtime.EventsEmit(s.ctx, "scheduler_log", map[string]string{
-						"msg":   fmt.Sprintf("Repeating job %s scheduled for %s", id, job.TargetTime.Format("15:04:05")),
-						"level": "INFO",
-					})
-				}
-			} else {
-				delete(s.jobs, id)
 			}
+			s.logLocked(fmt.Sprintf("Lịch lặp %s: lần chạy kế tiếp %s", id, job.TargetTime.Format("02/01 15:04")), "INFO")
+		} else {
+			// A one-shot job is switched off rather than deleted, so its outcome can
+			// still be read afterwards. Deleting it here also raced the run itself:
+			// runJob had nothing left to record the failure against, and a job that
+			// died at 2am looked exactly like one that never existed. Cancel removes
+			// it for good.
+			job.Enabled = false
+		}
+	}
 
-			if s.ctx != nil {
-				runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
-			}
+	if fired {
+		s.saveLocked()
+		if s.ctx != nil {
+			runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
 		}
 	}
 }
 
+// runJob executes one due job outside the lock and records how it went.
+func (s *SchedulerService) runJob(id string, request JobRequest) {
+	s.mu.Lock()
+	trigger := s.onTrigger
+	s.mu.Unlock()
+	if trigger == nil {
+		return
+	}
+
+	err := trigger(request)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job, ok := s.jobs[id]
+	if ok {
+		job.LastRunAt = time.Now()
+		job.RunCount++
+		if err != nil {
+			job.LastStatus, job.LastError = "failed", err.Error()
+		} else {
+			job.LastStatus, job.LastError = "ok", ""
+		}
+		s.saveLocked()
+	}
+
+	if err != nil {
+		s.logLocked(fmt.Sprintf("Lịch %s chạy thất bại: %v", id, err), "ERROR")
+	} else {
+		s.logLocked(fmt.Sprintf("Lịch %s đã chạy xong", id), "SUCCESS")
+	}
+	if s.ctx != nil {
+		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
+	}
+}
+
+// SchedulePrompt keeps the original signature so existing callers still work;
+// the run uses whatever provider and model the caller's trigger defaults to.
 func (s *SchedulerService) SchedulePrompt(prompt string, targetTimeStr string, repeat bool) (string, error) {
+	return s.ScheduleJob(prompt, targetTimeStr, repeat, "", "")
+}
+
+// ScheduleJob adds a job that runs against a chosen provider and model. Pointing
+// heavy overnight work at the provider whose quota resets first is the reason
+// this app carries two of them.
+func (s *SchedulerService) ScheduleJob(prompt, targetTimeStr string, repeat bool, provider, model string) (string, error) {
 	targetTime, err := time.Parse(time.RFC3339, targetTimeStr)
 	if err != nil {
 		return "", fmt.Errorf("invalid time format: %v", err)
@@ -136,7 +308,11 @@ func (s *SchedulerService) SchedulePrompt(prompt string, targetTimeStr string, r
 		Prompt:     prompt,
 		TargetTime: targetTime,
 		Repeat:     repeat,
+		Provider:   provider,
+		Model:      model,
+		Enabled:    true,
 	}
+	s.saveLocked()
 
 	if s.ctx != nil {
 		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
@@ -153,6 +329,7 @@ func (s *SchedulerService) CancelJob(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.jobs, id)
+	s.saveLocked()
 
 	if s.ctx != nil {
 		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
@@ -172,4 +349,27 @@ func (s *SchedulerService) GetJobs() []ScheduledJob {
 		list = append(list, *j)
 	}
 	return list
+}
+
+// SetJobEnabled pauses or resumes a repeating job without losing its schedule.
+func (s *SchedulerService) SetJobEnabled(id string, enabled bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	job, ok := s.jobs[id]
+	if !ok {
+		return false
+	}
+	job.Enabled = enabled
+	s.saveLocked()
+
+	state := "tạm dừng"
+	if enabled {
+		state = "bật lại"
+	}
+	s.logLocked(fmt.Sprintf("Lịch %s đã %s", id, state), "INFO")
+	if s.ctx != nil {
+		runtime.EventsEmit(s.ctx, "scheduler_updated", nil)
+	}
+	return true
 }

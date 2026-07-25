@@ -176,3 +176,7 @@ export function ToggleWebhook(arg1:number):Promise<boolean>;
 export function UpdateTaskStatus(arg1:string,arg2:string):Promise<void>;
 
 export function WarmupAntiAccountKeys():Promise<void>;
+
+export function ScheduleJob(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:string):Promise<string>;
+
+export function SetScheduledJobEnabled(arg1:string,arg2:boolean):Promise<boolean>;
