@@ -45,6 +45,12 @@
       if ((AppBindings as any).GetShowCLIConsole) {
         showCLIConsole = await (AppBindings as any).GetShowCLIConsole();
       }
+      if ((window as any)?.runtime?.EventsOn) {
+        (window as any).runtime.EventsOn("oauth_success", async (data: any) => {
+          await loadAntiKeys();
+          addLog(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
+        });
+      }
     } catch (e) {}
     return () => { unsubscribeAgents(); };
   });
@@ -656,8 +662,9 @@
                 />
               </div>
 
-              <p class="text-[11px] text-on-surface-variant leading-normal">
-                💡 <b>Hướng dẫn OAuth:</b> Bấm nút <b>🌐 Đăng nhập bằng Google</b> trên để ủy quyền ➔ Sau khi đăng nhập xong, sao chép <b>OAuth Token (ya29...)</b> hoặc lấy API Key từ Google AI Studio và dán vào ô bên dưới để lưu vào Bể chứa Tài khoản!
+              <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold leading-normal flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">auto_mode</span>
+                🎉 <b>OAuth Tự Động 100%:</b> Bấm nút <b>🌐 Đăng nhập bằng Google</b> ➔ Đăng nhập thành công, hệ thống sẽ <b>TỰ ĐỘNG LƯU TOKEN VÀO BỂ CHỨA</b> mà bạn không cần phải copy hay dán gì cả!
               </p>
             </div>
           {/if}

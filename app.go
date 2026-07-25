@@ -37,6 +37,7 @@ type App struct {
 	orchestrator    *orchestrator.Orchestrator
 	planBuilder     *pipeline.PlanBuilder
 	pipelineEngine  *pipeline.PipelineEngine
+	oauthListener   *services.OAuthListenerService
 
 	workspaceConfig models.WorkspaceConfig
 }
@@ -79,6 +80,7 @@ func NewApp() *App {
 		orchestrator:    orch,
 		planBuilder:     planBuilder,
 		pipelineEngine:  pipelineEng,
+		oauthListener:   services.NewOAuthListenerService(),
 	}
 
 	app.schedulerSvc.SetTriggerCallback(func(prompt string) {
@@ -520,6 +522,18 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 	if clientID == "" {
 		clientID = "32555940559-fa7440q2viic87nvi8nk5w0y86z.apps.googleusercontent.com"
 	}
+
+	if a.oauthListener != nil {
+		_ = a.oauthListener.StartOAuthListener(clientID, "", func(email, token string) {
+			if a.ctx != nil {
+				wailsRuntime.EventsEmit(a.ctx, "oauth_success", map[string]string{
+					"email": email,
+					"token": token,
+				})
+			}
+		})
+	}
+
 	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email"
 	if a.ctx != nil {
 		wailsRuntime.BrowserOpenURL(a.ctx, authURL)
