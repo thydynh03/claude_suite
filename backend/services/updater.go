@@ -53,7 +53,8 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 		var rel GitHubRelease
 		if err := json.NewDecoder(resp.Body).Decode(&rel); err == nil && rel.TagName != "" {
 			resp.Body.Close()
-			if rel.TagName != version.CurrentVersion {
+			curVer := version.GetVersion()
+			if rel.TagName != curVer {
 				var downloadUrl string
 				for _, asset := range rel.Assets {
 					if filepath.Ext(asset.Name) == ".exe" {
@@ -71,7 +72,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 					Body:        rel.Body,
 				}, nil
 			}
-			return &UpdateInfo{HasUpdate: false, Version: version.CurrentVersion}, nil
+			return &UpdateInfo{HasUpdate: false, Version: curVer}, nil
 		}
 		resp.Body.Close()
 	}
@@ -87,7 +88,8 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 			if err := json.NewDecoder(tResp.Body).Decode(&tags); err == nil && len(tags) > 0 {
 				tResp.Body.Close()
 				latestTag := tags[0].Name
-				if latestTag != version.CurrentVersion {
+				curVer := version.GetVersion()
+				if latestTag != curVer {
 					return &UpdateInfo{
 						HasUpdate:   true,
 						Version:     latestTag,
@@ -100,7 +102,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 		}
 	}
 
-	return &UpdateInfo{HasUpdate: false, Version: version.CurrentVersion}, nil
+	return &UpdateInfo{HasUpdate: false, Version: version.GetVersion()}, nil
 }
 
 func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(downloaded, total int64)) error {
