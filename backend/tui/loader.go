@@ -137,6 +137,10 @@ func validateReadableSchema(db *sql.DB) error {
 			}
 			found[name] = true
 		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read %s schema: %w", table, err)
+		}
 		if err := rows.Close(); err != nil {
 			return fmt.Errorf("close %s schema rows: %w", table, err)
 		}
@@ -249,6 +253,8 @@ func loadRecentMemory(db *sql.DB) ([]models.MemoryItem, error) {
 func parseTime(value string) time.Time {
 	for _, layout := range []string{
 		time.RFC3339Nano,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05-07:00",
 		"2006-01-02T15:04:05.999999",
 		"2006-01-02T15:04:05",
 		"2006-01-02 15:04:05.999999",

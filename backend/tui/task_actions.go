@@ -236,6 +236,23 @@ func (a *RepositoryTaskActions) ReadFileContent(relPath string) (string, error) 
 	if !filepath.IsAbs(relPath) && a.workspace != "" {
 		fullPath = filepath.Join(a.workspace, relPath)
 	}
+	// filepath.Join cleans "..", but a symlink inside the workspace can still
+	// point outside it, so compare the resolved paths rather than the literal
+	// ones before handing the contents to the preview pane.
+	if a.workspace != "" {
+		root, err := filepath.EvalSymlinks(a.workspace)
+		if err != nil {
+			return "", fmt.Errorf("resolve workspace: %w", err)
+		}
+		target, err := filepath.EvalSymlinks(fullPath)
+		if err != nil {
+			return "", err
+		}
+		rel, err := filepath.Rel(root, target)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("file is outside the workspace: %s", relPath)
+		}
+	}
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return "", err
@@ -322,7 +339,14 @@ func (a *RepositoryTaskActions) ToggleWebhook(port int) bool {
 		_ = a.webhook.Stop()
 		return false
 	}
-	_ = a.webhook.Start(port)
+	if err := a.webhook.Start(port); err != nil {
+		a.publish(RuntimeEvent{
+			Kind:    "log",
+			Level:   "ERROR",
+			Message: fmt.Sprintf("Webhook failed to start on port %d: %v", port, err),
+		})
+		return false
+	}
 	return true
 }
 
@@ -358,7 +382,7 @@ func saveScreenshot(dataURI string) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(dir, fmt.Sprintf("screenshot-%d.png", time.Now().UnixNano()))
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return "", err
 	}
 	return path, nil

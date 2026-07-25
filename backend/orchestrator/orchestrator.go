@@ -722,6 +722,14 @@ func (o *Orchestrator) emitApproval(taskID, agentName, taskTitle string) {
 // and also mirrors it into the global log stream.
 func (o *Orchestrator) emitTaskLog(taskID, msg, level string) {
 	ts := time.Now().Format("15:04:05")
+	// Frontends without Wails (the TUI) only see onLog, so task-scoped lines have
+	// to travel that path too or agent output never reaches the terminal.
+	o.mu.Lock()
+	onLog := o.onLog
+	o.mu.Unlock()
+	if onLog != nil {
+		onLog(msg, level)
+	}
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "task_log", map[string]string{
 			"task_id": taskID,

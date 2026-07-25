@@ -35,14 +35,17 @@
   let unoffAgents: any;
 
   async function initTaskBoard() {
-    await loadTasks();
-    await loadAgents();
     // board_updated is handled centrally in App.svelte (refreshes tasksStore).
+    // Register before the first await: onMount captures its cleanup closure
+    // synchronously, so a listener attached after an await would leak whenever
+    // the component unmounts while the initial load is still in flight.
     if ((window as any)?.runtime?.EventsOn) {
       unoffAgents = (window as any).runtime.EventsOn('agent_updated', () => {
         loadAgents();
       });
     }
+    await loadTasks();
+    await loadAgents();
   }
 
   onMount(() => {

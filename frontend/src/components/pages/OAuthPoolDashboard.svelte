@@ -49,14 +49,17 @@
   let unoff: any;
 
   async function initOAuthDashboard() {
-    await loadAccounts();
-    await loadGcpCreds();
+    // Register before the first await. onMount captures its cleanup closure
+    // synchronously, so a listener attached after an await would leak whenever
+    // the component unmounts while the initial load is still in flight.
     if ((window as any)?.runtime?.EventsOn) {
       unoff = (window as any).runtime.EventsOn('oauth_success', async (data: any) => {
         addLog(`Đăng nhập Google thành công: ${data.email || ''}`, 'SUCCESS');
         await loadAccounts();
       });
     }
+    await loadAccounts();
+    await loadGcpCreds();
   }
 
   onMount(() => {
