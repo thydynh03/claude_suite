@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, logs, tasksStore, agentsStore } from '../../lib/stores/appState';
+  import { tick } from 'svelte';
+  import { addLog, tasksStore, agentsStore, taskLogsStore, clearTaskLog } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
   export let tasks: Task[] = [];
@@ -12,6 +13,15 @@
     const unsub = tasksStore.subscribe((val) => {
       tasks = Array.isArray(val) ? [...val] : [];
     });
+
+    (async () => {
+      try {
+        if ((AppBindings as any).GetMaxConcurrency) {
+          const n = await (AppBindings as any).GetMaxConcurrency();
+          if (typeof n === 'number' && n > 0) maxConcurrency = n;
+        }
+      } catch (e) {}
+    })();
 
     let unoff: any;
     if ((window as any)?.runtime?.EventsOn) {
@@ -35,7 +45,31 @@
   ];
 
   let showAddModal = false;
-  let detailTask: Task | null = null;
+  // Track the open task by id and derive the live object so the drawer's status,
+  // Stop/Retry buttons and log stream stay in sync as the board updates.
+  let detailTaskId: string | null = null;
+  $: detailTask = detailTaskId ? ((Array.isArray(tasks) ? tasks : []).find((t) => t.task_id === detailTaskId) || null) : null;
+
+  // Max parallel sub-agents (backend SetMaxConcurrency).
+  let maxConcurrency = 3;
+
+  // Live log for the currently open task + auto-scroll to newest line.
+  let logContainer: HTMLDivElement | null = null;
+  $: currentTaskLogs = detailTaskId ? (($taskLogsStore[detailTaskId]) || []) : [];
+  $: if (currentTaskLogs.length && logContainer) {
+    tick().then(() => { if (logContainer) logContainer.scrollTop = logContainer.scrollHeight; });
+  }
+
+  async function updateConcurrency(n: number) {
+    maxConcurrency = n;
+    try { await (AppBindings as any).SetMaxConcurrency(n); addLog(`Số agent song song tối đa: ${n}`, 'INFO'); } catch (e) { console.error(e); }
+  }
+
+  function copyTaskLog() {
+    const text = currentTaskLogs.map((l) => `[${l.time}] ${l.message}`).join('\n');
+    navigator.clipboard.writeText(text);
+    addLog('Đã sao chép log của task.', 'SUCCESS');
+  }
   let searchQuery = '';
   let filterPriority = 'all';
 
@@ -197,6 +231,25 @@
     }
   }
 
+  async function handleStopTask(taskID: string) {
+    try {
+      const ok = await (AppBindings as any).StopTask(taskID);
+      addLog(ok ? 'Đã gửi yêu cầu dừng task.' : 'Task không đang chạy để dừng.', ok ? 'WARN' : 'INFO');
+    } catch (e) {
+      console.error('StopTask error:', e);
+    }
+  }
+
+  async function handleRetryTask(taskID: string) {
+    try {
+      await (AppBindings as any).RetryTask(taskID);
+      addLog('Đã đưa task về Backlog để chạy lại.', 'INFO');
+      if (onRefresh) await onRefresh();
+    } catch (e) {
+      console.error('RetryTask error:', e);
+    }
+  }
+
   async function handleClearDone() {
     try {
       const doneTasks = tasks.filter(t => t.status === 'done');
@@ -250,6 +303,19 @@
     </div>
 
     <div class="flex items-center gap-2">
+      <!-- Parallel agents control -->
+      <div class="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant rounded-xl px-2.5 py-1.5" title="Số sub-agent chạy song song tối đa">
+        <span class="material-symbols-outlined text-sm text-secondary">groups</span>
+        <span class="text-[10px] font-bold text-on-surface-variant uppercase whitespace-nowrap">Song song</span>
+        <select
+          value={maxConcurrency}
+          on:change={(e) => updateConcurrency(parseInt((e.currentTarget as HTMLSelectElement).value))}
+          class="bg-transparent text-xs font-bold text-on-surface outline-none cursor-pointer">
+          {#each [1,2,3,4,5,6] as n}
+            <option value={n}>{n}</option>
+          {/each}
+        </select>
+      </div>
       {#if selectedTaskIDs.length > 0}
         <button type="button" on:click|preventDefault={handleDeleteSelected} class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 animate-pulse cursor-pointer">
           <span class="material-symbols-outlined text-sm">delete</span> Xóa đã chọn ({selectedTaskIDs.length})
@@ -298,8 +364,8 @@
               <div 
                 role="button" 
                 tabindex="0"
-                on:click={() => detailTask = task}
-                on:keydown={(e) => { if (e.key === 'Enter') detailTask = task; }}
+                on:click={() => detailTaskId = task.task_id}
+                on:keydown={(e) => { if (e.key === 'Enter') detailTaskId = task.task_id; }}
                 class="flex items-center justify-between gap-2 cursor-pointer">
                 <div class="flex items-center gap-2 flex-1 cursor-pointer">
                   <input
@@ -450,7 +516,7 @@
           {detailTask.title}
         </h3>
       </div>
-      <button type="button" on:click={() => detailTask = null} class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-all cursor-pointer">
+      <button type="button" on:click={() => detailTaskId = null} class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-all cursor-pointer">
         <span class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
@@ -503,19 +569,31 @@
 
       <!-- Realtime Log Execution Output Stream -->
       <div class="space-y-1">
-        <span class="font-bold text-on-surface flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm text-secondary">terminal</span> Realtime Log Stream & Terminal:
-        </span>
-        <div class="bg-black/90 text-emerald-400 p-3 rounded-xl border border-slate-800 font-mono text-[11px] h-36 overflow-y-auto space-y-1 shadow-inner leading-relaxed">
-          {#each ($logs || []).slice(-15) as l}
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-on-surface flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm text-secondary">terminal</span> Realtime Sub-Agent Log ({currentTaskLogs.length}):
+          </span>
+          <div class="flex items-center gap-1.5">
+            <button type="button" on:click={copyTaskLog}
+              class="text-[10px] bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-2 py-0.5 rounded font-bold border border-outline-variant cursor-pointer flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">content_copy</span> Copy
+            </button>
+            <button type="button" on:click={() => detailTaskId && clearTaskLog(detailTaskId)}
+              class="text-[10px] bg-surface-container-high text-on-surface hover:bg-rose-500/10 hover:text-rose-600 px-2 py-0.5 rounded font-bold border border-outline-variant cursor-pointer flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">clear_all</span> Clear
+            </button>
+          </div>
+        </div>
+        <div bind:this={logContainer} class="bg-black/90 text-emerald-400 p-3 rounded-xl border border-slate-800 font-mono text-[11px] h-44 overflow-y-auto space-y-1 shadow-inner leading-relaxed scroll-smooth">
+          {#each currentTaskLogs as l}
             <div class="flex items-start gap-2">
               <span class="text-slate-500 font-mono">[{l.time || 'NOW'}]</span>
-              <span class={l.level === 'ERROR' ? 'text-rose-400' : l.level === 'SUCCESS' ? 'text-emerald-400' : l.level === 'WARN' ? 'text-amber-300' : 'text-slate-300'}>
+              <span class={l.level === 'ERROR' ? 'text-rose-400' : l.level === 'SUCCESS' ? 'text-emerald-400' : l.level === 'WARN' ? 'text-amber-300' : l.level === 'TOOL' ? 'text-cyan-300 font-semibold' : 'text-slate-300'}>
                 {l.message}
               </span>
             </div>
           {:else}
-            <div class="text-slate-600 italic">Chưa có log thực thi...</div>
+            <div class="text-slate-600 italic">Chưa có log cho task này. Log sẽ hiện realtime khi Agent thực thi (bao gồm cả tool calls 🔧).</div>
           {/each}
         </div>
       </div>
@@ -547,12 +625,30 @@
       <div class="text-[11px] text-on-surface-variant font-mono">
         Session ID: <strong class="text-on-surface">{detailTask.session_id || 'N/A'}</strong>
       </div>
-      <button 
-        type="button" 
-        on:click={() => detailTask = null} 
-        class="px-5 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer shadow-xs">
-        Đóng Panel
-      </button>
+      <div class="flex items-center gap-2">
+        {#if detailTask.status === 'running'}
+          <button
+            type="button"
+            on:click={() => detailTask && handleStopTask(detailTask.task_id)}
+            class="px-4 py-2 bg-rose-500/10 text-rose-600 border border-rose-500/30 font-bold text-xs rounded-xl hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">stop_circle</span> Dừng Task
+          </button>
+        {/if}
+        {#if detailTask.status === 'failed' || detailTask.status === 'done'}
+          <button
+            type="button"
+            on:click={() => detailTask && handleRetryTask(detailTask.task_id)}
+            class="px-4 py-2 bg-amber-500/10 text-amber-600 border border-amber-500/30 font-bold text-xs rounded-xl hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">replay</span> Chạy lại
+          </button>
+        {/if}
+        <button
+          type="button"
+          on:click={() => detailTaskId = null}
+          class="px-5 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer shadow-xs">
+          Đóng Panel
+        </button>
+      </div>
     </div>
   </div>
 </div>

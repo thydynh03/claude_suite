@@ -12,13 +12,14 @@
   import CodeStudioPage from './components/pages/CodeStudioPage.svelte';
   import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
 
-  import { activeTab, workspaceFolder, addLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
+  import { activeTab, workspaceFolder, addLog, addTaskLog, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
   let showApprovalModal = false;
   let approvalAgent = '';
   let approvalTask = '';
+  let approvalTaskId = '';
 
   onMount(async () => {
     // Wait until Wails IPC & Go bindings are fully injected by WebView2
@@ -65,10 +66,16 @@
           addLog(data.message, data.level || 'INFO', data.time || '');
         }
       });
+      EventsOn('task_log', (data: any) => {
+        if (data && data.task_id) {
+          addTaskLog(data.task_id, data.message || '', data.level || 'INFO', data.time || '');
+        }
+      });
       EventsOn('ask_approval', (data: any) => {
         if (data) {
           approvalAgent = data.agentName || 'Agent';
           approvalTask = data.taskTitle || 'Unknown task';
+          approvalTaskId = data.taskId || '';
           showApprovalModal = true;
         }
       });
@@ -91,7 +98,7 @@
   function resolveApproval(approved: boolean) {
     showApprovalModal = false;
     if ((window as any)?.go?.main?.App?.ResolveApproval) {
-      (window as any).go.main.App.ResolveApproval(approved);
+      (window as any).go.main.App.ResolveApproval(approvalTaskId, approved);
     }
   }
 
@@ -101,7 +108,7 @@
       await (window as any).go.main.App.SetAutoApproveAll(true);
     }
     if ((window as any)?.go?.main?.App?.ResolveApproval) {
-      (window as any).go.main.App.ResolveApproval(true);
+      (window as any).go.main.App.ResolveApproval(approvalTaskId, true);
     }
   }
 </script>

@@ -59,6 +59,8 @@ export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
 
 export function GetGitStatus():Promise<Record<string, any>>;
 
+export function GetMaxConcurrency():Promise<number>;
+
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
 
 export function GetScheduledJobs():Promise<Array<services.ScheduledJob>>;
@@ -87,7 +89,9 @@ export function ReadFileContent(arg1:string):Promise<string>;
 
 export function ResetAgentsToDefaults():Promise<void>;
 
-export function ResolveApproval(arg1:boolean):Promise<void>;
+export function ResolveApproval(arg1:string,arg2:boolean):Promise<void>;
+
+export function RetryTask(arg1:string):Promise<void>;
 
 export function RevertGitCommit(arg1:string):Promise<void>;
 
@@ -109,11 +113,15 @@ export function SelectWorkspaceFolder():Promise<string>;
 
 export function SetAutoApproveAll(arg1:boolean):Promise<boolean>;
 
+export function SetMaxConcurrency(arg1:number):Promise<number>;
+
 export function SetShowCLIConsole(arg1:boolean):Promise<boolean>;
 
 export function StartOrchestrator():Promise<boolean>;
 
 export function StopOrchestrator():Promise<boolean>;
+
+export function StopTask(arg1:string):Promise<boolean>;
 
 export function ToggleWebhook(arg1:number):Promise<boolean>;
 

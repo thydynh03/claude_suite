@@ -28,6 +28,7 @@ export namespace cli {
 	    error: string;
 	    session_id: string;
 	    tokens_used: number;
+	    cost_usd: number;
 	    duration_sec: number;
 	
 	    static createFrom(source: any = {}) {
@@ -41,6 +42,7 @@ export namespace cli {
 	        this.error = source["error"];
 	        this.session_id = source["session_id"];
 	        this.tokens_used = source["tokens_used"];
+	        this.cost_usd = source["cost_usd"];
 	        this.duration_sec = source["duration_sec"];
 	    }
 	}

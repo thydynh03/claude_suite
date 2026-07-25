@@ -110,6 +110,10 @@ export function GetGitStatus() {
   return window['go']['main']['App']['GetGitStatus']();
 }
 
+export function GetMaxConcurrency() {
+  return window['go']['main']['App']['GetMaxConcurrency']();
+}
+
 export function GetPipelineSteps() {
   return window['go']['main']['App']['GetPipelineSteps']();
 }
@@ -166,8 +170,12 @@ export function ResetAgentsToDefaults() {
   return window['go']['main']['App']['ResetAgentsToDefaults']();
 }
 
-export function ResolveApproval(arg1) {
-  return window['go']['main']['App']['ResolveApproval'](arg1);
+export function ResolveApproval(arg1, arg2) {
+  return window['go']['main']['App']['ResolveApproval'](arg1, arg2);
+}
+
+export function RetryTask(arg1) {
+  return window['go']['main']['App']['RetryTask'](arg1);
 }
 
 export function RevertGitCommit(arg1) {
@@ -210,6 +218,10 @@ export function SetAutoApproveAll(arg1) {
   return window['go']['main']['App']['SetAutoApproveAll'](arg1);
 }
 
+export function SetMaxConcurrency(arg1) {
+  return window['go']['main']['App']['SetMaxConcurrency'](arg1);
+}
+
 export function SetShowCLIConsole(arg1) {
   return window['go']['main']['App']['SetShowCLIConsole'](arg1);
 }
@@ -220,6 +232,10 @@ export function StartOrchestrator() {
 
 export function StopOrchestrator() {
   return window['go']['main']['App']['StopOrchestrator']();
+}
+
+export function StopTask(arg1) {
+  return window['go']['main']['App']['StopTask'](arg1);
 }
 
 export function ToggleWebhook(arg1) {
