@@ -13,6 +13,7 @@
   import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
 
   import ToastHost from './components/ui/ToastHost.svelte';
+  import CommandPalette from './components/ui/CommandPalette.svelte';
   import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
@@ -153,6 +154,7 @@
 </div>
 
 <ToastHost />
+<CommandPalette />
 
 {#if showApprovalModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
