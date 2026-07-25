@@ -3,57 +3,66 @@ package version
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"claude_suite/backend/paths"
 )
 
-// BuildVersion is injected at compile time via -ldflags "-X claude_suite/backend/version.BuildVersion=v..."
-var BuildVersion = "v2.8.0"
+// devVersion is what an untagged local build reports. Seeing it in the UI means
+// the binary was not built by the release workflow.
+const devVersion = "dev"
+
+// BuildVersion is injected at release time with
+// -ldflags "-X claude_suite/backend/version.BuildVersion=$TAG".
+// Leaving the default as "dev" is deliberate: a hardcoded real-looking version
+// is why every release kept reporting v2.8.0 no matter which tag built it.
+var BuildVersion = devVersion
 
 // CurrentVersion provides backward compatibility
-var CurrentVersion = "v2.8.0"
+var CurrentVersion = devVersion
 
 type VersionInfo struct {
 	Version string `json:"version"`
 }
 
-// SetInstalledVersion persists the newly installed version to version.json
-func SetInstalledVersion(ver string) error {
-	exePath, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	vFile := filepath.Join(filepath.Dir(exePath), "version.json")
-	data, _ := json.MarshalIndent(VersionInfo{Version: ver}, "", "  ")
-	return os.WriteFile(vFile, data, 0644)
+// versionFile lives in the data directory, not beside the executable: an
+// installed build sits in Program Files, which a normal user cannot write to,
+// so persisting the post-update version there silently failed.
+func versionFile() string {
+	return filepath.Join(paths.EnsureDataDir(), "version.json")
 }
 
-// GetVersion dynamically resolves current application version:
-// 1. Persisted version.json (updated upon auto-update download)
-// 2. Local Git tag (`git describe --tags --abbrev=0`)
-// 3. BuildVersion (-ldflags or default)
+// SetInstalledVersion persists the newly installed version.
+func SetInstalledVersion(ver string) error {
+	data, _ := json.MarshalIndent(VersionInfo{Version: strings.TrimSpace(ver)}, "", "  ")
+	return os.WriteFile(versionFile(), data, 0o600)
+}
+
+// GetVersion resolves the running application's version.
+//
+// The build-time value comes first. It is injected by the release workflow from
+// the git tag, so a tagged build always reports itself correctly and cannot be
+// contradicted by leftover state.
+//
+// version.json is only consulted when nothing was injected — a developer build.
+// It is written by the auto-updater after it downloads a newer release.
+//
+// There used to be a `git describe --tags` step between the two. It had to go:
+// in an installed app it reports the tag of whatever repository the user happens
+// to have launched from, which is never this application's version, and it spawned
+// a console window on every call.
 func GetVersion() string {
-	// 1. Persisted version.json
-	if exePath, err := os.Executable(); err == nil {
-		vFile := filepath.Join(filepath.Dir(exePath), "version.json")
-		if data, err := os.ReadFile(vFile); err == nil {
-			var info VersionInfo
-			if err := json.Unmarshal(data, &info); err == nil && strings.TrimSpace(info.Version) != "" {
-				return strings.TrimSpace(info.Version)
-			}
+	if v := strings.TrimSpace(BuildVersion); v != "" && v != devVersion {
+		return v
+	}
+
+	if data, err := os.ReadFile(versionFile()); err == nil {
+		var info VersionInfo
+		if err := json.Unmarshal(data, &info); err == nil && strings.TrimSpace(info.Version) != "" {
+			return strings.TrimSpace(info.Version)
 		}
 	}
 
-	// 2. Local Git Tag
-	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
-	if out, err := cmd.Output(); err == nil {
-		tag := strings.TrimSpace(string(out))
-		if tag != "" {
-			return tag
-		}
-	}
-
-	// 3. Build-time injected version
 	return BuildVersion
 }

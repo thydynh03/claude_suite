@@ -100,9 +100,20 @@ jobs:
       # release is a loose .exe: nothing puts it in Program Files, nothing adds a
       # Start menu entry, and nothing registers an uninstaller, so it never looks
       # like an installed application. NSIS ships on the windows-latest image.
+      # The tag is the single source of truth for the version. Without this the
+      # binary reports whatever the default in version.go happens to be, which is
+      # why every release kept calling itself v2.8.0.
+      - name: Resolve version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF -replace '^refs/tags/','' } else { "dev-$($env:GITHUB_SHA.Substring(0,7))" }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Building version $tag"
+
       - name: Build Production Wails App + Installer
         run: |
-          wails build -platform windows/amd64 -clean -nsis
+          wails build -platform windows/amd64 -clean -nsis -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
 
       - name: Verify the installer was produced
         shell: pwsh

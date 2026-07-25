@@ -4,10 +4,13 @@ import (
 	"claude_suite/backend/textutil"
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"os/exec"
+
+	"claude_suite/backend/sysproc"
 )
 
 // VerifyService runs build checks in a workspace so an agent's changes are
@@ -65,7 +68,7 @@ func (v *VerifyService) Verify(cwd string) VerifyResult {
 func runCmd(dir string, timeout time.Duration, name string, args ...string) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := sysproc.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	// Keep the tail: a compiler or bundler puts its error summary at the bottom.

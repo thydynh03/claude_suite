@@ -3,9 +3,10 @@ package services
 import (
 	"bytes"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
+
+	"claude_suite/backend/sysproc"
 )
 
 type GitCommitInfo struct {
@@ -31,19 +32,19 @@ func (g *GitService) AutoSnapshot(cwd string) error {
 		return nil
 	}
 
-	cmdCheck := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmdCheck := sysproc.Command("git", "rev-parse", "--is-inside-work-tree")
 	cmdCheck.Dir = cwd
 	if err := cmdCheck.Run(); err != nil {
 		return nil
 	}
 
-	cmdAdd := exec.Command("git", "add", ".")
+	cmdAdd := sysproc.Command("git", "add", ".")
 	cmdAdd.Dir = cwd
 	_ = cmdAdd.Run()
 
 	ts := time.Now().Format("2006-01-02 15:04:05")
 	msg := fmt.Sprintf("Auto-snapshot git tự động tại %s", ts)
-	cmdCommit := exec.Command("git", "commit", "-m", msg)
+	cmdCommit := sysproc.Command("git", "commit", "-m", msg)
 	cmdCommit.Dir = cwd
 
 	return cmdCommit.Run()
@@ -81,7 +82,7 @@ func (g *GitService) RunCommand(cwd string, args []string) (string, error) {
 		return "", fmt.Errorf("push/--force bị chặn trong panel vì an toàn")
 	}
 
-	cmd := exec.Command("git", args...)
+	cmd := sysproc.Command("git", args...)
 	cmd.Dir = cwd
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -96,20 +97,20 @@ func (g *GitService) GetWorkspaceDiff(cwd string) (string, error) {
 	if cwd == "" {
 		return "", nil
 	}
-	check := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	check := sysproc.Command("git", "rev-parse", "--is-inside-work-tree")
 	check.Dir = cwd
 	if err := check.Run(); err != nil {
 		return "", nil // not a git repo — nothing to diff
 	}
 
 	var out bytes.Buffer
-	diff := exec.Command("git", "diff", "HEAD", "--stat", "--patch")
+	diff := sysproc.Command("git", "diff", "HEAD", "--stat", "--patch")
 	diff.Dir = cwd
 	diff.Stdout = &out
 	_ = diff.Run()
 
 	// Append untracked (new) files, which don't appear in `git diff HEAD`.
-	untracked := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	untracked := sysproc.Command("git", "ls-files", "--others", "--exclude-standard")
 	untracked.Dir = cwd
 	var uout bytes.Buffer
 	untracked.Stdout = &uout
@@ -132,7 +133,7 @@ func (g *GitService) GetStatus(cwd string) (map[string]interface{}, error) {
 		return map[string]interface{}{"is_repo": false}, nil
 	}
 
-	cmdBranch := exec.Command("git", "branch", "--show-current")
+	cmdBranch := sysproc.Command("git", "branch", "--show-current")
 	cmdBranch.Dir = cwd
 	var outBranch bytes.Buffer
 	cmdBranch.Stdout = &outBranch
@@ -141,7 +142,7 @@ func (g *GitService) GetStatus(cwd string) (map[string]interface{}, error) {
 	}
 	currentBranch := strings.TrimSpace(outBranch.String())
 
-	cmdStatus := exec.Command("git", "status", "--porcelain")
+	cmdStatus := sysproc.Command("git", "status", "--porcelain")
 	cmdStatus.Dir = cwd
 	var outStatus bytes.Buffer
 	cmdStatus.Stdout = &outStatus
@@ -166,7 +167,7 @@ func (g *GitService) GetBranches(cwd string) (*GitBranchInfo, error) {
 		return &GitBranchInfo{Current: "main", Branches: []string{"main"}}, nil
 	}
 
-	cmd := exec.Command("git", "branch", "-a")
+	cmd := sysproc.Command("git", "branch", "-a")
 	cmd.Dir = cwd
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -201,7 +202,7 @@ func (g *GitService) GetLog(cwd string, limit int) ([]GitCommitInfo, error) {
 		limit = 10
 	}
 
-	cmd := exec.Command("git", "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%h|%an|%ar|%s")
+	cmd := sysproc.Command("git", "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%h|%an|%ar|%s")
 	cmd.Dir = cwd
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -229,7 +230,7 @@ func (g *GitService) CreateBranch(cwd string, branchName string) error {
 	if cwd == "" || branchName == "" {
 		return fmt.Errorf("invalid path or branch name")
 	}
-	cmd := exec.Command("git", "checkout", "-b", branchName)
+	cmd := sysproc.Command("git", "checkout", "-b", branchName)
 	cmd.Dir = cwd
 	return cmd.Run()
 }
@@ -238,7 +239,7 @@ func (g *GitService) CheckoutBranch(cwd string, branchName string) error {
 	if cwd == "" || branchName == "" {
 		return fmt.Errorf("invalid path or branch name")
 	}
-	cmd := exec.Command("git", "checkout", branchName)
+	cmd := sysproc.Command("git", "checkout", branchName)
 	cmd.Dir = cwd
 	return cmd.Run()
 }
@@ -247,12 +248,12 @@ func (g *GitService) CreateCommit(cwd string, message string) error {
 	if cwd == "" || message == "" {
 		return fmt.Errorf("invalid path or message")
 	}
-	cmdAdd := exec.Command("git", "add", ".")
+	cmdAdd := sysproc.Command("git", "add", ".")
 	cmdAdd.Dir = cwd
 	if err := cmdAdd.Run(); err != nil {
 		return err
 	}
-	cmdCommit := exec.Command("git", "commit", "-m", message)
+	cmdCommit := sysproc.Command("git", "commit", "-m", message)
 	cmdCommit.Dir = cwd
 	return cmdCommit.Run()
 }
@@ -261,7 +262,7 @@ func (g *GitService) RevertCommit(cwd string, commitHash string) error {
 	if cwd == "" || commitHash == "" {
 		return fmt.Errorf("invalid path or hash")
 	}
-	cmd := exec.Command("git", "revert", "--no-edit", commitHash)
+	cmd := sysproc.Command("git", "revert", "--no-edit", commitHash)
 	cmd.Dir = cwd
 	return cmd.Run()
 }

@@ -6,10 +6,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"claude_suite/backend/version"
+
+	"claude_suite/backend/sysproc"
 )
 
 type UpdateInfo struct {
@@ -108,7 +109,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(downloaded, total int64)) error {
 	// 1. Try Git Pull first if inside local git repository
 	if _, err := os.Stat(".git"); err == nil {
-		cmd := exec.Command("git", "pull", "origin", "master")
+		cmd := sysproc.Command("git", "pull", "origin", "master")
 		if out, err := cmd.CombinedOutput(); err == nil {
 			fmt.Println("Git pull auto-update output:", string(out))
 			// Save current git tag to version.json
@@ -188,7 +189,7 @@ del "%%~f0"
 		return err
 	}
 
-	cmd := exec.Command("cmd.exe", "/c", "start", "/b", "", batPath)
+	cmd := sysproc.Command("cmd.exe", "/c", "start", "/b", "", batPath)
 	cmd.Dir = exeDir
 	if err := cmd.Start(); err != nil {
 		return err

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"claude_suite/backend/sysproc"
 )
 
 // ── Why a dedicated profile instead of the user's real one ────────────────
@@ -49,7 +50,7 @@ func AgentUserDataDir() string {
 // ChromeExecutablePath resolves chrome.exe from the App Paths registry key,
 // falling back to the usual install locations.
 func ChromeExecutablePath() string {
-	out, err := exec.Command("reg", "query",
+	out, err := sysproc.Command("reg", "query",
 		`HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe`,
 		"/ve").Output()
 	if err == nil {
@@ -141,7 +142,7 @@ func agentChromePIDs() []int {
 		return nil
 	}
 	script := `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ForEach-Object { "$($_.ProcessId)|$($_.CommandLine)" }`
-	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script).Output()
+	out, err := sysproc.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script).Output()
 	if err != nil {
 		return nil
 	}
@@ -174,7 +175,7 @@ func closeAgentChrome(logf func(string)) {
 	}
 	for _, pid := range pids {
 		// No /F: let Chrome exit on its own so the cookie store is committed.
-		_ = exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T").Run()
+		_ = sysproc.Command("taskkill", "/PID", strconv.Itoa(pid), "/T").Run()
 	}
 	for i := 0; i < 24; i++ {
 		time.Sleep(250 * time.Millisecond)
@@ -184,7 +185,7 @@ func closeAgentChrome(logf func(string)) {
 	}
 	// Graceful close did not take; fall back to a forced kill.
 	for _, pid := range agentChromePIDs() {
-		_ = exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").Run()
+		_ = sysproc.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").Run()
 	}
 	time.Sleep(time.Second)
 }
@@ -221,7 +222,7 @@ func OpenAgentChromeForLogin(targetURL string, logf func(string)) error {
 	if logf != nil {
 		logf("🔓 Mở Chrome Agent ở chế độ ĐĂNG NHẬP (không bật debug port) — Google sẽ không chặn.")
 	}
-	if err := exec.Command(ChromeExecutablePath(), args...).Start(); err != nil {
+	if err := sysproc.Command(ChromeExecutablePath(), args...).Start(); err != nil {
 		return fmt.Errorf("không khởi động được Chrome tại %s: %w", ChromeExecutablePath(), err)
 	}
 	if logf != nil {
@@ -272,7 +273,7 @@ func EnsureAgentChromeSession(targetURL string, logf func(string)) (int, error) 
 	}
 
 	log("🚀 Mở Chrome Agent (profile riêng: %s)...", userDataDir)
-	if err := exec.Command(ChromeExecutablePath(), args...).Start(); err != nil {
+	if err := sysproc.Command(ChromeExecutablePath(), args...).Start(); err != nil {
 		return 0, fmt.Errorf("không khởi động được Chrome tại %s: %w", ChromeExecutablePath(), err)
 	}
 
