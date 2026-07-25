@@ -1305,7 +1305,9 @@ func (a *App) ClaimsHostStatus() map[string]interface{} {
 	} else if len(checks) == 0 {
 		// Worth saying plainly: with no catalogue every claim becomes an opinion
 		// and nothing can ever block, which looks like the feature is broken.
-		warning = "No checks in .claude-suite/checks.json — every claim will be an opinion and nothing can block."
+		// The catalogue is read from the workspace under review, not from this
+		// repository, so an empty one usually means the wrong folder is selected.
+		warning = "Workspace này chưa có .claude-suite/checks.json — mọi claim sẽ thành ý kiến và không có gì chặn được merge."
 	}
 	return map[string]interface{}{
 		"running":  a.claimsHost.IsRunning(),
