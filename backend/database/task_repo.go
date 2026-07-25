@@ -99,6 +99,24 @@ func (r *TaskRepository) UpdateStatus(taskID, status string, result string, sess
 	return err
 }
 
+// RecordAttemptFailure increments the task's persisted retry counter and reports
+// the new count with the task's limit.
+//
+// The counter has to live in the database: the orchestrator hands each run a
+// copy of the task, so incrementing the struct only touches a value that is
+// thrown away when the goroutine ends. Until this existed, retry_count stayed at
+// zero, max_retries never applied, and a task that always fails re-ran forever —
+// once per scan, each one a real paid agent invocation.
+func (r *TaskRepository) RecordAttemptFailure(taskID string) (retries int, maxRetries int, err error) {
+	if _, err = r.db.Exec(`UPDATE tasks SET retry_count = retry_count + 1 WHERE task_id = ?`, taskID); err != nil {
+		return 0, 0, err
+	}
+	err = r.db.QueryRow(
+		`SELECT retry_count, max_retries FROM tasks WHERE task_id = ?`, taskID,
+	).Scan(&retries, &maxRetries)
+	return retries, maxRetries, err
+}
+
 // RequeueWithDependency sends a task back to the backlog, makes it depend on
 // depID, and bumps its retry counter — used by the autonomous E2E fix loop so a
 // failed browser test re-runs only after its generated fix task completes.

@@ -451,7 +451,16 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 			o.markStopped(task, agent)
 			return
 		case <-o.stopCh:
-			// Orchestrator paused; leave task running to be handled next start.
+			// The orchestrator was paused while this task sat at the prompt. Put it
+			// back in the backlog so the next Start picks it up: leaving the row as
+			// "running" stranded it, because only backlog and queued rows are ever
+			// dispatched, and the agent stayed busy with it until the app restarted.
+			_ = o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", "")
+			agent.Status = "idle"
+			_ = o.agentRepo.Update(agent)
+			onLog(fmt.Sprintf("Task '%s' returned to the backlog: approval was still pending when the orchestrator stopped.", task.Title), "WARN")
+			o.emitBoard()
+			o.emitAgents()
 			return
 		}
 	}
@@ -561,11 +570,19 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		onLog(fmt.Sprintf("DONE '%s' (%.1fs · %d tokens%s)", task.Title, result.DurationSec, result.TokensUsed, costStr), "SUCCESS")
 		go o.notifierSvc.NotifyTaskEvent("task_done", task.Title, "done", fmt.Sprintf("Agent %s hoàn thành trong %.1fs", agent.Name, result.DurationSec))
 	} else {
-		task.RetryCount++
-		if task.RetryCount < task.MaxRetries {
-			backoffSec := time.Duration(1<<uint(task.RetryCount)) * time.Second
+		// Count the attempt in the database. This task is a copy owned by this
+		// goroutine, so incrementing the struct would be forgotten the moment the
+		// run ends — and the limit below would never be reached.
+		retries, maxRetries, err := o.taskRepo.RecordAttemptFailure(task.TaskID)
+		if err != nil {
+			// Without a trustworthy count, stop rather than risk retrying forever.
+			retries, maxRetries = 1, 1
+			onLog(fmt.Sprintf("Could not record the failed attempt (%v); not retrying.", err), "ERROR")
+		}
+		if retries < maxRetries {
+			backoffSec := time.Duration(1<<uint(retries)) * time.Second
 			_ = o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", "")
-			onLog(fmt.Sprintf("Failed '%s', retrying in %v (%d/%d)...", task.Title, backoffSec, task.RetryCount, task.MaxRetries), "WARN")
+			onLog(fmt.Sprintf("Failed '%s', retrying in %v (%d/%d)...", task.Title, backoffSec, retries, maxRetries), "WARN")
 		} else {
 			_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", result.Error, "")
 			onLog(fmt.Sprintf("FAILED '%s' after max retries", task.Title), "ERROR")
