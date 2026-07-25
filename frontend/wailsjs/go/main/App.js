@@ -58,6 +58,10 @@ export function DeleteAgent(arg1) {
   return window['go']['main']['App']['DeleteAgent'](arg1);
 }
 
+export function DeleteAntiAccountKey(arg1) {
+  return window['go']['main']['App']['DeleteAntiAccountKey'](arg1);
+}
+
 export function DeleteDoneTasks() {
   return window['go']['main']['App']['DeleteDoneTasks']();
 }
@@ -76,6 +80,10 @@ export function DownloadAndUpdate(arg1) {
 
 export function ExportKanbanReport() {
   return window['go']['main']['App']['ExportKanbanReport']();
+}
+
+export function GenerateCommitMessage() {
+  return window['go']['main']['App']['GenerateCommitMessage']();
 }
 
 export function GetActiveSession(arg1) {
@@ -114,40 +122,8 @@ export function GetIntegrationsConfig() {
   return window['go']['main']['App']['GetIntegrationsConfig']();
 }
 
-export function ShouldShowOnboarding() {
-  return window['go']['main']['App']['ShouldShowOnboarding']();
-}
-
-export function SetOnboardingSeen(arg1) {
-  return window['go']['main']['App']['SetOnboardingSeen'](arg1);
-}
-
-export function SaveIntegrationsConfig(arg1) {
-  return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
-}
-
-export function GetWorkspaceDiff() {
-  return window['go']['main']['App']['GetWorkspaceDiff']();
-}
-
-export function RunGitCommand(arg1) {
-  return window['go']['main']['App']['RunGitCommand'](arg1);
-}
-
-export function GenerateCommitMessage() {
-  return window['go']['main']['App']['GenerateCommitMessage']();
-}
-
 export function GetMaxConcurrency() {
   return window['go']['main']['App']['GetMaxConcurrency']();
-}
-
-export function SetVerifyBuild(arg1) {
-  return window['go']['main']['App']['SetVerifyBuild'](arg1);
-}
-
-export function GetVerifyBuild() {
-  return window['go']['main']['App']['GetVerifyBuild']();
 }
 
 export function GetPipelineSteps() {
@@ -166,12 +142,24 @@ export function GetSystemMetrics() {
   return window['go']['main']['App']['GetSystemMetrics']();
 }
 
+export function GetTaskTimeoutMinutes() {
+  return window['go']['main']['App']['GetTaskTimeoutMinutes']();
+}
+
 export function GetTasks() {
   return window['go']['main']['App']['GetTasks']();
 }
 
+export function GetVerifyBuild() {
+  return window['go']['main']['App']['GetVerifyBuild']();
+}
+
 export function GetWorkspaceConfig() {
   return window['go']['main']['App']['GetWorkspaceConfig']();
+}
+
+export function GetWorkspaceDiff() {
+  return window['go']['main']['App']['GetWorkspaceDiff']();
 }
 
 export function IsOrchestratorRunning() {
@@ -222,6 +210,10 @@ export function RunBrowserTask(arg1, arg2) {
   return window['go']['main']['App']['RunBrowserTask'](arg1, arg2);
 }
 
+export function RunGitCommand(arg1) {
+  return window['go']['main']['App']['RunGitCommand'](arg1);
+}
+
 export function RunPipeline(arg1) {
   return window['go']['main']['App']['RunPipeline'](arg1);
 }
@@ -236,6 +228,10 @@ export function SaveAgent(arg1) {
 
 export function SaveFileContent(arg1, arg2) {
   return window['go']['main']['App']['SaveFileContent'](arg1, arg2);
+}
+
+export function SaveIntegrationsConfig(arg1) {
+  return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
 }
 
 export function ScanWorkspaceFiles() {
@@ -254,8 +250,16 @@ export function SetAutoApproveAll(arg1) {
   return window['go']['main']['App']['SetAutoApproveAll'](arg1);
 }
 
+export function SetCurrentAntiAccountKey(arg1) {
+  return window['go']['main']['App']['SetCurrentAntiAccountKey'](arg1);
+}
+
 export function SetMaxConcurrency(arg1) {
   return window['go']['main']['App']['SetMaxConcurrency'](arg1);
+}
+
+export function SetOnboardingSeen(arg1) {
+  return window['go']['main']['App']['SetOnboardingSeen'](arg1);
 }
 
 export function SetShowCLIConsole(arg1) {
@@ -266,8 +270,12 @@ export function SetTaskTimeoutMinutes(arg1) {
   return window['go']['main']['App']['SetTaskTimeoutMinutes'](arg1);
 }
 
-export function GetTaskTimeoutMinutes() {
-  return window['go']['main']['App']['GetTaskTimeoutMinutes']();
+export function SetVerifyBuild(arg1) {
+  return window['go']['main']['App']['SetVerifyBuild'](arg1);
+}
+
+export function ShouldShowOnboarding() {
+  return window['go']['main']['App']['ShouldShowOnboarding']();
 }
 
 export function StartOrchestrator() {
@@ -282,10 +290,18 @@ export function StopTask(arg1) {
   return window['go']['main']['App']['StopTask'](arg1);
 }
 
+export function ToggleAntiAccountKeyStatus(arg1) {
+  return window['go']['main']['App']['ToggleAntiAccountKeyStatus'](arg1);
+}
+
 export function ToggleWebhook(arg1) {
   return window['go']['main']['App']['ToggleWebhook'](arg1);
 }
 
 export function UpdateTaskStatus(arg1, arg2) {
   return window['go']['main']['App']['UpdateTaskStatus'](arg1, arg2);
+}
+
+export function WarmupAntiAccountKeys() {
+  return window['go']['main']['App']['WarmupAntiAccountKeys']();
 }

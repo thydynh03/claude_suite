@@ -33,6 +33,8 @@ export function DecomposePlanWithProvider(arg1:string,arg2:string,arg3:string):P
 
 export function DeleteAgent(arg1:string):Promise<void>;
 
+export function DeleteAntiAccountKey(arg1:string):Promise<boolean>;
+
 export function DeleteDoneTasks():Promise<void>;
 
 export function DeleteTask(arg1:string):Promise<void>;
@@ -42,6 +44,8 @@ export function DownloadAndInstallUpdate(arg1:string):Promise<void>;
 export function DownloadAndUpdate(arg1:string):Promise<main.UpdateResponse>;
 
 export function ExportKanbanReport():Promise<string>;
+
+export function GenerateCommitMessage():Promise<string>;
 
 export function GetActiveSession(arg1:string):Promise<string>;
 
@@ -61,27 +65,7 @@ export function GetGitStatus():Promise<Record<string, any>>;
 
 export function GetIntegrationsConfig():Promise<models.IntegrationsConfig>;
 
-export function ShouldShowOnboarding():Promise<boolean>;
-
-export function SetOnboardingSeen(arg1:boolean):Promise<boolean>;
-
-export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
-
-export function GetWorkspaceDiff():Promise<string>;
-
-export function RunGitCommand(arg1:Array<string>):Promise<string>;
-
-export function GenerateCommitMessage():Promise<string>;
-
 export function GetMaxConcurrency():Promise<number>;
-
-export function SetVerifyBuild(arg1:boolean):Promise<boolean>;
-
-export function GetVerifyBuild():Promise<boolean>;
-
-export function SetTaskTimeoutMinutes(arg1:number):Promise<number>;
-
-export function GetTaskTimeoutMinutes():Promise<number>;
 
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
 
@@ -91,9 +75,15 @@ export function GetShowCLIConsole():Promise<boolean>;
 
 export function GetSystemMetrics():Promise<main.SystemMetrics>;
 
+export function GetTaskTimeoutMinutes():Promise<number>;
+
 export function GetTasks():Promise<Array<models.Task>>;
 
+export function GetVerifyBuild():Promise<boolean>;
+
 export function GetWorkspaceConfig():Promise<models.WorkspaceConfig>;
+
+export function GetWorkspaceDiff():Promise<string>;
 
 export function IsOrchestratorRunning():Promise<boolean>;
 
@@ -119,6 +109,8 @@ export function RevertGitCommit(arg1:string):Promise<void>;
 
 export function RunBrowserTask(arg1:string,arg2:boolean):Promise<services.BrowserActionResult>;
 
+export function RunGitCommand(arg1:Array<string>):Promise<string>;
+
 export function RunPipeline(arg1:Array<models.PipelineStep>):Promise<Array<models.PipelineStep>>;
 
 export function RunQuickCLI(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<cli.RunResult>;
@@ -126,6 +118,8 @@ export function RunQuickCLI(arg1:string,arg2:string,arg3:string,arg4:Array<strin
 export function SaveAgent(arg1:models.Agent):Promise<void>;
 
 export function SaveFileContent(arg1:string,arg2:string):Promise<void>;
+
+export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
 
 export function ScanWorkspaceFiles():Promise<Array<string>>;
 
@@ -135,9 +129,19 @@ export function SelectWorkspaceFolder():Promise<string>;
 
 export function SetAutoApproveAll(arg1:boolean):Promise<boolean>;
 
+export function SetCurrentAntiAccountKey(arg1:string):Promise<boolean>;
+
 export function SetMaxConcurrency(arg1:number):Promise<number>;
 
+export function SetOnboardingSeen(arg1:boolean):Promise<boolean>;
+
 export function SetShowCLIConsole(arg1:boolean):Promise<boolean>;
+
+export function SetTaskTimeoutMinutes(arg1:number):Promise<number>;
+
+export function SetVerifyBuild(arg1:boolean):Promise<boolean>;
+
+export function ShouldShowOnboarding():Promise<boolean>;
 
 export function StartOrchestrator():Promise<boolean>;
 
@@ -145,6 +149,10 @@ export function StopOrchestrator():Promise<boolean>;
 
 export function StopTask(arg1:string):Promise<boolean>;
 
+export function ToggleAntiAccountKeyStatus(arg1:string):Promise<string>;
+
 export function ToggleWebhook(arg1:number):Promise<boolean>;
 
 export function UpdateTaskStatus(arg1:string,arg2:string):Promise<void>;
+
+export function WarmupAntiAccountKeys():Promise<void>;
