@@ -21,3 +21,8 @@ ClaudeSuite_Kanban_Report_*.md
 ui_config.json
 integrations_config.json
 anti_accounts.json
+
+# Older builds seeded agent roles next to the binary. The real copies live in
+# backend/defaults/roles and are embedded; a root-level one is stale output.
+# Leading slash so backend/defaults/roles stays tracked.
+/roles/
