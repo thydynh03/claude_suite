@@ -70,6 +70,11 @@ jobs:
       # ignores — including bindings drifting out of sync with the Go source.
       - name: Type check
         run: npm run check
+      # Stores and utilities carry real logic — log buffering, per-task routing,
+      # toast lifetimes, cost estimates — and a type check does not exercise any
+      # of it.
+      - name: Test
+        run: npm run test
       - name: Build
         run: npm run build
 

@@ -54,8 +54,14 @@ Run this locally before opening a pull request — it is what
 go build ./backend/... ./cmd/...
 go vet ./backend/... ./cmd/...
 go test ./backend/... ./cmd/...
-cd frontend && npm ci && npm run check && npm run build
+cd frontend && npm ci && npm run check && npm run test && npm run build
 ```
+
+Frontend tests run on Vitest. `npm run test:watch` reruns them as you edit.
+Stores and utilities are plain TypeScript and need no DOM; component tests use
+`@testing-library/svelte` against jsdom, configured in `vitest.config.ts` —
+deliberately separate from `vite.config.ts`, so test tooling cannot change what
+the production build does.
 
 Two things about that command list are deliberate:
 
@@ -131,7 +137,7 @@ Any new path that reads or writes user files must go through
 | `backend/database/` | SQLite repositories and migrations |
 | `backend/tui/` | terminal UI (`model` / `update` / `commands` / `view` files) |
 | `backend/contract/` | cross-frontend consistency checks |
-| `frontend/src/` | Svelte 5 desktop UI |
+| `frontend/src/` | Svelte 5 desktop UI (`*.test.ts` next to what they cover) |
 | `cmd/claude-suite-tui/` | TUI entry point |
 
 ---
