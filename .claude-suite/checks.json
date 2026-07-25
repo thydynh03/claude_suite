@@ -1,0 +1,68 @@
+{
+  "_comment": [
+    "Checks a claim may point at. An agent names an entry here; it never supplies",
+    "a command, because claims arrive from other people's machines and the host",
+    "running them has that person's keys and source on disk.",
+    "",
+    "Convention: a falsifier PASSES when the claim is wrong. A non-zero exit",
+    "therefore confirms the defect. Reading this backwards inverts every verdict.",
+    "",
+    "Adding an entry goes through review like any other code."
+  ],
+  "checks": [
+    {
+      "name": "backend-tests",
+      "description": "Full backend test suite",
+      "command": ["go", "test", "./backend/...", "-count=1"],
+      "timeout_sec": 300
+    },
+    {
+      "name": "backend-vet",
+      "description": "go vet over backend and cmd",
+      "command": ["go", "vet", "./backend/...", "./cmd/..."],
+      "timeout_sec": 180
+    },
+    {
+      "name": "backend-build",
+      "description": "Backend and CLI compile",
+      "command": ["go", "build", "./backend/...", "./cmd/..."],
+      "timeout_sec": 300
+    },
+    {
+      "name": "orchestrator-tests",
+      "description": "Dispatch, concurrency limit and per-task approval",
+      "command": ["go", "test", "./backend/orchestrator/", "-count=1"],
+      "timeout_sec": 180
+    },
+    {
+      "name": "tui-wal-visibility",
+      "description": "The read-only TUI sees rows still in the write-ahead log",
+      "command": ["go", "test", "./backend/tui/", "-run", "TestOpenReadOnlySeesUncheckpointedWALRows", "-count=1"],
+      "timeout_sec": 120
+    },
+    {
+      "name": "webhook-bind-failure",
+      "description": "Start reports a port it could not bind",
+      "command": ["go", "test", "./backend/services/", "-run", "TestWebhook", "-count=1"],
+      "timeout_sec": 120
+    },
+    {
+      "name": "console-window-hidden",
+      "description": "Helper processes do not allocate a console window",
+      "command": ["go", "test", "./backend/sysproc/", "-count=1"],
+      "timeout_sec": 60
+    },
+    {
+      "name": "data-dir-migration",
+      "description": "Legacy data is adopted with its write-ahead log intact",
+      "command": ["go", "test", "./backend/database/", "-run", "TestAdopt", "-count=1"],
+      "timeout_sec": 120
+    },
+    {
+      "name": "frontend-typecheck",
+      "description": "svelte-check over the frontend",
+      "command": ["npm", "--prefix", "frontend", "run", "check"],
+      "timeout_sec": 300
+    }
+  ]
+}

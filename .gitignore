@@ -26,3 +26,7 @@ anti_accounts.json
 # backend/defaults/roles and are embedded; a root-level one is stale output.
 # Leading slash so backend/defaults/roles stays tracked.
 /roles/
+
+# Adjudication session state is per-run and per-machine; the catalogue at
+# .claude-suite/checks.json is reviewed config and stays tracked.
+.claude-suite/session-*/
