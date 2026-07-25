@@ -13,6 +13,8 @@ export function AssignTask(arg1:string,arg2:string):Promise<void>;
 
 export function CancelScheduledJob(arg1:string):Promise<void>;
 
+export function CheckChromeDebugMode():Promise<Record<string, any>>;
+
 export function CheckForUpdates():Promise<services.UpdateInfo>;
 
 export function CheckoutGitBranch(arg1:string):Promise<void>;
@@ -97,6 +99,8 @@ export function IsWebhookRunning():Promise<boolean>;
 
 export function ListRoles():Promise<Array<string>>;
 
+export function OpenAgentChromeWindow(arg1:string):Promise<Record<string, any>>;
+
 export function OpenGoogleOAuthLogin(arg1:string):Promise<string>;
 
 export function OpenURLInBrowser(arg1:string):Promise<void>;
@@ -110,6 +114,8 @@ export function ReadFileContent(arg1:string):Promise<string>;
 export function ResetAgentsToDefaults():Promise<void>;
 
 export function ResolveApproval(arg1:string,arg2:boolean):Promise<void>;
+
+export function ResolveBrowserAsk(arg1:string,arg2:string):Promise<boolean>;
 
 export function RetryTask(arg1:string):Promise<void>;
 
@@ -156,6 +162,8 @@ export function SetVerifyBuild(arg1:boolean):Promise<boolean>;
 export function ShouldShowOnboarding():Promise<boolean>;
 
 export function StartOrchestrator():Promise<boolean>;
+
+export function StopBrowserTask():Promise<void>;
 
 export function StopOrchestrator():Promise<boolean>;
 

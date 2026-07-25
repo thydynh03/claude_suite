@@ -122,6 +122,14 @@ func (a *App) startup(ctx context.Context) {
 			"time":    time.Now().Format("15:04:05"),
 		})
 	}
+
+	// Browser Agent asks the user through the live log instead of dying on a
+	// blocked step, so it needs a way to push forms onto the event bus.
+	a.browserService.SetEventEmitter(func(event string, payload map[string]interface{}) {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, event, payload)
+		}
+	})
 }
 
 // ── Workspace ──────────────────────────────────────────────────────────
@@ -695,6 +703,45 @@ func (a *App) addRecentWorkspace(dir string) {
 	a.workspaceConfig.RecentWorkspaces = newRecent
 }
 
+func (a *App) StopBrowserTask() {
+	a.browserService.StopBrowserTask()
+}
+
+// ResolveBrowserAsk delivers a live-log form answer back to the waiting agent.
+func (a *App) ResolveBrowserAsk(id string, answer string) bool {
+	return a.browserService.ResolveAsk(id, answer)
+}
+
+// OpenAgentChromeWindow brings up the agent's own persistent Chrome profile so the
+// user can sign in to a site once; the profile keeps that session for later runs.
+func (a *App) OpenAgentChromeWindow(targetURL string) map[string]interface{} {
+	logs := []string{}
+	port, err := services.EnsureAgentChromeSession(targetURL, func(msg string) {
+		logs = append(logs, msg)
+	})
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("❌ %v", err))
+		return map[string]interface{}{"success": false, "logs": logs, "error": err.Error()}
+	}
+	return map[string]interface{}{
+		"success": true,
+		"logs":    logs,
+		"port":    port,
+		"profile": services.AgentUserDataDir(),
+	}
+}
+
+// CheckChromeDebugMode reports whether the agent's own Chrome profile is running
+// and attachable over CDP.
+func (a *App) CheckChromeDebugMode() map[string]interface{} {
+	ready, port, profileDir := services.ChromeAgentStatus()
+	msg := fmt.Sprintf("⏸️ Chrome Agent chưa chạy. Nó sẽ tự mở khi bạn chạy Agent (profile: %s).", profileDir)
+	if ready {
+		msg = fmt.Sprintf("✅ Chrome Agent đang chạy trên port %d — các phiên đã đăng nhập trong profile này được dùng lại.", port)
+	}
+	return map[string]interface{}{"ready": ready, "message": msg, "profile": profileDir, "port": port}
+}
+
 func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, model string, takeScreenshot bool, headless bool, useRealProfile bool, maxSteps int) (*services.BrowserActionResult, error) {
 	systemPrompt := ""
 	if roleFile != "" {
@@ -709,7 +756,16 @@ func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, m
 		runner = a.cliRunner
 	}
 
-	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner)
+	onLog := func(msg string) {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "browser_agent_log", map[string]string{
+				"log":  msg,
+				"time": time.Now().Format("15:04:05"),
+			})
+		}
+	}
+
+	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner, onLog)
 }
 
 // ── Anti CLI Multi-Account / Key Pool ──────────────────────────────────

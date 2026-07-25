@@ -18,6 +18,10 @@ export function CancelScheduledJob(arg1) {
   return window['go']['main']['App']['CancelScheduledJob'](arg1);
 }
 
+export function CheckChromeDebugMode() {
+  return window['go']['main']['App']['CheckChromeDebugMode']();
+}
+
 export function CheckForUpdates() {
   return window['go']['main']['App']['CheckForUpdates']();
 }
@@ -186,6 +190,10 @@ export function ListRoles() {
   return window['go']['main']['App']['ListRoles']();
 }
 
+export function OpenAgentChromeWindow(arg1) {
+  return window['go']['main']['App']['OpenAgentChromeWindow'](arg1);
+}
+
 export function OpenGoogleOAuthLogin(arg1) {
   return window['go']['main']['App']['OpenGoogleOAuthLogin'](arg1);
 }
@@ -212,6 +220,10 @@ export function ResetAgentsToDefaults() {
 
 export function ResolveApproval(arg1, arg2) {
   return window['go']['main']['App']['ResolveApproval'](arg1, arg2);
+}
+
+export function ResolveBrowserAsk(arg1, arg2) {
+  return window['go']['main']['App']['ResolveBrowserAsk'](arg1, arg2);
 }
 
 export function RetryTask(arg1) {
@@ -304,6 +316,10 @@ export function ShouldShowOnboarding() {
 
 export function StartOrchestrator() {
   return window['go']['main']['App']['StartOrchestrator']();
+}
+
+export function StopBrowserTask() {
+  return window['go']['main']['App']['StopBrowserTask']();
 }
 
 export function StopOrchestrator() {
