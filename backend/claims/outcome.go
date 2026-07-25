@@ -50,9 +50,15 @@ func (s *Session) Close() *Outcome {
 		Dissent:   append([]Remark(nil), s.remarks...),
 	}
 
-	for _, c := range s.claims {
+	// The outcome carries copies: it is marshalled to every participant's disk
+	// after this returns, and nothing should be reading the session's own structs
+	// by then.
+	for _, live := range s.claims {
+		c := &Claim{}
+		*c = *live
 		switch {
 		case c.Kind == KindOpinion:
+			live.Verdict = VerdictEscalated
 			c.Verdict = VerdictEscalated
 			out.Escalated = append(out.Escalated, c)
 		case c.Verdict == VerdictConfirmed:
@@ -63,6 +69,7 @@ func (s *Session) Close() *Outcome {
 			// Pending or inconclusive: a check that timed out or never ran is not
 			// a confirmation. Send it to a person rather than guessing.
 			if c.Verdict == VerdictPending {
+				live.Verdict = VerdictInconclusive
 				c.Verdict = VerdictInconclusive
 			}
 			out.Escalated = append(out.Escalated, c)
@@ -76,7 +83,7 @@ func (s *Session) Close() *Outcome {
 		return out.Participants[i].Author < out.Participants[j].Author
 	})
 
-	s.Phase = PhaseRecord
+	s.phase = PhaseRecord
 	return out
 }
 

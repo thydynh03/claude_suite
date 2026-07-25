@@ -181,7 +181,7 @@ func waitForPhase(t *testing.T, h *Host, id string, want Phase, timeout time.Dur
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if s, ok := h.Session(id); ok && s.Phase == want {
+		if s, ok := h.Session(id); ok && s.Phase() == want {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

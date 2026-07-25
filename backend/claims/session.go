@@ -55,10 +55,17 @@ type Remark struct {
 type Session struct {
 	mu sync.Mutex
 
+	// ID, Subject and Opened are set once at construction and never written
+	// again, so they are safe to read without the lock.
 	ID      string    `json:"id"`
 	Subject string    `json:"subject"`
-	Phase   Phase     `json:"phase"`
 	Opened  time.Time `json:"opened"`
+
+	// phase is written by Advance and read from several goroutines: the host's
+	// adjudication goroutine, each connection's read loop, and the runner. It
+	// stays unexported so every reader has to go through Phase(), which takes
+	// the lock. As an exported field it raced, and the race detector caught it.
+	phase Phase
 
 	participants map[string]*Participant
 	claims       []*Claim
@@ -75,10 +82,17 @@ func NewSession(id, subject string) *Session {
 	return &Session{
 		ID:           id,
 		Subject:      subject,
-		Phase:        PhaseCollect,
+		phase:        PhaseCollect,
 		Opened:       time.Now(),
 		participants: map[string]*Participant{},
 	}
+}
+
+// Phase reports where the session is, safely from any goroutine.
+func (s *Session) Phase() Phase {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.phase
 }
 
 // Join adds an agent.
@@ -96,8 +110,8 @@ func (s *Session) Join(author, provider string) error {
 	if strings.TrimSpace(author) == "" {
 		return fmt.Errorf("participant has no author id")
 	}
-	if s.Phase != PhaseCollect {
-		return fmt.Errorf("session %s is past the collect phase (%s); cannot join now", s.ID, s.Phase)
+	if s.phase != PhaseCollect {
+		return fmt.Errorf("session %s is past the collect phase (%s); cannot join now", s.ID, s.phase)
 	}
 	if _, exists := s.participants[author]; exists {
 		return fmt.Errorf("%s has already joined", author)
@@ -160,8 +174,8 @@ func (s *Session) Submit(c *Claim) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.Phase != PhaseCollect {
-		return fmt.Errorf("claims are only accepted during collect, session is in %s", s.Phase)
+	if s.phase != PhaseCollect {
+		return fmt.Errorf("claims are only accepted during collect, session is in %s", s.phase)
 	}
 	if err := c.Validate(); err != nil {
 		return err
@@ -183,16 +197,20 @@ func (s *Session) Submit(c *Claim) error {
 // During collect this is only its own claims. That is the whole point of the
 // phase: an agent that has read another's wording tends to drift toward it, and
 // the drift is toward confidence rather than toward correctness.
+//
+// Copies, not pointers. A caller marshalling these to a websocket would
+// otherwise be reading Verdict and Evidence while adjudication writes them.
 func (s *Session) VisibleTo(author string) []*Claim {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var out []*Claim
 	for _, c := range s.claims {
-		if s.Phase == PhaseCollect && c.Author != author {
+		if s.phase == PhaseCollect && c.Author != author {
 			continue
 		}
-		out = append(out, c)
+		snapshot := *c
+		out = append(out, &snapshot)
 	}
 	return out
 }
@@ -202,10 +220,13 @@ func (s *Session) PendingFalsifiers() []*Claim {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Copies for the same reason as VisibleTo. The runner settles by id, so it
+	// never needs to hold the live struct.
 	var out []*Claim
 	for _, c := range s.claims {
 		if c.Kind == KindVerifiable && c.Verdict == VerdictPending {
-			out = append(out, c)
+			snapshot := *c
+			out = append(out, &snapshot)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -237,15 +258,15 @@ func (s *Session) Advance(to Phase) error {
 
 	switch to {
 	case PhaseAdjudicate:
-		if s.Phase != PhaseCollect {
-			return fmt.Errorf("adjudicate follows collect, not %s", s.Phase)
+		if s.phase != PhaseCollect {
+			return fmt.Errorf("adjudicate follows collect, not %s", s.phase)
 		}
 	case PhaseReveal:
 		// Refusing this is the core safeguard: revealing before the evidence is
 		// in means agents form positions against each other rather than against
 		// the output.
-		if s.Phase != PhaseAdjudicate {
-			return fmt.Errorf("reveal follows adjudicate, not %s: agents must not see each other before the evidence is in", s.Phase)
+		if s.phase != PhaseAdjudicate {
+			return fmt.Errorf("reveal follows adjudicate, not %s: agents must not see each other before the evidence is in", s.phase)
 		}
 		for _, c := range s.claims {
 			if c.Kind == KindVerifiable && c.Verdict == VerdictPending {
@@ -253,8 +274,8 @@ func (s *Session) Advance(to Phase) error {
 			}
 		}
 	case PhaseDebate:
-		if s.Phase != PhaseReveal && s.Phase != PhaseDebate {
-			return fmt.Errorf("debate follows reveal, not %s", s.Phase)
+		if s.phase != PhaseReveal && s.phase != PhaseDebate {
+			return fmt.Errorf("debate follows reveal, not %s", s.phase)
 		}
 		if !s.hasOpenOpinions() {
 			return fmt.Errorf("nothing to debate: every claim was settled by evidence")
@@ -264,14 +285,14 @@ func (s *Session) Advance(to Phase) error {
 		}
 		s.debateRound++
 	case PhaseRecord:
-		if s.Phase == PhaseCollect {
+		if s.phase == PhaseCollect {
 			return fmt.Errorf("cannot record before adjudicating")
 		}
 	default:
 		return fmt.Errorf("unknown phase %q", to)
 	}
 
-	s.Phase = to
+	s.phase = to
 	return nil
 }
 
@@ -290,8 +311,8 @@ func (s *Session) Remark(author, claimID, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.Phase != PhaseDebate {
-		return fmt.Errorf("remarks are only accepted during debate, session is in %s", s.Phase)
+	if s.phase != PhaseDebate {
+		return fmt.Errorf("remarks are only accepted during debate, session is in %s", s.phase)
 	}
 	for _, c := range s.claims {
 		if c.ID != claimID {

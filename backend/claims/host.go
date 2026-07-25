@@ -310,7 +310,7 @@ func (h *Host) handleJoin(hs *hosted, c *connection, msg Message) error {
 		note = "roster warning: " + strings.Join(warnings, "; ")
 	}
 	return c.send(Message{
-		Type: MsgState, Phase: hs.session.Phase,
+		Type: MsgState, Phase: hs.session.Phase(),
 		Claims: hs.session.VisibleTo(msg.Author), Warnings: warnings, Note: note,
 	})
 }
@@ -338,7 +338,7 @@ func (h *Host) handleClaim(hs *hosted, c *connection, msg Message) error {
 	// Only its own claims come back. The collect phase is blind, and that is
 	// enforced here rather than trusted to the client.
 	return c.send(Message{
-		Type: MsgState, Phase: hs.session.Phase, Claims: hs.session.VisibleTo(c.author),
+		Type: MsgState, Phase: hs.session.Phase(), Claims: hs.session.VisibleTo(c.author),
 	})
 }
 
@@ -357,7 +357,7 @@ func (h *Host) handleDone(hs *hosted, c *connection) error {
 // maybeAdjudicate moves the session on once every connected agent has finished.
 func (h *Host) maybeAdjudicate(hs *hosted) {
 	hs.mu.Lock()
-	if hs.closed || hs.session.Phase != PhaseCollect || len(hs.conns) == 0 {
+	if hs.closed || hs.session.Phase() != PhaseCollect || len(hs.conns) == 0 {
 		hs.mu.Unlock()
 		return
 	}
@@ -444,7 +444,7 @@ func (h *Host) broadcastState(hs *hosted) {
 
 	for _, c := range conns {
 		_ = c.send(Message{
-			Type: MsgState, Phase: hs.session.Phase, Claims: hs.session.VisibleTo(c.author),
+			Type: MsgState, Phase: hs.session.Phase(), Claims: hs.session.VisibleTo(c.author),
 		})
 	}
 }

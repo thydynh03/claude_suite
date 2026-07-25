@@ -155,8 +155,8 @@ func (r *Runner) Run(ctx context.Context, c *Claim) (Verdict, string, int) {
 
 // Adjudicate runs every pending falsifier in the session and records the results.
 func (r *Runner) Adjudicate(ctx context.Context, s *Session) error {
-	if s.Phase != PhaseAdjudicate {
-		return fmt.Errorf("session is in %s, not %s", s.Phase, PhaseAdjudicate)
+	if s.Phase() != PhaseAdjudicate {
+		return fmt.Errorf("session is in %s, not %s", s.Phase(), PhaseAdjudicate)
 	}
 	for _, c := range s.PendingFalsifiers() {
 		verdict, evidence, code := r.Run(ctx, c)
