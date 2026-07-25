@@ -184,9 +184,35 @@ func (p *AccountKeyPool) WarmupKeys() {
 	defer p.mu.Unlock()
 	nowStr := time.Now().Format("1/2/2006 03:04 PM")
 	for i := range p.keys {
+		// Warmup clears rate-limit marks; it does not undo the accounts the user
+		// switched off.
+		if p.keys[i].Status == statusDisabled {
+			continue
+		}
 		p.keys[i].Status = "active"
 		p.keys[i].LastUsed = nowStr
 	}
+}
+
+// statusDisabled marks an account the user switched off in the pool dashboard.
+// It means "do not send requests as this account", so key selection has to
+// honour it — otherwise the toggle is decorative.
+const statusDisabled = "disabled"
+
+// nextUsableIndex returns the first index at or after start, wrapping once, whose
+// account the user has not disabled. It returns -1 when every account is off.
+// Callers must hold the lock.
+func (p *AccountKeyPool) nextUsableIndex(start int) int {
+	if len(p.keys) == 0 {
+		return -1
+	}
+	for offset := 0; offset < len(p.keys); offset++ {
+		i := (start + offset) % len(p.keys)
+		if p.keys[i].Status != statusDisabled {
+			return i
+		}
+	}
+	return -1
 }
 
 func (p *AccountKeyPool) GetCurrentAccount() *AntiAccountKey {
@@ -195,7 +221,14 @@ func (p *AccountKeyPool) GetCurrentAccount() *AntiAccountKey {
 	if len(p.keys) == 0 {
 		return nil
 	}
-	acc := p.keys[p.current%len(p.keys)]
+	// Skip past accounts the user disabled rather than sending requests as one.
+	// With every account off, the caller falls back to the environment.
+	i := p.nextUsableIndex(p.current % len(p.keys))
+	if i < 0 {
+		return nil
+	}
+	p.current = i
+	acc := p.keys[i]
 	return &acc
 }
 
@@ -216,11 +249,22 @@ func (p *AccountKeyPool) RotateNextKey() string {
 	if len(p.keys) <= 1 {
 		return ""
 	}
-	p.keys[p.current%len(p.keys)].Status = "rate_limited_429"
-	p.current = (p.current + 1) % len(p.keys)
-	nextKey := &p.keys[p.current]
-	nextKey.Status = "active"
-	return nextKey.Name
+
+	current := p.current % len(p.keys)
+	p.keys[current].Status = "rate_limited_429"
+
+	// Move to the next account the user has not disabled. Rotating into an
+	// account is a decision to try it again, so a stale rate-limit mark is
+	// cleared — but a disabled one is never woken up, because switching it off
+	// was deliberate.
+	next := p.nextUsableIndex((current + 1) % len(p.keys))
+	if next < 0 || next == current {
+		return ""
+	}
+
+	p.current = next
+	p.keys[next].Status = "active"
+	return p.keys[next].Name
 }
 
 type AntigravityCLI struct {

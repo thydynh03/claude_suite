@@ -94,13 +94,24 @@ The new console still shows the output with `/c`.
 
 ## 4. The browser agent gets its own Chrome profile, at a path without spaces
 
-Two separate constraints, both learned the hard way:
+**A dedicated profile, not the user's real one.** Two reasons, both learned the
+hard way: Chrome 136 and later refuse `--remote-debugging-port` when the profile
+is the default *User Data* directory, so the agent silently fell back to a
+throwaway profile and every site appeared logged out; and driving the real
+profile made Chrome wipe its cookies, signing the user out of everything. The
+agent profile is persistent, so signing in is a one-time cost.
 
-- **A dedicated profile, not the user's real one.** Driving the real profile
-  made Chrome wipe its cookies, which signed the user out of everything. The
-  agent profile is persistent, so signing in is a one-time cost, not per-run.
-- **No spaces in the profile path** (`AgentUserDataDir`). A space silently breaks
-  `--user-data-dir` quoting and Chrome opens the fragments as URLs instead.
+**The path may contain spaces, and that is fine.** `AgentUserDataDir` is rooted
+at `LOCALAPPDATA`, which carries the account name, so it cannot promise
+otherwise. It stays safe because the directory is passed as a single element of
+an `exec.Command` argument slice — Go quotes it — and `agentChromePIDs` compares
+it in Go instead of pasting it into a PowerShell string. Building a command line
+by concatenating this path is what would break it.
+
+> An earlier comment here claimed the path "deliberately contains no spaces".
+> It never did: set an account name with a space and the test in
+> `chrome_debug_test.go` shows the space surviving. Corrected rather than copied
+> forward.
 
 ---
 

@@ -31,9 +31,14 @@ import (
 // inside the agent window; the directory survives app and machine restarts, so
 // it is a one-time cost rather than a per-run one.
 
-// AgentUserDataDir is the agent's own Chrome profile root. The path deliberately
-// contains no spaces — a space here silently breaks --user-data-dir quoting and
-// Chrome ends up opening the fragments as URLs.
+// AgentUserDataDir is the agent's own Chrome profile root.
+//
+// The result can contain spaces, because LOCALAPPDATA carries the account name.
+// That is safe: the directory is only ever passed as a single element of an
+// exec.Command argument slice, which Go quotes when it builds the Windows
+// command line, and agentChromePIDs compares it in Go rather than pasting it
+// into a PowerShell string. Keep it that way — building a command line by
+// concatenating this path is what would break it.
 func AgentUserDataDir() string {
 	if base := os.Getenv("LOCALAPPDATA"); base != "" {
 		return filepath.Join(base, "ClaudeSuite", "ChromeAgent")
