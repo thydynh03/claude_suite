@@ -68,20 +68,14 @@ func defaultQuotas(tier string) []ModelQuota {
 }
 
 var GlobalAntiPool = &AccountKeyPool{
-	keys: []AntiAccountKey{
-		{
-			ID:          "key-1",
-			Name:        "Environment Default Key",
-			Email:       "env.default@claude-suite.local",
-			Type:        "api_key",
-			APIKey:      "",
-			Status:      "active",
-			Tier:        "PRO",
-			IsCurrent:   true,
-			LastUsed:    time.Now().Format("1/2/2006 03:04 PM"),
-			ModelQuotas: defaultQuotas("PRO"),
-		},
-	},
+	keys: []AntiAccountKey{},
+}
+
+func (p *AccountKeyPool) SetKeys(keys []AntiAccountKey) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.keys = keys
+	p.current = 0
 }
 
 func (p *AccountKeyPool) GetKeys() []AntiAccountKey {

@@ -109,6 +109,7 @@ func (a *App) startup(ctx context.Context) {
 	a.loadWorkspaceConfig()
 	a.loadIntegrationsConfig()
 	a.loadUIConfig()
+	a.loadAntiKeys()
 	if a.workspaceConfig.LastWorkspaceFolder != "" {
 		a.orchestrator.SetWorkspaceDir(a.workspaceConfig.LastWorkspaceFolder)
 	}
@@ -614,6 +615,27 @@ func (a *App) saveIntegrationsConfig() {
 	_ = os.WriteFile(cfgPath, data, 0644)
 }
 
+// ── Anti Keys Config ───────────────────────────────────────────────────
+
+func (a *App) loadAntiKeys() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
+	data, err := os.ReadFile(cfgPath)
+	if err == nil {
+		var keys []cli.AntiAccountKey
+		if json.Unmarshal(data, &keys) == nil {
+			cli.GlobalAntiPool.SetKeys(keys)
+		}
+	}
+}
+
+func (a *App) saveAntiKeys() {
+	dbDir := filepath.Dir(database.GetDBPath())
+	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
+	data, _ := json.MarshalIndent(cli.GlobalAntiPool.GetKeys(), "", "  ")
+	_ = os.WriteFile(cfgPath, data, 0644)
+}
+
 // ── First-run Onboarding State ─────────────────────────────────────────
 
 func (a *App) loadUIConfig() {
@@ -687,26 +709,35 @@ func (a *App) GetAntiAccountKeys() []cli.AntiAccountKey {
 
 func (a *App) AddAntiAccountKey(name, apiKey string) {
 	cli.GlobalAntiPool.AddKey(name, apiKey)
+	a.saveAntiKeys()
 }
 
 func (a *App) AddAntiOAuthAccountKey(name, oauthToken string) {
 	cli.GlobalAntiPool.AddOAuthKey(name, oauthToken)
+	a.saveAntiKeys()
 }
 
 func (a *App) DeleteAntiAccountKey(id string) bool {
-	return cli.GlobalAntiPool.DeleteKey(id)
+	res := cli.GlobalAntiPool.DeleteKey(id)
+	a.saveAntiKeys()
+	return res
 }
 
 func (a *App) SetCurrentAntiAccountKey(id string) bool {
-	return cli.GlobalAntiPool.SetCurrentKey(id)
+	res := cli.GlobalAntiPool.SetCurrentKey(id)
+	a.saveAntiKeys()
+	return res
 }
 
 func (a *App) ToggleAntiAccountKeyStatus(id string) string {
-	return cli.GlobalAntiPool.ToggleKeyStatus(id)
+	res := cli.GlobalAntiPool.ToggleKeyStatus(id)
+	a.saveAntiKeys()
+	return res
 }
 
 func (a *App) WarmupAntiAccountKeys() {
 	cli.GlobalAntiPool.WarmupKeys()
+	a.saveAntiKeys()
 }
 
 // oauthCreds resolves GCP OAuth credentials from (1) environment variables,
