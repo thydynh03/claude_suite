@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"claude_suite/backend/paths"
 )
 
 type LogLevel string
@@ -38,8 +40,8 @@ var (
 
 func GetLogger() *Logger {
 	loggerOnce.Do(func() {
-		home, _ := os.UserHomeDir()
-		logDir := filepath.Join(home, ".claude_suite", "logs")
+		// Same data directory as the database and configs.
+		logDir := paths.LogDir()
 		_ = os.MkdirAll(logDir, 0755)
 
 		filePath := filepath.Join(logDir, "claude_suite.log")

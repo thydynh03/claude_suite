@@ -3,9 +3,10 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
+
+	"claude_suite/backend/paths"
 
 	_ "modernc.org/sqlite"
 )
@@ -15,19 +16,13 @@ var (
 	dbOnce     sync.Once
 )
 
-// GetDBPath returns the absolute path to SQLite database file
+// GetDBPath returns the absolute path to SQLite database file.
+//
+// Many callers use filepath.Dir(GetDBPath()) as "the data directory", so this
+// deliberately stays a thin wrapper over paths.DataDir rather than growing its
+// own idea of where state lives.
 func GetDBPath() string {
-	baseDir := `e:\exe`
-	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			baseDir = "."
-		} else {
-			baseDir = filepath.Join(home, ".claude_suite")
-		}
-	}
-	_ = os.MkdirAll(baseDir, 0755)
-	return filepath.Join(baseDir, "agent_manager.db")
+	return filepath.Join(paths.EnsureDataDir(), paths.DatabaseFile)
 }
 
 // OpenAt opens the database at path, applies the connection pragmas and runs
@@ -58,6 +53,15 @@ func InitDB() (*sql.DB, error) {
 	var initErr error
 	dbOnce.Do(func() {
 		dbPath := GetDBPath()
+
+		// Older builds hardcoded the developer's checkout as the data directory.
+		// Adopt that state once, before anything opens the new database.
+		if report, err := AdoptLegacyDataDir(filepath.Dir(dbPath)); err != nil {
+			fmt.Printf("Data migration warning: %v\n", err)
+		} else if report != nil {
+			fmt.Printf("Adopted existing Claude Suite data from %s (kept as a backup there)\n", report.From)
+		}
+
 		db, err := OpenAt(dbPath)
 		if err != nil {
 			initErr = err

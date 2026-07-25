@@ -100,22 +100,43 @@ func openReadOnly(path string) (*sql.DB, string, error) {
 		return nil, "", fmt.Errorf("database path is a directory: %s", absolute)
 	}
 
-	// immutable=1 prevents SQLite from checkpointing or removing WAL/SHM
-	// sidecars when the read-only TUI opens and closes the database.
-	dsn := sqliteURI(absolute, "mode=ro&immutable=1")
+	// mode=ro alone is what keeps this read-only: SQLite will not checkpoint or
+	// remove the WAL through a connection that cannot write.
+	//
+	// immutable=1 must NOT be added here. It promises SQLite the file never
+	// changes, so it skips the WAL entirely — every row the running app has
+	// written but not yet checkpointed becomes invisible, and rows deleted in
+	// the WAL come back. Measured on a live database: 2 agents shown that had
+	// actually been deleted, and 7 memory entries missing.
+	db, err := openReadOnlyDSN(sqliteURI(absolute, "mode=ro"))
+	if err == nil {
+		return db, absolute, nil
+	}
+
+	// A read-only connection cannot create the -shm file, so a database left
+	// with a WAL but no sidecar cannot be opened this way. Falling back to
+	// immutable=1 shows the last checkpointed state rather than refusing to
+	// start at all.
+	if fallback, fallbackErr := openReadOnlyDSN(sqliteURI(absolute, "mode=ro&immutable=1")); fallbackErr == nil {
+		return fallback, absolute, nil
+	}
+	return nil, "", err
+}
+
+func openReadOnlyDSN(dsn string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, "", fmt.Errorf("open database read-only: %w", err)
+		return nil, fmt.Errorf("open database read-only: %w", err)
 	}
 	if _, err := db.Exec("PRAGMA query_only=ON"); err != nil {
 		_ = db.Close()
-		return nil, "", fmt.Errorf("enable query-only mode: %w", err)
+		return nil, fmt.Errorf("enable query-only mode: %w", err)
 	}
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
-		return nil, "", fmt.Errorf("read database: %w", err)
+		return nil, fmt.Errorf("read database: %w", err)
 	}
-	return db, absolute, nil
+	return db, nil
 }
 
 func validateReadableSchema(db *sql.DB) error {
