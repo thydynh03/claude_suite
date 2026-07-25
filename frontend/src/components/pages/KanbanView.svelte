@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog, tasksStore, agentsStore } from '../../lib/stores/appState';
@@ -7,9 +8,23 @@
   export let tasks: Task[] = [];
   export let onRefresh: () => void;
 
-  $: if ($tasksStore) {
-    tasks = $tasksStore;
-  }
+  onMount(() => {
+    const unsub = tasksStore.subscribe((val) => {
+      tasks = Array.isArray(val) ? [...val] : [];
+    });
+
+    let unoff: any;
+    if ((window as any)?.runtime?.EventsOn) {
+      unoff = (window as any).runtime.EventsOn('board_updated', async () => {
+        if (onRefresh) await onRefresh();
+      });
+    }
+
+    return () => {
+      unsub();
+      if (unoff && typeof unoff === 'function') unoff();
+    };
+  });
 
   $: agentOptions = [
     { value: '', label: 'Unassigned (Auto Dispatch)' },
@@ -149,12 +164,16 @@
 
   async function handleClearAll() {
     if (confirm('Bạn có chắc chắn muốn xóa toàn bộ Tasks không?')) {
-      await AppBindings.ClearAllTasks();
-      tasks = [];
-      tasksStore.set([]);
-      selectedTaskIDs = [];
-      if (onRefresh) onRefresh();
-      addLog('Đã xóa toàn bộ tasks.', 'INFO');
+      try {
+        await AppBindings.ClearAllTasks();
+        tasks = [];
+        tasksStore.set([]);
+        selectedTaskIDs = [];
+        if (onRefresh) await onRefresh();
+        addLog('Đã xóa toàn bộ tasks.', 'SUCCESS');
+      } catch (e) {
+        console.error('ClearAll error:', e);
+      }
     }
   }
 
@@ -165,10 +184,10 @@
         await AppBindings.DeleteTask(id);
       }
       tasks = tasks.filter(t => !selectedTaskIDs.includes(t.task_id));
-      tasksStore.set(tasks);
+      tasksStore.set([...tasks]);
       selectedTaskIDs = [];
-      if (onRefresh) onRefresh();
-      addLog(`Đã xóa ${selectedTaskIDs.length} tasks đã chọn.`, 'INFO');
+      if (onRefresh) await onRefresh();
+      addLog(`Đã xóa ${selectedTaskIDs.length} tasks đã chọn.`, 'SUCCESS');
     }
   }
 
@@ -180,10 +199,11 @@
         return;
       }
       await (AppBindings as any).DeleteDoneTasks();
-      tasks = tasks.filter(t => t.status !== 'done');
-      tasksStore.set(tasks);
+      const remaining = tasks.filter(t => t.status !== 'done');
+      tasks = [...remaining];
+      tasksStore.set([...remaining]);
+      if (onRefresh) await onRefresh();
       addLog(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
-      if (onRefresh) onRefresh();
     } catch (e) {
       console.error('ClearDone error:', e);
     }
