@@ -46,7 +46,7 @@ type TaskActions interface {
 	DeleteDoneTasks() error
 	ClearAllTasks() error
 	DecomposePlanWithProvider(requirement, provider, model string) error
-	ExportReport() (string, error)
+	ExportKanbanReport() (string, error)
 	RunQuickCLI(prompt, provider, model string, files []string) (string, error)
 	GetActiveSession(provider string) string
 	ClearActiveSession(provider string) error
@@ -62,13 +62,13 @@ type TaskActions interface {
 	DeleteAgent(agentID string) error
 	ResetAgentsToDefaults() error
 	RunPipeline() error
-	GitStatus() (map[string]interface{}, error)
-	GitBranches() (*services.GitBranchInfo, error)
-	GitLog(limit int) ([]services.GitCommitInfo, error)
-	GitCreateBranch(name string) error
-	GitCheckoutBranch(name string) error
-	GitCommit(message string) error
-	GitRevert(hash string) error
+	GetGitStatus() (map[string]interface{}, error)
+	GetGitBranches() (*services.GitBranchInfo, error)
+	GetGitLog(limit int) ([]services.GitCommitInfo, error)
+	CreateGitBranch(name string) error
+	CheckoutGitBranch(name string) error
+	CreateGitCommit(message string) error
+	RevertGitCommit(hash string) error
 	ToggleWebhook(port int) bool
 	IsWebhookRunning() bool
 	RunBrowserTask(url string, screenshot bool) (BrowserResult, error)

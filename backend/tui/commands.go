@@ -108,7 +108,7 @@ func (m Model) exportReport() (tea.Model, tea.Cmd) {
 	}
 	m.status, m.statusErr = "Exporting Kanban report…", false
 	return m, func() tea.Msg {
-		path, err := m.tasks.ExportReport()
+		path, err := m.tasks.ExportKanbanReport()
 		return reportMsg{path: path, err: err}
 	}
 }
@@ -143,25 +143,25 @@ func (m Model) updateConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			branch := m.pendingGitBranch
 			m.pendingGitBranch = ""
 			return m.runGitMutation("Creating branch "+branch+"…", func() error {
-				return m.tasks.GitCreateBranch(branch)
+				return m.tasks.CreateGitBranch(branch)
 			})
 		case "git-checkout-branch":
 			branch := m.pendingGitBranch
 			m.pendingGitBranch = ""
 			return m.runGitMutation("Checking out "+branch+"…", func() error {
-				return m.tasks.GitCheckoutBranch(branch)
+				return m.tasks.CheckoutGitBranch(branch)
 			})
 		case "git-commit":
 			message := m.pendingGitMessage
 			m.pendingGitMessage = ""
 			return m.runGitMutation("Committing…", func() error {
-				return m.tasks.GitCommit(message)
+				return m.tasks.CreateGitCommit(message)
 			})
 		case "git-revert":
 			hash := m.pendingGitHash
 			m.pendingGitHash = ""
 			return m.runGitMutation("Reverting "+hash+"…", func() error {
-				return m.tasks.GitRevert(hash)
+				return m.tasks.RevertGitCommit(hash)
 			})
 		case "toggle-webhook":
 			if m.tasks != nil {
@@ -282,9 +282,9 @@ func (m Model) runGitMutation(label string, mutate func() error) (tea.Model, tea
 		if err := mutate(); err != nil {
 			return gitLoadedMsg{err: err}
 		}
-		status, statusErr := m.tasks.GitStatus()
-		branches, branchErr := m.tasks.GitBranches()
-		log, logErr := m.tasks.GitLog(8)
+		status, statusErr := m.tasks.GetGitStatus()
+		branches, branchErr := m.tasks.GetGitBranches()
+		log, logErr := m.tasks.GetGitLog(8)
 		if statusErr != nil {
 			return gitLoadedMsg{err: statusErr}
 		}
@@ -486,15 +486,15 @@ func (m Model) runQuickPrompt(prompt string) (tea.Model, tea.Cmd) {
 func (m Model) loadGitInfo() tea.Cmd {
 	tasks := m.tasks
 	return func() tea.Msg {
-		status, err := tasks.GitStatus()
+		status, err := tasks.GetGitStatus()
 		if err != nil {
 			return gitLoadedMsg{err: err}
 		}
-		branches, err := tasks.GitBranches()
+		branches, err := tasks.GetGitBranches()
 		if err != nil {
 			return gitLoadedMsg{err: err}
 		}
-		log, err := tasks.GitLog(8)
+		log, err := tasks.GetGitLog(8)
 		if err != nil {
 			return gitLoadedMsg{err: err}
 		}

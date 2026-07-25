@@ -170,7 +170,7 @@ func (a *RepositoryTaskActions) DecomposePlanWithProvider(requirement, provider,
 	return a.checkpoint()
 }
 
-func (a *RepositoryTaskActions) ExportReport() (string, error) {
+func (a *RepositoryTaskActions) ExportKanbanReport() (string, error) {
 	tasks, err := a.repo.GetAll()
 	if err != nil {
 		return "", err
@@ -294,31 +294,31 @@ func (a *RepositoryTaskActions) RunPipeline() error {
 	return err
 }
 
-func (a *RepositoryTaskActions) GitStatus() (map[string]interface{}, error) {
+func (a *RepositoryTaskActions) GetGitStatus() (map[string]interface{}, error) {
 	return a.git.GetStatus(a.workspace)
 }
 
-func (a *RepositoryTaskActions) GitBranches() (*services.GitBranchInfo, error) {
+func (a *RepositoryTaskActions) GetGitBranches() (*services.GitBranchInfo, error) {
 	return a.git.GetBranches(a.workspace)
 }
 
-func (a *RepositoryTaskActions) GitLog(limit int) ([]services.GitCommitInfo, error) {
+func (a *RepositoryTaskActions) GetGitLog(limit int) ([]services.GitCommitInfo, error) {
 	return a.git.GetLog(a.workspace, limit)
 }
 
-func (a *RepositoryTaskActions) GitCreateBranch(name string) error {
+func (a *RepositoryTaskActions) CreateGitBranch(name string) error {
 	return a.git.CreateBranch(a.workspace, name)
 }
 
-func (a *RepositoryTaskActions) GitCheckoutBranch(name string) error {
+func (a *RepositoryTaskActions) CheckoutGitBranch(name string) error {
 	return a.git.CheckoutBranch(a.workspace, name)
 }
 
-func (a *RepositoryTaskActions) GitCommit(message string) error {
+func (a *RepositoryTaskActions) CreateGitCommit(message string) error {
 	return a.git.CreateCommit(a.workspace, message)
 }
 
-func (a *RepositoryTaskActions) GitRevert(hash string) error {
+func (a *RepositoryTaskActions) RevertGitCommit(hash string) error {
 	return a.git.RevertCommit(a.workspace, hash)
 }
 
@@ -345,7 +345,13 @@ func (a *RepositoryTaskActions) IsWebhookRunning() bool {
 func (a *RepositoryTaskActions) RunBrowserTask(url string, screenshot bool) (BrowserResult, error) {
 	result, err := a.browser.RunBrowserTask(url, "", screenshot, true)
 	if result == nil {
-		return BrowserResult{Success: false, Error: emptyError(err.Error(), "browser task failed")}, err
+		// err is only non-nil here by convention of the browser service; do not
+		// dereference it blindly, or a future (nil, nil) return panics the TUI.
+		message := "browser task failed"
+		if err != nil {
+			message = emptyError(err.Error(), message)
+		}
+		return BrowserResult{Success: false, Error: message}, err
 	}
 	out := BrowserResult{
 		URL: result.URL, Title: result.Title, TextContent: result.TextContent,

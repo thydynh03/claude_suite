@@ -736,7 +736,7 @@ func (f *fakeTaskActions) DecomposePlanWithProvider(requirement, provider, model
 	f.planRequirement, f.planProvider, f.planModel = requirement, provider, model
 	return nil
 }
-func (*fakeTaskActions) ExportReport() (string, error) {
+func (*fakeTaskActions) ExportKanbanReport() (string, error) {
 	return "report.md", nil
 }
 func (f *fakeTaskActions) RunQuickCLI(prompt, provider, model string, files []string) (string, error) {
@@ -786,26 +786,26 @@ func (f *fakeTaskActions) RunPipeline() error {
 	f.pipelineRan = true
 	return nil
 }
-func (f *fakeTaskActions) GitStatus() (map[string]interface{}, error) {
+func (f *fakeTaskActions) GetGitStatus() (map[string]interface{}, error) {
 	return map[string]interface{}{"is_repo": false}, nil
 }
-func (f *fakeTaskActions) GitBranches() (*services.GitBranchInfo, error) {
+func (f *fakeTaskActions) GetGitBranches() (*services.GitBranchInfo, error) {
 	return &services.GitBranchInfo{}, nil
 }
-func (f *fakeTaskActions) GitLog(limit int) ([]services.GitCommitInfo, error) { return nil, nil }
-func (f *fakeTaskActions) GitCreateBranch(name string) error {
+func (f *fakeTaskActions) GetGitLog(limit int) ([]services.GitCommitInfo, error) { return nil, nil }
+func (f *fakeTaskActions) CreateGitBranch(name string) error {
 	f.gitBranchCreated = name
 	return nil
 }
-func (f *fakeTaskActions) GitCheckoutBranch(name string) error {
+func (f *fakeTaskActions) CheckoutGitBranch(name string) error {
 	f.gitBranchCheckedOut = name
 	return nil
 }
-func (f *fakeTaskActions) GitCommit(message string) error {
+func (f *fakeTaskActions) CreateGitCommit(message string) error {
 	f.gitCommitMessage = message
 	return nil
 }
-func (f *fakeTaskActions) GitRevert(hash string) error {
+func (f *fakeTaskActions) RevertGitCommit(hash string) error {
 	f.gitRevertHash = hash
 	return nil
 }
