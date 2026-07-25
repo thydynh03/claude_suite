@@ -9,24 +9,22 @@ on:
 jobs:
   backend:
     name: Go build & test
-    runs-on: ubuntu-latest
+    # Runs on Windows: the CLI runners use Windows-only syscall.SysProcAttr fields
+    # (HideWindow/CreationFlags), so the backend only compiles on Windows. SQLite
+    # uses modernc.org/sqlite (pure Go), so no CGO/gcc is required.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: true
-      # Only the backend packages are built/tested in CI. The root package pulls
-      # in Wails (webkit2gtk/CGO desktop deps) which isn't available on a headless
-      # Linux runner — that's exercised by the Windows release build instead.
       - name: Build
         run: go build ./backend/...
       - name: Vet
         run: go vet ./backend/...
       - name: Test
         run: go test ./backend/...
-        env:
-          CGO_ENABLED: '1'
 
   frontend:
     name: Frontend build
