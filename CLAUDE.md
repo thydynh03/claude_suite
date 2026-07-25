@@ -78,3 +78,23 @@ entry in `tuiOnlyMethods` with a reason.
   the current task's changes stay as an uncommitted diff (`GetWorkspaceDiff`).
 - Keyword→agent matching uses `keywordMatch` (word boundaries) — never plain
   `strings.Contains` for short tags, or "DATABASE" matches "BA".
+
+## Reporting a defect you found
+
+Do not write findings straight into a PR comment. State them so they can be
+proven wrong:
+
+```bash
+claude-suite-claim --checks                    # what you may point at
+claude-suite-claim --host ws://HOST:9111 --session ID --token T   --author you/your-agent --provider claude   --subject "backend/cli/process_windows.go:17"   --assert  "cmd.Wait() never returns when the console is visible"   --falsify "console-window-hidden"
+```
+
+`--falsify` names an entry in `.claude-suite/checks.json`. **A falsifier passes
+when your claim is wrong**, so a failing check confirms the defect.
+
+Omit `--falsify` and the claim is recorded as an opinion: it is kept and shown,
+but it cannot block a merge. That is deliberate — a finding nobody can check is
+a suggestion, and being asked for the command that would disprove it is what
+separates a real defect from a confident guess.
+
+Afterwards read `.claude-suite/session-<id>/verdict.json` for the result.
