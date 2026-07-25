@@ -26,9 +26,10 @@
   $: tokenText = estimatedTokens > 999 ? `~${(estimatedTokens / 1000).toFixed(1)}k` : `~${estimatedTokens}`;
   $: confidence = (tasks || []).length > 3 ? 98 : (tasks || []).length > 0 ? 88 : 0;
 
-  onMount(async () => {
-    await loadTasks();
-    let unoff: any;
+  let unoff: any;
+
+  onMount(() => {
+    loadTasks();
     if ((window as any)?.runtime) {
       unoff = (window as any).runtime.EventsOn('board_updated', () => {
         loadTasks();

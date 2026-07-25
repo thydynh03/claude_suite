@@ -2,10 +2,13 @@ package tui
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
@@ -21,11 +24,16 @@ import (
 type RepositoryTaskActions struct {
 	db        *sql.DB
 	repo      *database.TaskRepository
+	agents    *database.AgentRepository
 	plan      *pipeline.PlanBuilder
+	pipe      *pipeline.PipelineEngine
 	exporter  *services.ExporterService
 	runner    cli.CLIRunner
 	context   *services.ContextManager
 	orch      *orchestrator.Orchestrator
+	git       *services.GitService
+	webhook   *services.WebhookService
+	browser   *services.BrowserAgentService
 	events    chan RuntimeEvent
 	workspace string
 }
@@ -58,16 +66,20 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 	runner := cli.NewClaudeCLI()
 	contextManager := services.NewContextManager()
 	taskRepo := database.NewTaskRepository(db)
+	agentRepo := database.NewAgentRepository(db)
 	orch := orchestrator.NewOrchestrator(
-		database.NewAgentRepository(db), taskRepo, database.NewMemoryRepository(db),
+		agentRepo, taskRepo, database.NewMemoryRepository(db),
 		runner, contextManager, services.NewGitService(), services.NewBrowserAgentService(),
 	)
 	orch.SetWorkspaceDir(workspace)
 	actions := &RepositoryTaskActions{
-		db: db, repo: database.NewTaskRepository(db),
-		plan: pipeline.NewPlanBuilder(runner), exporter: services.NewExporterService(),
-		runner: runner, context: contextManager,
-		orch: orch, events: make(chan RuntimeEvent, 128), workspace: workspace,
+		db: db, repo: taskRepo, agents: agentRepo,
+		plan: pipeline.NewPlanBuilder(runner), pipe: pipeline.NewPipelineEngine(agentRepo, runner),
+		exporter: services.NewExporterService(),
+		runner:   runner, context: contextManager,
+		orch: orch, git: services.NewGitService(), webhook: services.NewWebhookService(taskRepo),
+		browser: services.NewBrowserAgentService(),
+		events:  make(chan RuntimeEvent, 128), workspace: workspace,
 	}
 	orch.SetEventHandlers(
 		func(message, level string) {
@@ -95,6 +107,13 @@ func (a *RepositoryTaskActions) UpdateTaskStatus(taskID, status string) error {
 	return a.checkpoint()
 }
 
+func (a *RepositoryTaskActions) AssignTask(taskID, assignedTo string) error {
+	if err := a.repo.AssignTask(taskID, assignedTo); err != nil {
+		return err
+	}
+	return a.checkpoint()
+}
+
 func (a *RepositoryTaskActions) DeleteTask(taskID string) error {
 	if err := a.repo.Delete(taskID); err != nil {
 		return err
@@ -116,8 +135,15 @@ func (a *RepositoryTaskActions) ClearAllTasks() error {
 	return a.checkpoint()
 }
 
-func (a *RepositoryTaskActions) DecomposePlan(requirement string) error {
-	tasks, err := a.plan.Decompose(requirement, a.workspace)
+func (a *RepositoryTaskActions) DecomposePlanWithProvider(requirement, provider, model string) error {
+	providerHint := "claude_cli"
+	if provider == "anti" {
+		providerHint = "anti_cli"
+	}
+	if model == "" {
+		model = "claude-opus-4-8"
+	}
+	tasks, err := a.plan.DecomposeWithProvider(requirement, a.workspace, providerHint, model)
 	if err != nil {
 		return err
 	}
@@ -138,23 +164,68 @@ func (a *RepositoryTaskActions) ExportReport() (string, error) {
 	return markdown, err
 }
 
-func (a *RepositoryTaskActions) RunQuickCLI(prompt string) (string, error) {
+func (a *RepositoryTaskActions) RunQuickCLI(prompt, provider, model string, files []string) (string, error) {
 	fullPrompt := prompt
 	if a.workspace != "" {
-		if contextPrompt := a.context.BuildContextPrompt(a.workspace, nil); contextPrompt != "" {
+		if contextPrompt := a.context.BuildContextPrompt(a.workspace, files); contextPrompt != "" {
 			fullPrompt = contextPrompt + "\n\n" + prompt
 		}
 	}
-	result := a.runner.RunOnce(fullPrompt, "claude-sonnet-4-5", "", func(message, level string) {
+	if model == "" {
+		model = "claude-sonnet-4-5"
+	}
+	runner := a.runner
+	if provider == "anti" {
+		runner = cli.NewAntigravityCLI()
+	}
+	log := func(message, level string) {
 		a.publish(RuntimeEvent{Kind: "log", Message: message, Level: level})
-	}, a.workspace)
+	}
+	sessionID := cli.GetGlobalSession(provider)
+	var result *cli.RunResult
+	if sessionID != "" {
+		result = runner.RunSession(fullPrompt, model, "", sessionID, log, a.workspace)
+	} else {
+		result = runner.RunOnce(fullPrompt, model, "", log, a.workspace)
+	}
 	if result == nil {
 		return "", fmt.Errorf("quick CLI returned no result")
+	}
+	if result.SessionID != "" {
+		cli.SetGlobalSession(provider, result.SessionID)
 	}
 	if !result.Success {
 		return result.Output, fmt.Errorf("%s", emptyError(result.Error, "quick CLI execution failed"))
 	}
 	return result.Output, nil
+}
+
+func (a *RepositoryTaskActions) GetActiveSession(provider string) string {
+	return cli.GetGlobalSession(provider)
+}
+
+func (a *RepositoryTaskActions) ClearActiveSession(provider string) error {
+	cli.ClearGlobalSession(provider)
+	return nil
+}
+
+func (a *RepositoryTaskActions) ScanWorkspaceFiles() ([]string, error) {
+	if a.workspace == "" {
+		return []string{}, nil
+	}
+	return a.context.ScanWorkspace(a.workspace)
+}
+
+func (a *RepositoryTaskActions) ReadFileContent(relPath string) (string, error) {
+	fullPath := relPath
+	if !filepath.IsAbs(relPath) && a.workspace != "" {
+		fullPath = filepath.Join(a.workspace, relPath)
+	}
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func emptyError(value, fallback string) string {
@@ -169,9 +240,115 @@ func (a *RepositoryTaskActions) StopOrchestrator()  { a.orch.Stop() }
 func (a *RepositoryTaskActions) IsOrchestratorRunning() bool {
 	return a.orch.IsRunning()
 }
+func (a *RepositoryTaskActions) SetAutoApproveAll(enabled bool) bool {
+	a.orch.SetAutoApproveAll(enabled)
+	return enabled
+}
+func (a *RepositoryTaskActions) GetAutoApproveAll() bool {
+	return a.orch.GetAutoApproveAll()
+}
 func (a *RepositoryTaskActions) ResolveApproval(approved bool) {
 	a.orch.ResolveApproval(approved)
 }
+
+func (a *RepositoryTaskActions) SaveAgent(agent models.Agent) error {
+	if agent.AgentID == "" {
+		return a.agents.Create(&agent)
+	}
+	return a.agents.Update(&agent)
+}
+
+func (a *RepositoryTaskActions) DeleteAgent(agentID string) error {
+	return a.agents.Delete(agentID)
+}
+
+func (a *RepositoryTaskActions) ResetAgentsToDefaults() error {
+	return a.agents.ResetToDefaults()
+}
+
+func (a *RepositoryTaskActions) RunPipeline() error {
+	_, err := a.pipe.RunPipeline(a.pipe.GetDefaultSteps(), a.workspace)
+	if err == nil {
+		a.publish(RuntimeEvent{Kind: "board"})
+	}
+	return err
+}
+
+func (a *RepositoryTaskActions) GitStatus() (map[string]interface{}, error) {
+	return a.git.GetStatus(a.workspace)
+}
+
+func (a *RepositoryTaskActions) GitBranches() (*services.GitBranchInfo, error) {
+	return a.git.GetBranches(a.workspace)
+}
+
+func (a *RepositoryTaskActions) GitLog(limit int) ([]services.GitCommitInfo, error) {
+	return a.git.GetLog(a.workspace, limit)
+}
+
+func (a *RepositoryTaskActions) GitCreateBranch(name string) error {
+	return a.git.CreateBranch(a.workspace, name)
+}
+
+func (a *RepositoryTaskActions) GitCheckoutBranch(name string) error {
+	return a.git.CheckoutBranch(a.workspace, name)
+}
+
+func (a *RepositoryTaskActions) GitCommit(message string) error {
+	return a.git.CreateCommit(a.workspace, message)
+}
+
+func (a *RepositoryTaskActions) GitRevert(hash string) error {
+	return a.git.RevertCommit(a.workspace, hash)
+}
+
+func (a *RepositoryTaskActions) ToggleWebhook(port int) bool {
+	if a.webhook.IsRunning() {
+		_ = a.webhook.Stop()
+		return false
+	}
+	_ = a.webhook.Start(port)
+	return true
+}
+
+func (a *RepositoryTaskActions) IsWebhookRunning() bool {
+	return a.webhook.IsRunning()
+}
+
+func (a *RepositoryTaskActions) RunBrowserTask(url string, screenshot bool) (BrowserResult, error) {
+	result, err := a.browser.RunBrowserTask(url, screenshot)
+	if result == nil {
+		return BrowserResult{Success: false, Error: emptyError(err.Error(), "browser task failed")}, err
+	}
+	out := BrowserResult{
+		URL: result.URL, Title: result.Title, TextContent: result.TextContent,
+		Logs: result.Logs, Success: result.Success, Error: result.Error,
+	}
+	if result.ScreenshotBase64 != "" {
+		if path, saveErr := saveScreenshot(result.ScreenshotBase64); saveErr == nil {
+			out.ScreenshotPath = path
+		}
+	}
+	return out, err
+}
+
+func saveScreenshot(dataURI string) (string, error) {
+	raw := strings.TrimPrefix(dataURI, "data:image/png;base64,")
+	data, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(os.TempDir(), "claude-suite-screenshots")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("screenshot-%d.png", time.Now().UnixNano()))
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 func (a *RepositoryTaskActions) Events() <-chan RuntimeEvent { return a.events }
 
 func (a *RepositoryTaskActions) publish(event RuntimeEvent) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"claude_suite/backend/models"
+	"claude_suite/backend/services"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -250,7 +251,7 @@ func TestSettingsSectionsAreNavigable(t *testing.T) {
 	}
 	model, _ = update(model, key("j"))
 	if model.settingsSection != 3 ||
-		!strings.Contains(model.View().Content, "Unavailable controls are intentionally hidden") {
+		!strings.Contains(model.View().Content, "Starting the webhook opens a local HTTP server") {
 		t.Fatal("integrations section did not display")
 	}
 }
@@ -684,8 +685,29 @@ type fakeTaskActions struct {
 	updatedID, updatedStatus string
 	createdTitle             string
 	quickPrompt              string
+	quickProvider            string
+	quickModel               string
+	quickFiles               []string
+	planRequirement          string
+	planProvider             string
+	planModel                string
+	assignedID, assignedTo   string
+	autoApprove              bool
+	savedAgent               models.Agent
+	deletedAgentID           string
+	agentsReset              bool
+	pipelineRan              bool
+	gitBranchCreated         string
+	gitBranchCheckedOut      string
+	gitCommitMessage         string
+	gitRevertHash            string
+	webhookRunning           bool
+	webhookPort              int
+	browserURL               string
+	browserScreenshot        bool
 	running, approval        bool
 	events                   chan RuntimeEvent
+	session                  map[string]string
 }
 
 func (f *fakeTaskActions) CreateTask(task models.Task) error {
@@ -696,19 +718,96 @@ func (f *fakeTaskActions) UpdateTaskStatus(id, status string) error {
 	f.updatedID, f.updatedStatus = id, status
 	return nil
 }
-func (*fakeTaskActions) DeleteTask(string) error    { return nil }
-func (*fakeTaskActions) DeleteDoneTasks() error     { return nil }
-func (*fakeTaskActions) ClearAllTasks() error       { return nil }
-func (*fakeTaskActions) DecomposePlan(string) error { return nil }
+func (f *fakeTaskActions) AssignTask(taskID, assignedTo string) error {
+	f.assignedID, f.assignedTo = taskID, assignedTo
+	return nil
+}
+func (*fakeTaskActions) DeleteTask(string) error { return nil }
+func (*fakeTaskActions) DeleteDoneTasks() error  { return nil }
+func (*fakeTaskActions) ClearAllTasks() error    { return nil }
+func (f *fakeTaskActions) DecomposePlanWithProvider(requirement, provider, model string) error {
+	f.planRequirement, f.planProvider, f.planModel = requirement, provider, model
+	return nil
+}
 func (*fakeTaskActions) ExportReport() (string, error) {
 	return "report.md", nil
 }
-func (f *fakeTaskActions) RunQuickCLI(prompt string) (string, error) {
-	f.quickPrompt = prompt
+func (f *fakeTaskActions) RunQuickCLI(prompt, provider, model string, files []string) (string, error) {
+	f.quickPrompt, f.quickProvider, f.quickModel, f.quickFiles = prompt, provider, model, files
 	return "completed: " + prompt, nil
+}
+func (f *fakeTaskActions) GetActiveSession(provider string) string {
+	if f.session == nil {
+		return ""
+	}
+	return f.session[provider]
+}
+func (f *fakeTaskActions) ClearActiveSession(provider string) error {
+	if f.session != nil {
+		delete(f.session, provider)
+	}
+	return nil
+}
+func (f *fakeTaskActions) ScanWorkspaceFiles() ([]string, error) { return nil, nil }
+func (f *fakeTaskActions) ReadFileContent(relPath string) (string, error) {
+	return "fake content: " + relPath, nil
 }
 func (f *fakeTaskActions) StartOrchestrator()            { f.running = true }
 func (f *fakeTaskActions) StopOrchestrator()             { f.running = false }
 func (f *fakeTaskActions) IsOrchestratorRunning() bool   { return f.running }
 func (f *fakeTaskActions) ResolveApproval(approved bool) { f.approval = approved }
-func (f *fakeTaskActions) Events() <-chan RuntimeEvent   { return f.events }
+func (f *fakeTaskActions) SetAutoApproveAll(enabled bool) bool {
+	f.autoApprove = enabled
+	return enabled
+}
+func (f *fakeTaskActions) GetAutoApproveAll() bool { return f.autoApprove }
+func (f *fakeTaskActions) SaveAgent(agent models.Agent) error {
+	f.savedAgent = agent
+	return nil
+}
+func (f *fakeTaskActions) DeleteAgent(agentID string) error {
+	f.deletedAgentID = agentID
+	return nil
+}
+func (f *fakeTaskActions) ResetAgentsToDefaults() error {
+	f.agentsReset = true
+	return nil
+}
+func (f *fakeTaskActions) RunPipeline() error {
+	f.pipelineRan = true
+	return nil
+}
+func (f *fakeTaskActions) GitStatus() (map[string]interface{}, error) {
+	return map[string]interface{}{"is_repo": false}, nil
+}
+func (f *fakeTaskActions) GitBranches() (*services.GitBranchInfo, error) {
+	return &services.GitBranchInfo{}, nil
+}
+func (f *fakeTaskActions) GitLog(limit int) ([]services.GitCommitInfo, error) { return nil, nil }
+func (f *fakeTaskActions) GitCreateBranch(name string) error {
+	f.gitBranchCreated = name
+	return nil
+}
+func (f *fakeTaskActions) GitCheckoutBranch(name string) error {
+	f.gitBranchCheckedOut = name
+	return nil
+}
+func (f *fakeTaskActions) GitCommit(message string) error {
+	f.gitCommitMessage = message
+	return nil
+}
+func (f *fakeTaskActions) GitRevert(hash string) error {
+	f.gitRevertHash = hash
+	return nil
+}
+func (f *fakeTaskActions) ToggleWebhook(port int) bool {
+	f.webhookRunning = !f.webhookRunning
+	f.webhookPort = port
+	return f.webhookRunning
+}
+func (f *fakeTaskActions) IsWebhookRunning() bool { return f.webhookRunning }
+func (f *fakeTaskActions) RunBrowserTask(url string, screenshot bool) (BrowserResult, error) {
+	f.browserURL, f.browserScreenshot = url, screenshot
+	return BrowserResult{URL: url, Success: true}, nil
+}
+func (f *fakeTaskActions) Events() <-chan RuntimeEvent { return f.events }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import { models } from '../../../wailsjs/go/models';
   import { addLog, tasksStore, agentsStore } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
@@ -56,7 +57,7 @@
   async function handleAddTask() {
     if (!newTaskTitle.trim()) return;
     try {
-      await AppBindings.CreateTask({
+      await AppBindings.CreateTask(models.Task.createFrom({
         task_id: '',
         title: newTaskTitle,
         description: newTaskDescription,
@@ -70,7 +71,7 @@
         result: '',
         session_id: '',
         parent_id: '',
-      });
+      }));
       newTaskTitle = '';
       newTaskDescription = '';
       showAddModal = false;

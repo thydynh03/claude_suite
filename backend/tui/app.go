@@ -3,12 +3,20 @@ package tui
 import (
 	"fmt"
 	"image/color"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"claude_suite/backend/cli"
 	"claude_suite/backend/models"
+	"claude_suite/backend/services"
+	"claude_suite/backend/version"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -28,7 +36,16 @@ const (
 )
 
 var screenNames = []string{"Cockpit", "Task Board", "Agents", "Pipeline", "Scheduler", "Operations", "Settings"}
-var settingsSectionNames = []string{"Workspace", "Providers", "Execution", "Integrations"}
+var settingsSectionNames = []string{"Workspace", "Providers", "Execution", "Integrations", "Antigravity", "Git", "Code Studio", "Browser", "Diagnostics"}
+
+const (
+	integrationsSection = 3
+	antigravitySection  = 4
+	gitSection          = 5
+	codeStudioSection   = 6
+	browserSection      = 7
+)
+
 var taskFilters = []string{"all", "backlog", "queued", "running", "done", "failed"}
 var taskStatuses = []string{"backlog", "queued", "running", "done", "failed"}
 var agentStatuses = []string{"idle", "running", "done", "error"}
@@ -50,6 +67,33 @@ type reportMsg struct {
 type quickRunMsg struct {
 	output string
 	err    error
+}
+
+type filesLoadedMsg struct {
+	files []string
+	err   error
+}
+
+type gitLoadedMsg struct {
+	status   map[string]interface{}
+	branches *services.GitBranchInfo
+	log      []services.GitCommitInfo
+	err      error
+}
+
+type browserRunMsg struct {
+	result BrowserResult
+	err    error
+}
+
+type codeStudioPreviewMsg struct {
+	file    string
+	content string
+	err     error
+}
+
+type codeStudioEditMsg struct {
+	err error
 }
 
 type runtimeEventMsg RuntimeEvent
@@ -92,24 +136,106 @@ type Model struct {
 	width           int
 	height          int
 
-	inputMode           rune
-	input               string
-	query               string
-	palette             bool
-	paletteAt           int
-	keyHelp             bool
-	confirm             string
-	approvalAgent       string
-	approvalTask        string
-	status              string
-	statusErr           bool
-	reloading           bool
-	updatedAt           time.Time
-	liveEvents          []RuntimeEvent
-	orchestratorRunning bool
-	cockpitPrompt       string
-	cockpitResult       string
-	cockpitRunning      bool
+	inputMode            rune
+	input                string
+	query                string
+	palette              bool
+	paletteAt            int
+	keyHelp              bool
+	confirm              string
+	approvalAgent        string
+	approvalTask         string
+	status               string
+	statusErr            bool
+	reloading            bool
+	updatedAt            time.Time
+	liveEvents           []RuntimeEvent
+	orchestratorRunning  bool
+	autoApproveAll       bool
+	cockpitPrompt        string
+	cockpitResult        string
+	cockpitRunning       bool
+	cockpitProvider      string
+	cockpitModelIdx      int
+	cockpitFiles         []string
+	cockpitFilePicker    bool
+	cockpitFileCursor    int
+	cockpitAvailFiles    []string
+	planProvider         string
+	planModelIdx         int
+	pendingAntiKeyName   string
+	pendingAntiKeySecret string
+	gitLoaded            bool
+	gitLoading           bool
+	gitError             string
+	gitStatus            map[string]interface{}
+	gitBranches          *services.GitBranchInfo
+	gitLog               []services.GitCommitInfo
+	pendingGitBranch     string
+	pendingGitMessage    string
+	pendingGitHash       string
+	webhookPort          int
+	webhookRunning       bool
+	browserURL           string
+	browserScreenshot    bool
+	browserRunning       bool
+	browserResult        *BrowserResult
+	browserError         string
+	codeStudioCursor     int
+	codeStudioFile       string
+	codeStudioPreview    string
+	codeStudioPreviewErr string
+	codeStudioLoading    bool
+}
+
+var planClaudeModels = []string{"claude-opus-4-8", "claude-sonnet-4-5"}
+var planAntiModels = []string{"gemini-3.1-pro-high", "gemini-3.6-flash-high"}
+
+func (m Model) planModels() []string {
+	if m.planProvider == "anti" {
+		return planAntiModels
+	}
+	return planClaudeModels
+}
+
+func (m Model) planModel() string {
+	models := m.planModels()
+	if m.planModelIdx < 0 || m.planModelIdx >= len(models) {
+		return models[0]
+	}
+	return models[m.planModelIdx]
+}
+
+func (m Model) planProviderLabel() string {
+	if m.planProvider == "anti" {
+		return "Antigravity"
+	}
+	return "Claude"
+}
+
+var cockpitClaudeModels = []string{"claude-sonnet-4-5", "claude-opus-4-8"}
+var cockpitAntiModels = []string{"gemini-3.6-flash-high", "gemini-3.1-pro-high"}
+
+func (m Model) cockpitModels() []string {
+	if m.cockpitProvider == "anti" {
+		return cockpitAntiModels
+	}
+	return cockpitClaudeModels
+}
+
+func (m Model) cockpitModel() string {
+	models := m.cockpitModels()
+	if m.cockpitModelIdx < 0 || m.cockpitModelIdx >= len(models) {
+		return models[0]
+	}
+	return models[m.cockpitModelIdx]
+}
+
+func (m Model) cockpitProviderLabel() string {
+	if m.cockpitProvider == "anti" {
+		return "Antigravity"
+	}
+	return "Claude"
 }
 
 func New(snapshot Snapshot, path string, loadErr error) Model {
@@ -122,16 +248,21 @@ func NewWithLoader(snapshot Snapshot, path string, loadErr error, loader Loader)
 
 func NewWithTaskActions(snapshot Snapshot, path string, loadErr error, loader Loader, tasks TaskActions) Model {
 	m := Model{
-		snapshot:  snapshot,
-		dbPath:    path,
-		loader:    loader,
-		tasks:     tasks,
-		updatedAt: time.Now(),
-		navCursor: int(cockpitScreen),
-		navFocus:  true,
+		snapshot:        snapshot,
+		dbPath:          path,
+		loader:          loader,
+		tasks:           tasks,
+		cockpitProvider: "claude",
+		planProvider:    "claude",
+		webhookPort:     9090,
+		updatedAt:       time.Now(),
+		navCursor:       int(cockpitScreen),
+		navFocus:        true,
 	}
 	if tasks != nil {
 		m.orchestratorRunning = tasks.IsOrchestratorRunning()
+		m.autoApproveAll = tasks.GetAutoApproveAll()
+		m.webhookRunning = tasks.IsWebhookRunning()
 	}
 	if loadErr != nil {
 		m.status, m.statusErr = loadErr.Error(), true
@@ -198,6 +329,53 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.status, m.statusErr = "Quick execution completed", false
 		}
 		return m, nil
+	case filesLoadedMsg:
+		if msg.err != nil {
+			m.status, m.statusErr = msg.err.Error(), true
+		} else {
+			m.cockpitAvailFiles = msg.files
+			m.cockpitFileCursor = 0
+		}
+		return m, nil
+	case browserRunMsg:
+		m.browserRunning = false
+		if msg.err != nil {
+			m.browserError = msg.err.Error()
+			m.browserResult = nil
+		} else {
+			m.browserError = ""
+			result := msg.result
+			m.browserResult = &result
+		}
+		return m, nil
+	case codeStudioPreviewMsg:
+		m.codeStudioLoading = false
+		m.codeStudioFile = msg.file
+		if msg.err != nil {
+			m.codeStudioPreview, m.codeStudioPreviewErr = "", msg.err.Error()
+		} else {
+			m.codeStudioPreview, m.codeStudioPreviewErr = msg.content, ""
+		}
+		return m, nil
+	case codeStudioEditMsg:
+		if msg.err != nil {
+			m.status, m.statusErr = msg.err.Error(), true
+		} else {
+			m.status, m.statusErr = "Editor closed", false
+		}
+		return m, nil
+	case gitLoadedMsg:
+		m.gitLoading = false
+		m.gitLoaded = true
+		if msg.err != nil {
+			m.gitError = msg.err.Error()
+		} else {
+			m.gitError = ""
+			m.gitStatus = msg.status
+			m.gitBranches = msg.branches
+			m.gitLog = msg.log
+		}
+		return m, nil
 	case runtimeEventMsg:
 		event := RuntimeEvent(msg)
 		switch event.Kind {
@@ -238,6 +416,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.inputMode != 0 {
 			return m.updateInput(msg)
 		}
+		if m.cockpitFilePicker {
+			return m.updateFilePicker(msg)
+		}
 		if m.keyHelp {
 			switch msg.String() {
 			case "?", "esc", "q":
@@ -270,6 +451,13 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == settingsScreen && !m.inspect {
 				m.settingsCursor = min(len(settingsSectionNames)-1, m.settingsCursor+1)
 				m.settingsSection = m.settingsCursor
+				if m.settingsSection == gitSection && !m.gitLoaded && !m.gitLoading && m.tasks != nil {
+					m.gitLoading = true
+					return m, m.loadGitInfo()
+				}
+				if m.settingsSection == codeStudioSection && len(m.cockpitAvailFiles) == 0 && m.tasks != nil {
+					return m, m.loadWorkspaceFiles()
+				}
 			} else if m.screen == tasksScreen && !m.inspect {
 				m.moveTaskCard(1)
 			} else if !m.inspect {
@@ -279,6 +467,13 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == settingsScreen && !m.inspect {
 				m.settingsCursor = max(0, m.settingsCursor-1)
 				m.settingsSection = m.settingsCursor
+				if m.settingsSection == gitSection && !m.gitLoaded && !m.gitLoading && m.tasks != nil {
+					m.gitLoading = true
+					return m, m.loadGitInfo()
+				}
+				if m.settingsSection == codeStudioSection && len(m.cockpitAvailFiles) == 0 && m.tasks != nil {
+					return m, m.loadWorkspaceFiles()
+				}
 			} else if m.screen == tasksScreen && !m.inspect {
 				m.moveTaskCard(-1)
 			} else if !m.inspect {
@@ -291,6 +486,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.screen == cockpitScreen && !m.cockpitRunning {
 				m.inputMode, m.input = 'p', m.cockpitPrompt
+			} else if m.screen == settingsScreen && m.settingsSection == codeStudioSection && m.tasks != nil {
+				return m.previewCodeStudioFile()
 			} else if !m.inspect && len(m.rows()) > 0 {
 				m.inspect = true
 			}
@@ -306,6 +503,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == tasksScreen {
 				m.inputMode, m.input = 'a', ""
 			}
+			if m.screen == settingsScreen && m.settingsSection == antigravitySection {
+				m.inputMode, m.input = 'K', ""
+			}
 		case "e":
 			if m.screen == tasksScreen {
 				m.status, m.statusErr = "Desktop Task Board does not expose task editing", true
@@ -318,9 +518,86 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == tasksScreen {
 				return m.exportReport()
 			}
+			if m.screen == agentsScreen && m.tasks != nil {
+				m.confirm = "reset-agents"
+			}
 		case "x":
 			if m.screen == tasksScreen || m.screen == pipelineScreen || m.screen == operationsScreen {
 				return m.toggleOrchestrator()
+			}
+		case "X":
+			if m.screen == tasksScreen || m.screen == pipelineScreen || m.screen == operationsScreen {
+				return m.toggleAutoApprove()
+			}
+		case "A":
+			if m.screen == tasksScreen {
+				return m.cycleAssignedAgent()
+			}
+		case "p":
+			if m.screen == pipelineScreen {
+				return m.runPipeline()
+			}
+		case "v":
+			if m.screen == cockpitScreen {
+				if m.cockpitProvider == "anti" {
+					m.cockpitProvider = "claude"
+				} else {
+					m.cockpitProvider = "anti"
+				}
+				m.cockpitModelIdx = 0
+			} else if m.screen == tasksScreen {
+				if m.planProvider == "anti" {
+					m.planProvider = "claude"
+				} else {
+					m.planProvider = "anti"
+				}
+				m.planModelIdx = 0
+			}
+		case "m":
+			if m.screen == cockpitScreen {
+				models := m.cockpitModels()
+				m.cockpitModelIdx = (m.cockpitModelIdx + 1) % len(models)
+			} else if m.screen == tasksScreen {
+				models := m.planModels()
+				m.planModelIdx = (m.planModelIdx + 1) % len(models)
+			}
+		case "C":
+			if m.screen == cockpitScreen && m.tasks != nil {
+				_ = m.tasks.ClearActiveSession(m.cockpitProvider)
+				m.status, m.statusErr = "Session cleared for "+m.cockpitProviderLabel(), false
+			}
+		case "f":
+			if m.screen == cockpitScreen && m.tasks != nil {
+				m.cockpitFilePicker = true
+				if len(m.cockpitAvailFiles) == 0 {
+					return m, m.loadWorkspaceFiles()
+				}
+			}
+			if m.screen == settingsScreen && m.settingsSection == codeStudioSection && m.tasks != nil {
+				m.codeStudioCursor = 0
+				return m, m.loadWorkspaceFiles()
+			}
+		case "J", "shift+down":
+			if m.screen == settingsScreen && m.settingsSection == codeStudioSection && len(m.cockpitAvailFiles) > 0 {
+				m.codeStudioCursor = min(len(m.cockpitAvailFiles)-1, m.codeStudioCursor+1)
+			}
+		case "K", "shift+up":
+			if m.screen == settingsScreen && m.settingsSection == codeStudioSection {
+				m.codeStudioCursor = max(0, m.codeStudioCursor-1)
+			}
+		case "E":
+			if m.screen == settingsScreen && m.settingsSection == codeStudioSection && m.tasks != nil {
+				return m.openCodeStudioFile()
+			}
+		case "S":
+			if m.screen == settingsScreen && m.settingsSection == codeStudioSection && m.codeStudioCursor < len(m.cockpitAvailFiles) {
+				file := m.cockpitAvailFiles[m.codeStudioCursor]
+				if idx := indexOfString(m.cockpitFiles, file); idx >= 0 {
+					m.cockpitFiles = append(append([]string{}, m.cockpitFiles[:idx]...), m.cockpitFiles[idx+1:]...)
+				} else {
+					m.cockpitFiles = append(m.cockpitFiles, file)
+				}
+				m.status, m.statusErr = "Cockpit context updated ("+fmt.Sprintf("%d", len(m.cockpitFiles))+" files)", false
 			}
 		case "d":
 			if m.screen == tasksScreen {
@@ -328,9 +605,49 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					m.confirm = "delete"
 				}
 			}
+			if m.screen == agentsScreen && m.tasks != nil {
+				if len(m.rows()) > 0 {
+					m.confirm = "delete-agent"
+				}
+			}
+		case "n":
+			if m.screen == agentsScreen && m.tasks != nil {
+				m.inputMode, m.input = 'N', ""
+			}
 		case "c":
 			if m.screen == tasksScreen {
 				m.confirm = "clear-done"
+			}
+			if m.screen == settingsScreen && m.settingsSection == gitSection && m.tasks != nil {
+				m.inputMode, m.input = 'M', ""
+			}
+		case "b":
+			if m.screen == settingsScreen && m.settingsSection == gitSection && m.tasks != nil {
+				m.inputMode, m.input = 'B', ""
+			}
+		case "o":
+			if m.screen == settingsScreen && m.settingsSection == gitSection && m.tasks != nil {
+				m.inputMode, m.input = 'O', ""
+			}
+		case "V":
+			if m.screen == settingsScreen && m.settingsSection == gitSection && m.tasks != nil {
+				m.inputMode, m.input = 'V', ""
+			}
+		case "w":
+			if m.screen == settingsScreen && m.settingsSection == integrationsSection && m.tasks != nil {
+				m.confirm = "toggle-webhook"
+			}
+		case "P":
+			if m.screen == settingsScreen && m.settingsSection == integrationsSection && m.tasks != nil {
+				m.inputMode, m.input = 'P', fmt.Sprintf("%d", m.webhookPort)
+			}
+		case "u":
+			if m.screen == settingsScreen && m.settingsSection == browserSection && m.tasks != nil && !m.browserRunning {
+				m.inputMode, m.input = 'U', m.browserURL
+			}
+		case "t":
+			if m.screen == settingsScreen && m.settingsSection == browserSection {
+				m.browserScreenshot = !m.browserScreenshot
 			}
 		case "esc":
 			if m.inspect {
@@ -350,6 +667,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			m.inputMode, m.input = '/', m.query
 		case "r":
+			if m.screen == settingsScreen && m.settingsSection == gitSection && m.tasks != nil {
+				return m, m.loadGitInfo()
+			}
 			return m.reload()
 		}
 	}
@@ -564,6 +884,75 @@ func (m Model) toggleOrchestrator() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) toggleAutoApprove() (tea.Model, tea.Cmd) {
+	if m.tasks == nil {
+		m.status, m.statusErr = "Auto-approve unavailable: start with --write", true
+		return m, nil
+	}
+	m.autoApproveAll = m.tasks.SetAutoApproveAll(!m.autoApproveAll)
+	if m.autoApproveAll {
+		m.status, m.statusErr = "Auto-approve enabled for all tasks", false
+	} else {
+		m.status, m.statusErr = "Auto-approve disabled", false
+	}
+	return m, nil
+}
+
+func (m Model) cycleAssignedAgent() (tea.Model, tea.Cmd) {
+	if m.tasks == nil {
+		m.status, m.statusErr = "Assign unavailable: start with --write", true
+		return m, nil
+	}
+	rows := m.rows()
+	if len(rows) == 0 {
+		return m, nil
+	}
+	item := rows[m.cursor[m.screen]]
+	currentAssignee := ""
+	for _, task := range m.snapshot.Tasks {
+		if task.TaskID == item.id {
+			currentAssignee = task.AssignedTo
+			break
+		}
+	}
+	names := []string{""}
+	for _, agent := range m.snapshot.Agents {
+		names = append(names, agent.Name)
+	}
+	current := indexOfString(names, currentAssignee)
+	next := names[(max(0, current)+1)%len(names)]
+	return m.runTaskMutation("Assigning task…", func() error {
+		return m.tasks.AssignTask(item.id, next)
+	})
+}
+
+func (m Model) runBrowserTask(targetURL string) (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(targetURL) == "" {
+		m.status, m.statusErr = "URL is required", true
+		return m, nil
+	}
+	if m.tasks == nil {
+		m.status, m.statusErr = "Browser agent unavailable: start with --write", true
+		return m, nil
+	}
+	m.browserURL = strings.TrimSpace(targetURL)
+	m.browserRunning = true
+	m.browserResult = nil
+	m.browserError = ""
+	url, screenshot := m.browserURL, m.browserScreenshot
+	m.status, m.statusErr = "Running browser agent…", false
+	return m, func() tea.Msg {
+		result, err := m.tasks.RunBrowserTask(url, screenshot)
+		return browserRunMsg{result: result, err: err}
+	}
+}
+
+func (m Model) runPipeline() (tea.Model, tea.Cmd) {
+	return m.runTaskMutation("Running 5-stage pipeline (Plan → Architect → Code → Review → QA)…", func() error {
+		return m.tasks.RunPipeline()
+	})
+}
+
 func (m Model) exportReport() (tea.Model, tea.Cmd) {
 	if m.tasks == nil {
 		m.status, m.statusErr = "Report export unavailable: shared service not connected", true
@@ -584,12 +973,57 @@ func (m Model) updateConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.confirm = ""
 		m.approvalAgent, m.approvalTask = "", ""
+		m.pendingAntiKeyName, m.pendingAntiKeySecret = "", ""
+		m.pendingGitBranch, m.pendingGitMessage, m.pendingGitHash = "", "", ""
 	case "y", "enter":
 		action := m.confirm
 		m.confirm = ""
 		switch action {
 		case "delete":
 			return m.deleteSelectedTask()
+		case "delete-agent":
+			return m.deleteSelectedAgent()
+		case "reset-agents":
+			return m.runTaskMutation("Resetting agents to defaults…", func() error {
+				return m.tasks.ResetAgentsToDefaults()
+			})
+		case "add-antikey":
+			cli.GlobalAntiPool.AddKey(m.pendingAntiKeyName, m.pendingAntiKeySecret)
+			m.status, m.statusErr = "Added Antigravity key: "+m.pendingAntiKeyName, false
+			m.pendingAntiKeyName, m.pendingAntiKeySecret = "", ""
+		case "git-create-branch":
+			branch := m.pendingGitBranch
+			m.pendingGitBranch = ""
+			return m.runGitMutation("Creating branch "+branch+"…", func() error {
+				return m.tasks.GitCreateBranch(branch)
+			})
+		case "git-checkout-branch":
+			branch := m.pendingGitBranch
+			m.pendingGitBranch = ""
+			return m.runGitMutation("Checking out "+branch+"…", func() error {
+				return m.tasks.GitCheckoutBranch(branch)
+			})
+		case "git-commit":
+			message := m.pendingGitMessage
+			m.pendingGitMessage = ""
+			return m.runGitMutation("Committing…", func() error {
+				return m.tasks.GitCommit(message)
+			})
+		case "git-revert":
+			hash := m.pendingGitHash
+			m.pendingGitHash = ""
+			return m.runGitMutation("Reverting "+hash+"…", func() error {
+				return m.tasks.GitRevert(hash)
+			})
+		case "toggle-webhook":
+			if m.tasks != nil {
+				m.webhookRunning = m.tasks.ToggleWebhook(m.webhookPort)
+				if m.webhookRunning {
+					m.status, m.statusErr = fmt.Sprintf("Webhook listening on port %d", m.webhookPort), false
+				} else {
+					m.status, m.statusErr = "Webhook stopped", false
+				}
+			}
 		case "clear-done":
 			return m.runTaskMutation("Clearing completed tasks…", func() error {
 				return m.tasks.DeleteDoneTasks()
@@ -628,6 +1062,101 @@ func (m Model) deleteSelectedTask() (tea.Model, tea.Cmd) {
 	item := rows[m.cursor[tasksScreen]]
 	return m.runTaskMutation("Deleting task…", func() error {
 		return m.tasks.DeleteTask(item.id)
+	})
+}
+
+func (m Model) deleteSelectedAgent() (tea.Model, tea.Cmd) {
+	rows := m.rows()
+	if len(rows) == 0 {
+		return m, nil
+	}
+	item := rows[m.cursor[agentsScreen]]
+	return m.runTaskMutation("Deleting agent…", func() error {
+		return m.tasks.DeleteAgent(item.id)
+	})
+}
+
+func (m Model) stageAntigravityKey(value string) (tea.Model, tea.Cmd) {
+	name, secret := "", value
+	if idx := strings.Index(value, ":"); idx >= 0 {
+		name, secret = strings.TrimSpace(value[:idx]), strings.TrimSpace(value[idx+1:])
+	}
+	if secret == "" {
+		m.status, m.statusErr = "Key value is required (format name:secret)", true
+		return m, nil
+	}
+	if name == "" {
+		name = fmt.Sprintf("Key %d", len(cli.GlobalAntiPool.GetKeys())+1)
+	}
+	m.pendingAntiKeyName, m.pendingAntiKeySecret = name, secret
+	m.confirm = "add-antikey"
+	return m, nil
+}
+
+func (m Model) stageGitBranch(name, action string) (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(name) == "" {
+		m.status, m.statusErr = "Branch name is required", true
+		return m, nil
+	}
+	m.pendingGitBranch = strings.TrimSpace(name)
+	m.confirm = action
+	return m, nil
+}
+
+func (m Model) stageGitCommit(message string) (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(message) == "" {
+		m.status, m.statusErr = "Commit message is required", true
+		return m, nil
+	}
+	m.pendingGitMessage = strings.TrimSpace(message)
+	m.confirm = "git-commit"
+	return m, nil
+}
+
+func (m Model) stageGitRevert(hash string) (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(hash) == "" {
+		m.status, m.statusErr = "Commit hash is required", true
+		return m, nil
+	}
+	m.pendingGitHash = strings.TrimSpace(hash)
+	m.confirm = "git-revert"
+	return m, nil
+}
+
+func (m Model) runGitMutation(label string, mutate func() error) (tea.Model, tea.Cmd) {
+	if m.tasks == nil {
+		m.status, m.statusErr = "Git actions unavailable: start with --write", true
+		return m, nil
+	}
+	m.status, m.statusErr = label, false
+	m.gitLoading = true
+	return m, func() tea.Msg {
+		if err := mutate(); err != nil {
+			return gitLoadedMsg{err: err}
+		}
+		status, statusErr := m.tasks.GitStatus()
+		branches, branchErr := m.tasks.GitBranches()
+		log, logErr := m.tasks.GitLog(8)
+		if statusErr != nil {
+			return gitLoadedMsg{err: statusErr}
+		}
+		if branchErr != nil {
+			return gitLoadedMsg{err: branchErr}
+		}
+		if logErr != nil {
+			return gitLoadedMsg{err: logErr}
+		}
+		return gitLoadedMsg{status: status, branches: branches, log: log}
+	}
+}
+
+func (m Model) createAgent(name string) (tea.Model, tea.Cmd) {
+	if name == "" {
+		m.status, m.statusErr = "Agent name is required", true
+		return m, nil
+	}
+	return m.runTaskMutation("Creating agent…", func() error {
+		return m.tasks.SaveAgent(models.Agent{Name: name, Role: "Specialist", Status: "idle", Model: "claude-sonnet-4-5"})
 	})
 }
 
@@ -742,6 +1271,36 @@ func (m Model) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if mode == 'D' {
 			return m.decomposePlan(value)
 		}
+		if mode == 'N' {
+			return m.createAgent(value)
+		}
+		if mode == 'K' {
+			return m.stageAntigravityKey(value)
+		}
+		if mode == 'B' {
+			return m.stageGitBranch(value, "git-create-branch")
+		}
+		if mode == 'O' {
+			return m.stageGitBranch(value, "git-checkout-branch")
+		}
+		if mode == 'M' {
+			return m.stageGitCommit(value)
+		}
+		if mode == 'V' {
+			return m.stageGitRevert(value)
+		}
+		if mode == 'U' {
+			return m.runBrowserTask(value)
+		}
+		if mode == 'P' {
+			if port, err := strconv.Atoi(value); err == nil && port > 0 && port < 65536 {
+				m.webhookPort = port
+				m.status, m.statusErr = fmt.Sprintf("Webhook port set to %d", port), false
+			} else {
+				m.status, m.statusErr = "Invalid port", true
+			}
+			return m, nil
+		}
 		return m, nil
 	case "backspace":
 		if m.input != "" {
@@ -768,11 +1327,105 @@ func (m Model) runQuickPrompt(prompt string) (tea.Model, tea.Cmd) {
 	m.cockpitPrompt = prompt
 	m.cockpitRunning = true
 	m.cockpitResult = ""
-	m.status, m.statusErr = "Running Claude CLI…", false
+	provider, model, files := m.cockpitProvider, m.cockpitModel(), m.cockpitFiles
+	m.status, m.statusErr = "Running "+m.cockpitProviderLabel()+" CLI…", false
 	return m, func() tea.Msg {
-		output, err := m.tasks.RunQuickCLI(prompt)
+		output, err := m.tasks.RunQuickCLI(prompt, provider, model, files)
 		return quickRunMsg{output: output, err: err}
 	}
+}
+
+func (m Model) loadGitInfo() tea.Cmd {
+	tasks := m.tasks
+	return func() tea.Msg {
+		status, err := tasks.GitStatus()
+		if err != nil {
+			return gitLoadedMsg{err: err}
+		}
+		branches, err := tasks.GitBranches()
+		if err != nil {
+			return gitLoadedMsg{err: err}
+		}
+		log, err := tasks.GitLog(8)
+		if err != nil {
+			return gitLoadedMsg{err: err}
+		}
+		return gitLoadedMsg{status: status, branches: branches, log: log}
+	}
+}
+
+func (m Model) loadWorkspaceFiles() tea.Cmd {
+	tasks := m.tasks
+	return func() tea.Msg {
+		files, err := tasks.ScanWorkspaceFiles()
+		return filesLoadedMsg{files: files, err: err}
+	}
+}
+
+func (m Model) previewCodeStudioFile() (tea.Model, tea.Cmd) {
+	if m.codeStudioCursor >= len(m.cockpitAvailFiles) {
+		return m, nil
+	}
+	file := m.cockpitAvailFiles[m.codeStudioCursor]
+	m.codeStudioLoading = true
+	tasks := m.tasks
+	return m, func() tea.Msg {
+		content, err := tasks.ReadFileContent(file)
+		return codeStudioPreviewMsg{file: file, content: content, err: err}
+	}
+}
+
+func (m Model) openCodeStudioFile() (tea.Model, tea.Cmd) {
+	if m.codeStudioCursor >= len(m.cockpitAvailFiles) {
+		return m, nil
+	}
+	file := m.cockpitAvailFiles[m.codeStudioCursor]
+	fullPath := file
+	if !filepath.IsAbs(file) && m.snapshot.Workspace != "" {
+		fullPath = filepath.Join(m.snapshot.Workspace, file)
+	}
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	cmd := exec.Command(editor, fullPath)
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return codeStudioEditMsg{err: err}
+	})
+}
+
+func (m Model) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "enter":
+		m.cockpitFilePicker = false
+	case "j", "down":
+		if len(m.cockpitAvailFiles) > 0 {
+			m.cockpitFileCursor = min(len(m.cockpitAvailFiles)-1, m.cockpitFileCursor+1)
+		}
+	case "k", "up":
+		m.cockpitFileCursor = max(0, m.cockpitFileCursor-1)
+	case " ", "space":
+		if m.cockpitFileCursor < len(m.cockpitAvailFiles) {
+			file := m.cockpitAvailFiles[m.cockpitFileCursor]
+			if idx := indexOfString(m.cockpitFiles, file); idx >= 0 {
+				m.cockpitFiles = append(append([]string{}, m.cockpitFiles[:idx]...), m.cockpitFiles[idx+1:]...)
+			} else {
+				m.cockpitFiles = append(m.cockpitFiles, file)
+			}
+		}
+	case "c":
+		m.cockpitFiles = nil
+	}
+	return m, nil
+}
+
+func indexOfString(list []string, value string) int {
+	for i, item := range list {
+		if item == value {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m Model) decomposePlan(requirement string) (tea.Model, tea.Cmd) {
@@ -780,8 +1433,9 @@ func (m Model) decomposePlan(requirement string) (tea.Model, tea.Cmd) {
 		m.status, m.statusErr = "Project requirement is required", true
 		return m, nil
 	}
-	return m.runTaskMutation("AI is decomposing the plan…", func() error {
-		return m.tasks.DecomposePlan(requirement)
+	provider, model := m.planProvider, m.planModel()
+	return m.runTaskMutation("AI is decomposing the plan with "+m.planProviderLabel()+"…", func() error {
+		return m.tasks.DecomposePlanWithProvider(requirement, provider, model)
 	})
 }
 
@@ -1168,6 +1822,26 @@ func (m Model) confirmationView(width, height int) string {
 	title, message := "DELETE TASK", "Delete the selected task?"
 	if m.confirm == "clear-done" {
 		title, message = "CLEAR COMPLETED", "Delete every completed task?"
+	} else if m.confirm == "delete-agent" {
+		title, message = "DELETE AGENT", "Delete the selected agent?"
+	} else if m.confirm == "reset-agents" {
+		title, message = "RESET AGENTS", "Reset the agent roster to defaults?"
+	} else if m.confirm == "add-antikey" {
+		title, message = "ADD ANTIGRAVITY KEY", "Add key "+m.pendingAntiKeyName+" to the pool? (value hidden)"
+	} else if m.confirm == "git-create-branch" {
+		title, message = "CREATE BRANCH", "Create and switch to branch \""+m.pendingGitBranch+"\"?"
+	} else if m.confirm == "git-checkout-branch" {
+		title, message = "CHECKOUT BRANCH", "Switch to branch \""+m.pendingGitBranch+"\"?"
+	} else if m.confirm == "git-commit" {
+		title, message = "COMMIT CHANGES", "Stage all changes and commit with message:\n\""+m.pendingGitMessage+"\"?"
+	} else if m.confirm == "git-revert" {
+		title, message = "REVERT COMMIT", "Revert commit "+m.pendingGitHash+"? This creates a new commit."
+	} else if m.confirm == "toggle-webhook" {
+		if m.webhookRunning {
+			title, message = "STOP WEBHOOK", fmt.Sprintf("Stop the webhook listener on port %d?", m.webhookPort)
+		} else {
+			title, message = "START WEBHOOK", fmt.Sprintf("Start a local HTTP webhook listener on port %d?", m.webhookPort)
+		}
 	} else if m.confirm == "approval" {
 		title = "APPROVAL REQUIRED"
 		message = empty(m.approvalAgent) + " wants to run:\n" + empty(m.approvalTask)
@@ -1357,7 +2031,13 @@ func (m Model) contextualKeyHelp() []keyHelpEntry {
 	var local []keyHelpEntry
 	switch m.screen {
 	case cockpitScreen:
-		local = []keyHelpEntry{{"enter", "Edit and submit Claude request"}}
+		local = []keyHelpEntry{
+			{"enter", "Edit and submit request"},
+			{"v", "Toggle provider (Claude/Antigravity)"},
+			{"m", "Cycle model"},
+			{"f", "Select workspace files for context"},
+			{"C", "Clear active session"},
+		}
 	case tasksScreen:
 		local = []keyHelpEntry{
 			{"h/l", "Select column"},
@@ -1368,13 +2048,26 @@ func (m Model) contextualKeyHelp() []keyHelpEntry {
 			{"d", "Delete task"},
 			{"c", "Clear completed"},
 			{"D", "AI Plan Builder"},
+			{"v", "Toggle plan provider (Claude/Antigravity)"},
+			{"m", "Cycle plan model"},
+			{"A", "Cycle assigned agent"},
 			{"R", "Export report"},
 			{"x", m.orchestratorHelpAction()},
+			{"X", m.autoApproveHelpAction()},
 		}
 	case agentsScreen:
-		local = []keyHelpEntry{{"j/k", "Select agent"}, {"enter", "Inspect agent"}}
+		local = []keyHelpEntry{
+			{"j/k", "Select agent"},
+			{"enter", "Inspect agent"},
+			{"n", "New agent (name prompt)"},
+			{"d", "Delete agent"},
+			{"R", "Reset agents to defaults"},
+		}
 	case pipelineScreen:
-		local = []keyHelpEntry{{"x", m.orchestratorHelpAction()}}
+		local = []keyHelpEntry{
+			{"x", m.orchestratorHelpAction()},
+			{"p", "Run default 5-stage pipeline"},
+		}
 	case schedulerScreen:
 		local = nil
 	case operationsScreen:
@@ -1385,6 +2078,18 @@ func (m Model) contextualKeyHelp() []keyHelpEntry {
 		}
 	case settingsScreen:
 		local = []keyHelpEntry{{"j/k", "Select settings section"}}
+		switch m.settingsSection {
+		case gitSection:
+			local = append(local, keyHelpEntry{"r", "Refresh git status"}, keyHelpEntry{"b", "New branch"}, keyHelpEntry{"o", "Checkout branch"}, keyHelpEntry{"c", "Commit"}, keyHelpEntry{"V", "Revert commit"})
+		case codeStudioSection:
+			local = append(local, keyHelpEntry{"f", "Scan workspace files"}, keyHelpEntry{"J/K", "Move file cursor"}, keyHelpEntry{"enter", "Preview file"}, keyHelpEntry{"E", "Open in $EDITOR"}, keyHelpEntry{"S", "Stage file into cockpit context"})
+		case browserSection:
+			local = append(local, keyHelpEntry{"u", "Enter URL and run"}, keyHelpEntry{"t", "Toggle screenshot"})
+		case integrationsSection:
+			local = append(local, keyHelpEntry{"w", "Toggle webhook (confirm)"}, keyHelpEntry{"P", "Set webhook port"})
+		case antigravitySection:
+			local = append(local, keyHelpEntry{"a", "Set Antigravity key"})
+		}
 	}
 	return append(local, global...)
 }
@@ -1399,7 +2104,20 @@ func (m Model) orchestratorHelpAction() string {
 	return "Start orchestrator"
 }
 
+func (m Model) autoApproveHelpAction() string {
+	if m.tasks == nil {
+		return "Auto-approve unavailable (read-only)"
+	}
+	if m.autoApproveAll {
+		return "Disable auto-approve all"
+	}
+	return "Enable auto-approve all"
+}
+
 func (m Model) cockpit(width, height int) string {
+	if m.cockpitFilePicker {
+		return m.cockpitFilePickerView(width, height)
+	}
 	running := m.snapshot.TaskCounts["running"]
 	queued := m.snapshot.TaskCounts["queued"] + m.snapshot.TaskCounts["backlog"]
 	done := m.snapshot.TaskCounts["done"]
@@ -1418,17 +2136,27 @@ func (m Model) cockpit(width, height int) string {
 	if m.tasks == nil {
 		state = mutedStyle.Render("READ ONLY · run with --write to execute")
 	} else if m.cockpitRunning {
-		state = warningStyle.Render("RUNNING CLAUDE CLI…")
+		state = warningStyle.Render("RUNNING " + strings.ToUpper(m.cockpitProviderLabel()) + " CLI…")
 	}
 	composer := outlinedPanel("REQUEST · "+state, prompt+"\n\n"+
-		mutedStyle.Render("Enter newline · Ctrl+Enter run · Esc cancel · : command center"),
+		mutedStyle.Render("Enter newline · Ctrl+Enter run · Esc cancel · v provider · m model · f files · C clear session"),
 		width, min(8, max(6, height/3)), screenStyle(cockpitScreen).GetForeground())
 	metrics := statusStyle("running").Bold(true).Render(fmt.Sprintf("● %d running", running)) + "  " +
 		warningStyle.Render(fmt.Sprintf("◌ %d waiting", queued)) + "  " +
 		successStyle.Render(fmt.Sprintf("✓ %d shipped", done))
+	session := "none"
+	if m.tasks != nil {
+		if active := m.tasks.GetActiveSession(m.cockpitProvider); active != "" {
+			session = active
+		}
+	}
 	context := keyValue("Workspace", empty(m.snapshot.Workspace)) + "\n" +
 		keyValue("Database", filepath.Base(m.dbPath)) + "\n" +
-		keyValue("Team", fmt.Sprintf("%d agents", len(m.snapshot.Agents)))
+		keyValue("Team", fmt.Sprintf("%d agents", len(m.snapshot.Agents))) + "\n\n" +
+		keyValue("Provider", m.cockpitProviderLabel()) + "\n" +
+		keyValue("Model", m.cockpitModel()) + "\n" +
+		keyValue("Session", session) + "\n" +
+		keyValue("Files", fmt.Sprintf("%d selected", len(m.cockpitFiles)))
 	result := m.cockpitResult
 	if result == "" {
 		result = mutedStyle.Render("Execution output will appear here.")
@@ -1448,6 +2176,38 @@ func (m Model) cockpit(width, height int) string {
 		lower = outlinedPanel("RESULT", result, width, remaining, colorBorder)
 	}
 	content := hero + "\n" + metrics + "\n\n" + composer + "\n" + lower
+	return fitBlock(content, width, height)
+}
+
+func (m Model) cockpitFilePickerView(width, height int) string {
+	header := screenStyle(cockpitScreen).Bold(true).Render("SELECT WORKSPACE FILES") + "\n" +
+		mutedStyle.Render("j/k move · space toggle · c clear · enter/esc done")
+	if len(m.cockpitAvailFiles) == 0 {
+		return fitBlock(header+"\n\n"+mutedStyle.Render("No files found in workspace, or workspace not loading."), width, height)
+	}
+	visible := max(1, height-6)
+	cursor := min(m.cockpitFileCursor, len(m.cockpitAvailFiles)-1)
+	start := max(0, cursor-visible/2)
+	if start+visible > len(m.cockpitAvailFiles) {
+		start = max(0, len(m.cockpitAvailFiles)-visible)
+	}
+	var lines []string
+	for index := start; index < min(len(m.cockpitAvailFiles), start+visible); index++ {
+		file := m.cockpitAvailFiles[index]
+		mark := "[ ]"
+		if indexOfString(m.cockpitFiles, file) >= 0 {
+			mark = "[x]"
+		}
+		line := mark + " " + file
+		if index == cursor {
+			line = focusStyle().Bold(true).Render("▌ " + mark + " " + file)
+		} else {
+			line = "  " + textStyle.Render(mark+" "+file)
+		}
+		lines = append(lines, line)
+	}
+	content := header + "\n\n" + strings.Join(lines, "\n") + "\n\n" +
+		mutedStyle.Render(fmt.Sprintf("%d selected", len(m.cockpitFiles)))
 	return fitBlock(content, width, height)
 }
 
@@ -1702,11 +2462,25 @@ func (m Model) settingsDetailView(section int) string {
 			keyValue("Mode", ternaryStatus(m.tasks != nil, "task write enabled", "read-only")) + "\n" +
 			mutedStyle.Render("Use x on Task Board, Pipeline, or Operations to toggle execution.")
 	case 3:
+		webhookNote := fmt.Sprintf("port %d · w toggle (confirm) · P set port", m.webhookPort)
+		if m.tasks == nil {
+			webhookNote = "unavailable (read-only)"
+		}
 		return textStyle.Bold(true).Render("Integrations") + "\n" +
 			mutedStyle.Render("External automation adapters") + "\n\n" +
 			serviceLine("Scheduler", false, "adapter not connected") + "\n" +
-			serviceLine("Webhook", false, "adapter not connected") + "\n\n" +
-			warningStyle.Render("Unavailable controls are intentionally hidden.")
+			serviceLine("Webhook", m.webhookRunning, webhookNote) + "\n\n" +
+			warningStyle.Render("Starting the webhook opens a local HTTP server; scheduler stays read-only.")
+	case antigravitySection:
+		return m.antigravityView()
+	case gitSection:
+		return m.gitView()
+	case codeStudioSection:
+		return m.codeStudioView()
+	case browserSection:
+		return m.browserView()
+	case 8:
+		return m.diagnosticsView()
 	default:
 		return textStyle.Bold(true).Render("Workspace") + "\n" +
 			mutedStyle.Render("Paths and local application state") + "\n\n" +
@@ -1717,6 +2491,207 @@ func (m Model) settingsDetailView(section int) string {
 			serviceLine("Database", true, m.databaseMode()) + "\n" +
 			serviceLine("Execution", m.tasks != nil, m.orchestratorStatus())
 	}
+}
+
+func (m Model) antigravityView() string {
+	keys := cli.GlobalAntiPool.GetKeys()
+	current := cli.GlobalAntiPool.GetCurrentAccount()
+	currentName := "none"
+	if current != nil {
+		currentName = current.Name
+	}
+	lines := []string{
+		textStyle.Bold(true).Render("Antigravity Key Pool"),
+		mutedStyle.Render("OAuth accounts and API keys used for fallback rotation"),
+		"",
+		keyValue("Active keys", fmt.Sprintf("%d", len(keys))),
+		keyValue("Current account", currentName),
+		"",
+		textStyle.Bold(true).Render("Accounts"),
+		"",
+	}
+	for _, k := range keys {
+		lines = append(lines, statusStyle(ternaryStatus(k.Status == "active", "done", "failed")).Render(strings.ToUpper(k.Status))+
+			"  "+textStyle.Render(k.Name)+"  "+mutedStyle.Render("("+k.Type+", "+maskSecret(secretValue(k))+")"))
+	}
+	lines = append(lines, "", mutedStyle.Render("Press a to add a key or OAuth token (value masked, requires confirm)."))
+	return strings.Join(lines, "\n")
+}
+
+func secretValue(k cli.AntiAccountKey) string {
+	if k.Type == "oauth_token" {
+		return k.OAuthToken
+	}
+	return k.APIKey
+}
+
+func maskSecret(value string) string {
+	if value == "" {
+		return "unset"
+	}
+	if len(value) <= 4 {
+		return "••••"
+	}
+	return "••••" + value[len(value)-4:]
+}
+
+func (m Model) gitView() string {
+	header := textStyle.Bold(true).Render("Git")
+	if m.tasks == nil {
+		return header + "\n\n" + warningStyle.Render("Git controls unavailable: start with --write.")
+	}
+	if m.gitLoading {
+		return header + "\n\n" + mutedStyle.Render("Loading git status…")
+	}
+	if !m.gitLoaded {
+		return header + "\n\n" + mutedStyle.Render("Press j/k to load, r to refresh.")
+	}
+	if m.gitError != "" {
+		return header + "\n\n" + dangerStyle.Render(m.gitError)
+	}
+	lines := []string{
+		header,
+		mutedStyle.Render("r refresh · b new branch · o checkout · c commit · V revert"),
+		"",
+	}
+	isRepo, _ := m.gitStatus["is_repo"].(bool)
+	if !isRepo {
+		lines = append(lines, mutedStyle.Render("Workspace is not a git repository."))
+		return strings.Join(lines, "\n")
+	}
+	branch, _ := m.gitStatus["branch"].(string)
+	changed, _ := m.gitStatus["changed_files"].(int)
+	clean, _ := m.gitStatus["clean"].(bool)
+	lines = append(lines,
+		keyValue("Branch", branch),
+		keyValue("Changed files", fmt.Sprintf("%d", changed)),
+		keyValue("Clean", ternaryStatus(clean, "yes", "no")),
+		"",
+		textStyle.Bold(true).Render("Branches"),
+		"",
+	)
+	if m.gitBranches != nil {
+		for _, b := range m.gitBranches.Branches {
+			marker := "  "
+			if b == m.gitBranches.Current {
+				marker = focusStyle().Bold(true).Render("▌ ")
+			}
+			lines = append(lines, marker+textStyle.Render(b))
+		}
+	}
+	lines = append(lines, "", textStyle.Bold(true).Render("Recent commits"), "")
+	for _, entry := range m.gitLog {
+		lines = append(lines, mutedStyle.Render(entry.Hash)+" "+textStyle.Render(oneLine(entry.Message))+"  "+mutedStyle.Render(entry.Author+" · "+entry.Date))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) codeStudioView() string {
+	header := textStyle.Bold(true).Render("Code Studio")
+	if m.tasks == nil {
+		return header + "\n\n" + warningStyle.Render("Code Studio unavailable: start with --write.")
+	}
+	lines := []string{
+		header,
+		mutedStyle.Render("f scan workspace · J/K move · enter preview · E open in $EDITOR · S stage into cockpit"),
+		"",
+	}
+	if len(m.cockpitAvailFiles) == 0 {
+		lines = append(lines, mutedStyle.Render("Press f to scan the workspace for files."))
+		return strings.Join(lines, "\n")
+	}
+	visible := 12
+	start := max(0, m.codeStudioCursor-visible/2)
+	if start+visible > len(m.cockpitAvailFiles) {
+		start = max(0, len(m.cockpitAvailFiles)-visible)
+	}
+	for index := start; index < min(len(m.cockpitAvailFiles), start+visible); index++ {
+		file := m.cockpitAvailFiles[index]
+		marker := "  "
+		if index == m.codeStudioCursor {
+			marker = focusStyle().Bold(true).Render("▌ ")
+		}
+		staged := ""
+		if indexOfString(m.cockpitFiles, file) >= 0 {
+			staged = mutedStyle.Render(" [staged]")
+		}
+		lines = append(lines, marker+textStyle.Render(file)+staged)
+	}
+	lines = append(lines, "", textStyle.Bold(true).Render("Preview"), "")
+	if m.codeStudioLoading {
+		lines = append(lines, mutedStyle.Render("Loading…"))
+	} else if m.codeStudioPreviewErr != "" {
+		lines = append(lines, dangerStyle.Render(m.codeStudioPreviewErr))
+	} else if m.codeStudioFile != "" {
+		lines = append(lines, mutedStyle.Render(m.codeStudioFile), "", textStyle.Render(truncateRunes(m.codeStudioPreview, 2000)))
+	} else {
+		lines = append(lines, mutedStyle.Render("No file previewed yet."))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) browserView() string {
+	header := textStyle.Bold(true).Render("Browser Agent")
+	if m.tasks == nil {
+		return header + "\n\n" + warningStyle.Render("Browser agent unavailable: start with --write.")
+	}
+	lines := []string{
+		header,
+		mutedStyle.Render("u enter URL & run · t toggle screenshot"),
+		"",
+		keyValue("URL", empty(m.browserURL)),
+		keyValue("Screenshot", ternaryStatus(m.browserScreenshot, "on", "off")),
+		"",
+	}
+	if m.browserRunning {
+		lines = append(lines, warningStyle.Render("Running headless Chrome… this can take up to 35s."))
+		return strings.Join(lines, "\n")
+	}
+	if m.browserError != "" {
+		lines = append(lines, dangerStyle.Render(m.browserError))
+		return strings.Join(lines, "\n")
+	}
+	if m.browserResult == nil {
+		lines = append(lines, mutedStyle.Render("No run yet."))
+		return strings.Join(lines, "\n")
+	}
+	result := m.browserResult
+	lines = append(lines,
+		keyValue("Title", empty(result.Title)),
+		keyValue("Success", ternaryStatus(result.Success, "yes", "no")),
+	)
+	if result.ScreenshotPath != "" {
+		lines = append(lines, keyValue("Screenshot", result.ScreenshotPath))
+	}
+	if result.Error != "" {
+		lines = append(lines, keyValue("Error", result.Error))
+	}
+	lines = append(lines, "", textStyle.Bold(true).Render("Page text"), "",
+		textStyle.Render(truncateRunes(result.TextContent, 1200)))
+	if len(result.Logs) > 0 {
+		lines = append(lines, "", textStyle.Bold(true).Render("Log"), "")
+		for _, entry := range result.Logs {
+			lines = append(lines, mutedStyle.Render(entry))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) diagnosticsView() string {
+	cliPaths := cli.GetDetectedCLIPaths()
+	return textStyle.Bold(true).Render("Diagnostics") + "\n" +
+		mutedStyle.Render("Version, paths, and CLI resolution") + "\n\n" +
+		keyValue("App version", version.GetVersion()) + "\n" +
+		keyValue("Database", m.dbPath) + "\n" +
+		keyValue("Workspace", empty(m.snapshot.Workspace)) + "\n\n" +
+		textStyle.Bold(true).Render("CLI resolver") + "\n\n" +
+		keyValue("Claude", cliPaths["claude"]) + "\n" +
+		keyValue("Antigravity", cliPaths["antigravity"]) + "\n\n" +
+		textStyle.Bold(true).Render("Runtime") + "\n\n" +
+		keyValue("Go runtime", runtime.Version()) + "\n" +
+		keyValue("OS/Arch", runtime.GOOS+"/"+runtime.GOARCH) + "\n" +
+		keyValue("Goroutines", fmt.Sprintf("%d", runtime.NumGoroutine())) + "\n\n" +
+		serviceLine("Orchestrator", m.tasks != nil, m.orchestratorStatus())
 }
 
 func (m Model) orchestratorStatus() string {
@@ -1833,9 +2808,25 @@ func (m Model) footer(width int) string {
 		if m.inputMode == 'a' {
 			prompt = "New task: "
 		} else if m.inputMode == 'D' {
-			prompt = "Plan requirement: "
+			prompt = fmt.Sprintf("Plan requirement [%s/%s]: ", m.planProviderLabel(), m.planModel())
 		} else if m.inputMode == 'p' {
 			prompt = "Claude request: "
+		} else if m.inputMode == 'N' {
+			prompt = "New agent name: "
+		} else if m.inputMode == 'K' {
+			prompt = "Antigravity key (name:secret): "
+		} else if m.inputMode == 'B' {
+			prompt = "New branch name: "
+		} else if m.inputMode == 'O' {
+			prompt = "Checkout branch: "
+		} else if m.inputMode == 'M' {
+			prompt = "Commit message: "
+		} else if m.inputMode == 'V' {
+			prompt = "Revert commit hash: "
+		} else if m.inputMode == 'P' {
+			prompt = "Webhook port: "
+		} else if m.inputMode == 'U' {
+			prompt = "Browser agent URL: "
 		}
 		line := fitLine(screenStyle(m.screen).Render(prompt)+m.input+"_", width)
 		return lipgloss.NewStyle().Background(colorSurface).Render(line)
@@ -1853,10 +2844,83 @@ func (m Model) footer(width int) string {
 
 func taskDetail(task models.Task) string {
 	text := task.Description
+	if formatted := formatStructuredPrompt(task.Prompt); formatted != "" {
+		text += "\n\n" + formatted
+	}
 	if task.Result != "" {
 		text += "\n\nRESULT\n" + task.Result
 	}
-	return empty(text) + "\n\nTask: " + empty(task.TaskID) + "\nAssigned: " + empty(task.AssignedTo) + "\nCreated: " + formatTime(task.CreatedAt)
+	details := empty(text) + "\n\nTask: " + empty(task.TaskID) +
+		"\nAssigned: " + empty(task.AssignedTo) +
+		"\nSession: " + empty(task.SessionID) +
+		"\nRetries: " + fmt.Sprintf("%d/%d", task.RetryCount, task.MaxRetries) +
+		"\nCreated: " + formatTime(task.CreatedAt)
+	if task.ParentID != "" {
+		details += "\nParent: " + task.ParentID
+	}
+	if len(task.DependsOn) > 0 {
+		details += "\nDepends on: " + strings.Join(task.DependsOn, ", ")
+	}
+	return details
+}
+
+type structuredPrompt struct {
+	action, requirements, targetFiles, expectedOutput string
+	ok                                                bool
+}
+
+func parseStructuredPrompt(prompt string) structuredPrompt {
+	type tagPos struct {
+		idx  int
+		name string
+	}
+	tags := []tagPos{
+		{strings.Index(prompt, "[ACTION]"), "action"},
+		{strings.Index(prompt, "[REQUIREMENTS]"), "requirements"},
+		{strings.Index(prompt, "[TARGET FILES]"), "files"},
+		{strings.Index(prompt, "[EXPECTED OUTPUT]"), "output"},
+	}
+	for _, tag := range tags {
+		if tag.idx < 0 {
+			return structuredPrompt{}
+		}
+	}
+	sort.Slice(tags, func(i, j int) bool { return tags[i].idx < tags[j].idx })
+	result := structuredPrompt{ok: true}
+	for i, tag := range tags {
+		end := len(prompt)
+		if i+1 < len(tags) {
+			end = tags[i+1].idx
+		}
+		segment := prompt[tag.idx:end]
+		if colon := strings.Index(segment, ":"); colon >= 0 {
+			segment = segment[colon+1:]
+		}
+		value := strings.TrimSpace(segment)
+		switch tag.name {
+		case "action":
+			result.action = value
+		case "requirements":
+			result.requirements = value
+		case "files":
+			result.targetFiles = value
+		case "output":
+			result.expectedOutput = value
+		}
+	}
+	return result
+}
+
+func formatStructuredPrompt(prompt string) string {
+	parsed := parseStructuredPrompt(prompt)
+	if !parsed.ok {
+		return ""
+	}
+	label := accentStyle.Bold(true)
+	return label.Render("[ACTION]") + " " + textStyle.Render(parsed.action) + "\n\n" +
+		label.Render("[REQUIREMENTS]") + " " + textStyle.Render(parsed.requirements) + "\n\n" +
+		label.Render("[TARGET FILES]") + " " + textStyle.Render(parsed.targetFiles) + "\n\n" +
+		label.Render("[EXPECTED OUTPUT]") + " " + textStyle.Render(parsed.expectedOutput)
 }
 
 func agentDetail(agent models.Agent) string {

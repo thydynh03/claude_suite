@@ -35,7 +35,7 @@
   let newKeyName = '';
   let newKeyValue = '';
 
-  onMount(async () => {
+  async function initSettings() {
     await loadAgents();
     await loadAntiKeys();
     try {
@@ -52,6 +52,10 @@
         });
       }
     } catch (e) {}
+  }
+
+  onMount(() => {
+    initSettings();
     return () => { unsubscribeAgents(); };
   });
 

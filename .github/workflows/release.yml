@@ -11,7 +11,47 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Go Vet
+        run: go vet ./...
+
+      - name: Go Test
+        run: go test ./... -count=1
+
+      - name: Go Test (race, TUI)
+        run: go test -race ./backend/tui ./cmd/claude-suite-tui
+
+      - name: Build TUI for Windows
+        run: GOOS=windows GOARCH=amd64 go build -o /tmp/ClaudeSuiteTUI.exe ./cmd/claude-suite-tui
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Frontend Type Check
+        working-directory: ./frontend
+        run: npm run check
+
   build-and-release:
+    needs: test
     runs-on: windows-latest
 
     steps:
@@ -23,7 +63,7 @@ jobs:
       - name: Setup Go Environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.26'
 
       - name: Setup Node.js Environment
         uses: actions/setup-node@v4
