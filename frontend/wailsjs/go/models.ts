@@ -409,6 +409,14 @@ export namespace services {
 	    // Go type: time
 	    target_time: any;
 	    repeat: boolean;
+	    provider: string;
+	    model: string;
+	    enabled: boolean;
+	    // Go type: time
+	    last_run_at: any;
+	    last_status: string;
+	    last_error: string;
+	    run_count: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ScheduledJob(source);
@@ -420,6 +428,13 @@ export namespace services {
 	        this.prompt = source["prompt"];
 	        this.target_time = this.convertValues(source["target_time"], null);
 	        this.repeat = source["repeat"];
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	        this.enabled = source["enabled"];
+	        this.last_run_at = this.convertValues(source["last_run_at"], null);
+	        this.last_status = source["last_status"];
+	        this.last_error = source["last_error"];
+	        this.run_count = source["run_count"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

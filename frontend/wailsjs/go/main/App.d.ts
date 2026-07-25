@@ -141,6 +141,8 @@ export function SaveRoleContent(arg1:string,arg2:string):Promise<void>;
 
 export function ScanWorkspaceFiles():Promise<Array<string>>;
 
+export function ScheduleJob(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:string):Promise<string>;
+
 export function SchedulePrompt(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
 export function SelectWorkspaceFolder():Promise<string>;
@@ -152,6 +154,8 @@ export function SetCurrentAntiAccountKey(arg1:string):Promise<boolean>;
 export function SetMaxConcurrency(arg1:number):Promise<number>;
 
 export function SetOnboardingSeen(arg1:boolean):Promise<boolean>;
+
+export function SetScheduledJobEnabled(arg1:string,arg2:boolean):Promise<boolean>;
 
 export function SetShowCLIConsole(arg1:boolean):Promise<boolean>;
 
@@ -176,7 +180,3 @@ export function ToggleWebhook(arg1:number):Promise<boolean>;
 export function UpdateTaskStatus(arg1:string,arg2:string):Promise<void>;
 
 export function WarmupAntiAccountKeys():Promise<void>;
-
-export function ScheduleJob(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:string):Promise<string>;
-
-export function SetScheduledJobEnabled(arg1:string,arg2:boolean):Promise<boolean>;
