@@ -646,13 +646,21 @@
               <!-- Optional Custom Client ID Input -->
               <div class="space-y-1">
                 <div class="flex items-center justify-between text-[11px]">
-                  <span class="font-bold text-on-surface">Custom Google OAuth Client ID (Tùy chọn - Tránh lỗi 401 Invalid Client):</span>
-                  <button 
-                    type="button"
-                    on:click={() => handleOpenExternalUrl('https://console.cloud.google.com/apis/credentials')}
-                    class="text-primary hover:underline text-[10px]">
-                    ☁️ Tạo Client ID tại GCP Console
-                  </button>
+                  <span class="font-bold text-on-surface">Custom Google OAuth Client ID:</span>
+                  <div class="flex gap-2">
+                    <button 
+                      type="button"
+                      on:click={() => handleOpenExternalUrl('https://console.cloud.google.com/apis/credentials/consent')}
+                      class="text-rose-500 font-bold hover:underline text-[10px]">
+                      ⚠️ Sửa lỗi 403 Access Denied (Thêm Email vào Test Users)
+                    </button>
+                    <button 
+                      type="button"
+                      on:click={() => handleOpenExternalUrl('https://console.cloud.google.com/apis/credentials')}
+                      class="text-primary hover:underline text-[10px]">
+                      ☁️ GCP Credentials
+                    </button>
+                  </div>
                 </div>
                 <input 
                   type="text" 
