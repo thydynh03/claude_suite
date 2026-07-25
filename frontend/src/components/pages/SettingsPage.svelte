@@ -657,7 +657,7 @@
                 <input 
                   type="text" 
                   bind:value={customClientId}
-                  placeholder="32555940559-fa7440q2viic87nvi8nk5w0y86z.apps.googleusercontent.com (Mặc định)"
+                  placeholder="1072006483967-hi79hmm245ftvfq5k77jqevjr0oq359k.apps.googleusercontent.com (Mặc định đã cấu hình)"
                   class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs focus:ring-1 focus:ring-primary outline-none font-mono"
                 />
               </div>

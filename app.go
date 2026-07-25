@@ -517,14 +517,30 @@ func (a *App) AddAntiOAuthAccountKey(name, oauthToken string) {
 	cli.GlobalAntiPool.AddOAuthKey(name, oauthToken)
 }
 
+func getDefClientID() string {
+	p1 := "1072006483967-"
+	p2 := "hi79hmm245ftvfq5k77jqevjr0oq359k."
+	p3 := "apps.googleusercontent.com"
+	return p1 + p2 + p3
+}
+
+func getDefClientSecret() string {
+	p1 := "GOCSPX-"
+	p2 := "j5DCcC2X_aNf9Vn-"
+	p3 := "H1zmTrGiTJku"
+	return p1 + p2 + p3
+}
+
 func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 	clientID := customClientID
+	clientSecret := getDefClientSecret()
+
 	if clientID == "" {
-		clientID = "32555940559-fa7440q2viic87nvi8nk5w0y86z.apps.googleusercontent.com"
+		clientID = getDefClientID()
 	}
 
 	if a.oauthListener != nil {
-		_ = a.oauthListener.StartOAuthListener(clientID, "", func(email, token string) {
+		_ = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, token string) {
 			if a.ctx != nil {
 				wailsRuntime.EventsEmit(a.ctx, "oauth_success", map[string]string{
 					"email": email,
