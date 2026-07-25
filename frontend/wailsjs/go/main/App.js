@@ -226,6 +226,14 @@ export function SetShowCLIConsole(arg1) {
   return window['go']['main']['App']['SetShowCLIConsole'](arg1);
 }
 
+export function SetTaskTimeoutMinutes(arg1) {
+  return window['go']['main']['App']['SetTaskTimeoutMinutes'](arg1);
+}
+
+export function GetTaskTimeoutMinutes() {
+  return window['go']['main']['App']['GetTaskTimeoutMinutes']();
+}
+
 export function StartOrchestrator() {
   return window['go']['main']['App']['StartOrchestrator']();
 }

@@ -99,6 +99,17 @@ func (r *TaskRepository) UpdateStatus(taskID, status string, result string, sess
 	return err
 }
 
+// ResetRunningTasks moves any task stuck in "running" (e.g. from a previous
+// session that was killed mid-execution) back to the backlog on startup.
+func (r *TaskRepository) ResetRunningTasks() (int64, error) {
+	res, err := r.db.Exec(`UPDATE tasks SET status='backlog', assigned_to='' WHERE status='running'`)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // ResetForRetry moves a finished/failed task back to the backlog and clears its
 // retry counter, result and timestamps so the orchestrator re-dispatches it.
 func (r *TaskRepository) ResetForRetry(taskID string) error {

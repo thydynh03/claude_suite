@@ -271,6 +271,21 @@ func (o *Orchestrator) prepareAgentForTask(task *models.Task) *models.Agent {
 
 // runTask executes a single task to completion (or cancellation) in its own goroutine.
 func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *models.Agent) {
+	// A panic in one task must never crash the whole orchestrator/app.
+	defer func() {
+		if r := recover(); r != nil {
+			o.emitTaskLog(task.TaskID, fmt.Sprintf("💥 Panic khi chạy task: %v", r), "ERROR")
+			_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", fmt.Sprintf("panic: %v", r), "")
+			if agent != nil {
+				agent.Status = "idle"
+				agent.LastError = fmt.Sprintf("panic: %v", r)
+				_ = o.agentRepo.Update(agent)
+			}
+			o.emitBoard()
+			o.emitAgents()
+		}
+	}()
+
 	// Per-task log helper: streams to both the task inspector and the global log.
 	onLog := func(msg, level string) {
 		o.emitTaskLog(task.TaskID, fmt.Sprintf("[%s] %s", agent.Name, msg), level)

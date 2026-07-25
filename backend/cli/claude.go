@@ -84,7 +84,7 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 		args = append(args, "--resume", sessionID)
 	}
 
-	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
 	var cmd *exec.Cmd

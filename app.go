@@ -104,6 +104,15 @@ func (a *App) startup(ctx context.Context) {
 	if a.workspaceConfig.LastWorkspaceFolder != "" {
 		a.orchestrator.SetWorkspaceDir(a.workspaceConfig.LastWorkspaceFolder)
 	}
+
+	// Recover tasks left "running" by a previous session that was killed mid-flight.
+	if n, err := a.taskRepo.ResetRunningTasks(); err == nil && n > 0 {
+		wailsRuntime.EventsEmit(ctx, "log_entry", map[string]string{
+			"message": fmt.Sprintf("♻️ Đã khôi phục %d task đang chạy dở về Backlog sau khi khởi động lại.", n),
+			"level":   "WARN",
+			"time":    time.Now().Format("15:04:05"),
+		})
+	}
 }
 
 // ── Workspace ──────────────────────────────────────────────────────────
@@ -293,6 +302,15 @@ func (a *App) SetMaxConcurrency(n int) int {
 
 func (a *App) GetMaxConcurrency() int {
 	return a.orchestrator.GetMaxConcurrency()
+}
+
+func (a *App) SetTaskTimeoutMinutes(minutes int) int {
+	cli.SetTaskTimeout(time.Duration(minutes) * time.Minute)
+	return int(cli.TaskTimeout() / time.Minute)
+}
+
+func (a *App) GetTaskTimeoutMinutes() int {
+	return int(cli.TaskTimeout() / time.Minute)
 }
 
 func (a *App) SetAutoApproveAll(enabled bool) bool {

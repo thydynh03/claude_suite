@@ -165,7 +165,7 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
 	var cmd *exec.Cmd

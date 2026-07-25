@@ -2,9 +2,28 @@ package cli
 
 import (
 	"context"
+	"sync/atomic"
+	"time"
 
 	"claude_suite/backend/models"
 )
+
+// taskTimeoutNanos is the per-execution CLI timeout (default 10m), configurable
+// at runtime via SetTaskTimeout. Stored as int64 nanoseconds for atomic access.
+var taskTimeoutNanos int64 = int64(10 * time.Minute)
+
+// SetTaskTimeout sets the per-task CLI timeout. Values < 1 minute are clamped.
+func SetTaskTimeout(d time.Duration) {
+	if d < time.Minute {
+		d = time.Minute
+	}
+	atomic.StoreInt64(&taskTimeoutNanos, int64(d))
+}
+
+// TaskTimeout returns the current per-task CLI timeout.
+func TaskTimeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&taskTimeoutNanos))
+}
 
 // RunResult contains output and metrics from a CLI execution
 type RunResult struct {

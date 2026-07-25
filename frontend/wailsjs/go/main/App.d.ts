@@ -61,6 +61,10 @@ export function GetGitStatus():Promise<Record<string, any>>;
 
 export function GetMaxConcurrency():Promise<number>;
 
+export function SetTaskTimeoutMinutes(arg1:number):Promise<number>;
+
+export function GetTaskTimeoutMinutes():Promise<number>;
+
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
 
 export function GetScheduledJobs():Promise<Array<services.ScheduledJob>>;
