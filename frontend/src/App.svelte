@@ -97,6 +97,14 @@
           agentsStore.set(ag || []);
         } catch (_) {}
       });
+      // Keep the agent list in sync everywhere (Settings, 3D office, Kanban,
+      // Cockpit) whenever an agent is created/updated/deleted anywhere.
+      EventsOn('agent_updated', async () => {
+        try {
+          const ag = await AppBindings.GetAgents();
+          agentsStore.set(ag || []);
+        } catch (_) {}
+      });
     } catch (e) {
       console.warn('Wails events error:', e);
     }

@@ -134,8 +134,53 @@
   }
 
   async function handleSaveAgent(agent: Agent) {
-    // In a real app, call a Go binding like AppBindings.SaveAgent(agent)
-    addLog(`Agent ${agent.name} saved.`, 'SUCCESS');
+    try {
+      await AppBindings.SaveAgent(agent as any);
+      addLog(`Đã lưu Agent ${agent.name}.`, 'SUCCESS');
+      // agent_updated event refreshes agentsStore globally (3D office, kanban, cockpit).
+    } catch (e) {
+      addLog(`Lỗi lưu agent: ${e}`, 'ERROR');
+    }
+  }
+
+  let newAgentName = '';
+  let newAgentRole = '';
+  async function handleAddAgent() {
+    const name = newAgentName.trim();
+    if (!name) return;
+    const agent: any = {
+      agent_id: '',
+      name,
+      role: newAgentRole.trim() || 'Custom Agent',
+      provider: 'claude_cli',
+      model: 'claude-sonnet-4-5',
+      system: `You are ${name}, ${newAgentRole.trim() || 'a specialized AI agent'}.`,
+      icon: 'smart_toy',
+      status: 'idle',
+      tasks_done: 0,
+      tokens_used: 0,
+      token_limit: 0,
+      token_remaining: 0,
+    };
+    try {
+      await AppBindings.SaveAgent(agent);
+      newAgentName = '';
+      newAgentRole = '';
+      addLog(`Đã tạo Agent mới: ${name}.`, 'SUCCESS');
+    } catch (e) {
+      addLog(`Lỗi tạo agent: ${e}`, 'ERROR');
+    }
+  }
+
+  async function handleDeleteAgent(agent: Agent) {
+    if (!(agent as any).agent_id) return;
+    if (!confirm(`Xóa agent "${agent.name}"?`)) return;
+    try {
+      await AppBindings.DeleteAgent((agent as any).agent_id);
+      addLog(`Đã xóa Agent ${agent.name}.`, 'WARN');
+    } catch (e) {
+      addLog(`Lỗi xóa agent: ${e}`, 'ERROR');
+    }
   }
 
   async function handleSaveIntegrations() {
@@ -289,6 +334,21 @@
         </button>
       </div>
 
+      <!-- Add new agent (persists + syncs to 3D office, Kanban, Cockpit) -->
+      <div class="flex flex-wrap items-center gap-2 bg-surface-container-low/50 border border-outline-variant rounded-xl p-3">
+        <span class="material-symbols-outlined text-primary text-lg">person_add</span>
+        <input bind:value={newAgentName} placeholder="Tên agent mới..."
+          on:keydown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
+          class="flex-1 min-w-[140px] bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary" />
+        <input bind:value={newAgentRole} placeholder="Vai trò (role)..."
+          on:keydown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
+          class="flex-1 min-w-[140px] bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary" />
+        <button on:click={handleAddAgent} disabled={!newAgentName.trim()}
+          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">add</span> Tạo Agent
+        </button>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         {#each agents as agent}
           <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-sm hover:shadow-md transition-all">
@@ -326,10 +386,11 @@
                 <div class="w-32">
                   <Dropdown
                     options={[
-                      { value: 'claude-cli', label: 'Claude CLI' },
-                      { value: 'anti-cli', label: 'Anti CLI' }
+                      { value: 'claude_cli', label: 'Claude CLI' },
+                      { value: 'anti_cli', label: 'Anti CLI' }
                     ]}
-                    value="claude-cli"
+                    value={agent.provider || 'claude_cli'}
+                    on:change={(e) => agent.provider = e.detail}
                   />
                 </div>
               </div>
@@ -344,6 +405,7 @@
                       { value: 'gemini-3.6-flash-high', label: 'Gemini Flash' }
                     ]}
                     value={agent.model}
+                    on:change={(e) => agent.model = e.detail}
                   />
                 </div>
               </div>
@@ -352,8 +414,11 @@
                 <span>Tokens Used:</span>
                 <span>{agent.tokens_used.toLocaleString()}</span>
               </div>
-              <div class="flex justify-end pt-2">
-                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90">
+              <div class="flex justify-end gap-2 pt-2">
+                <button on:click={() => handleDeleteAgent(agent)} class="bg-rose-500/10 text-rose-600 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm">delete</span> Xóa
+                </button>
+                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer">
                   Save
                 </button>
               </div>

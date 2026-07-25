@@ -23,7 +23,10 @@
 
   const unsubscribeAgents = agentsStore.subscribe((list) => {
     currentAgentList = list || [];
-    if (scene && !isAllSeatsPopulated) {
+    // Reflect real agent create/update/delete live, except while the demo
+    // "populate all seats" simulation is running (which manages its own avatars).
+    if (scene && !isSimulating) {
+      isAllSeatsPopulated = false;
       rebuildOfficeLayout();
     }
   });
