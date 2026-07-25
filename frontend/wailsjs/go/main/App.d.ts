@@ -67,8 +67,6 @@ export function GetShowCLIConsole():Promise<boolean>;
 
 export function GetSystemMetrics():Promise<main.SystemMetrics>;
 
-export function GetTasks():Promise<Array<models.Task>>;
-
 export function GetWorkspaceConfig():Promise<models.WorkspaceConfig>;
 
 export function IsOrchestratorRunning():Promise<boolean>;

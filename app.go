@@ -160,25 +160,39 @@ func (a *App) GetAgents() ([]models.Agent, error) {
 	return a.agentRepo.GetAll()
 }
 
-func (a *App) SaveAgent(agent models.Agent) error {
-	if agent.AgentID == "" {
-		return a.agentRepo.Create(&agent)
+func (a *App) emitAgentsUpdated() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "agent_updated", nil)
 	}
-	return a.agentRepo.Update(&agent)
+}
+
+func (a *App) SaveAgent(agent models.Agent) error {
+	var err error
+	if agent.AgentID == "" {
+		err = a.agentRepo.Create(&agent)
+	} else {
+		err = a.agentRepo.Update(&agent)
+	}
+	if err == nil {
+		a.emitAgentsUpdated()
+	}
+	return err
 }
 
 func (a *App) DeleteAgent(agentID string) error {
-	return a.agentRepo.Delete(agentID)
+	err := a.agentRepo.Delete(agentID)
+	if err == nil {
+		a.emitAgentsUpdated()
+	}
+	return err
 }
 
 func (a *App) ResetAgentsToDefaults() error {
-	return a.agentRepo.ResetToDefaults()
-}
-
-// ── Tasks CRUD ─────────────────────────────────────────────────────────
-
-func (a *App) GetTasks() ([]models.Task, error) {
-	return a.taskRepo.GetAll()
+	err := a.agentRepo.ResetToDefaults()
+	if err == nil {
+		a.emitAgentsUpdated()
+	}
+	return err
 }
 
 func (a *App) emitBoardUpdated() {

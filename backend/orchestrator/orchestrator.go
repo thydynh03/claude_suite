@@ -177,6 +177,7 @@ func (o *Orchestrator) processNextTask() {
 
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "board_updated", nil)
+		runtime.EventsEmit(o.ctx, "agent_updated", nil)
 	}
 
 	// Automated E2E Web Test Skill Auto-Binding
@@ -305,9 +306,10 @@ func (o *Orchestrator) processNextTask() {
 		_ = o.agentRepo.Update(agent)
 	}
 
-	// Notify Wails frontend to refresh board
+	// Notify Wails frontend to refresh board & agents
 	if o.ctx != nil {
 		runtime.EventsEmit(o.ctx, "board_updated", nil)
+		runtime.EventsEmit(o.ctx, "agent_updated", nil)
 	}
 }
 

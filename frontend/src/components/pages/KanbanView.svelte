@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, tasksStore, agentsStore } from '../../lib/stores/appState';
+  import { addLog, logs, tasksStore, agentsStore } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
   export let tasks: Task[] = [];
@@ -427,55 +427,125 @@
 {/if}
 
 {#if detailTask}
-<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[600px] max-h-[80vh] flex flex-col space-y-4">
-    <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
-      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary">analytics</span> Chi tiết Task & Kết quả AI
-      </h3>
-      <button type="button" on:click={() => detailTask = null} class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-full max-w-3xl max-h-[90vh] flex flex-col space-y-4">
+    <!-- Modal Header -->
+    <div class="flex justify-between items-start pb-3 border-b border-outline-variant">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold uppercase bg-primary/10 text-primary border border-primary/20">
+            Task Inspector & Sub-Agent Monitor
+          </span>
+          <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold uppercase {detailTask.status === 'running' ? 'bg-primary/20 text-primary animate-pulse' : detailTask.status === 'done' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-surface-container-high text-on-surface-variant'}">
+            {detailTask.status}
+          </span>
+        </div>
+        <h3 class="text-base font-bold text-on-surface mt-1 flex items-center gap-2">
+          {detailTask.title}
+        </h3>
+      </div>
+      <button type="button" on:click={() => detailTask = null} class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-all cursor-pointer">
         <span class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto space-y-3 text-xs">
-      <div>
-        <span class="font-bold text-on-surface block mb-1">Tiêu đề Task:</span>
-        <p class="font-bold text-sm text-primary">{detailTask.title}</p>
+    <!-- Main Content Area -->
+    <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+      
+      <!-- Subagent Card & Live Status -->
+      <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/60 space-y-3 shadow-xs">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <span class="material-symbols-outlined text-xl">smart_toy</span>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase font-bold text-outline">Sub-Agent Phân Công</div>
+              <h4 class="font-bold text-sm text-on-surface">{detailTask.assigned_to || 'Chưa phân công (Unassigned)'}</h4>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-bold text-on-surface-variant">Đổi Agent:</span>
+            <select
+              value={detailTask.assigned_to || ''}
+              on:change={(e) => handleAssignAgent(detailTask.task_id, e.currentTarget.value)}
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface font-semibold outline-none focus:border-primary cursor-pointer"
+            >
+              {#each agentOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        {#if detailTask.status === 'running'}
+          <div class="p-2.5 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-2 text-primary font-bold text-xs animate-pulse">
+            <span class="material-symbols-outlined text-base animate-spin">sync</span>
+            <span>Sub-Agent đang xử lý task này ngầm... Vui lòng xem log bên dưới!</span>
+          </div>
+        {/if}
       </div>
 
-      <div class="grid grid-cols-2 gap-2 bg-surface-container-low p-2.5 rounded-xl border border-outline-variant font-mono">
-        <div>Trạng thái: <strong class="uppercase text-on-surface">{detailTask.status}</strong></div>
-        <div>Độ ưu tiên: <strong class="uppercase text-primary">{detailTask.priority}</strong></div>
-        <div>Phân công: <strong>{detailTask.assigned_to || 'Unassigned'}</strong></div>
-        <div>Session ID: <strong class="truncate block">{detailTask.session_id || 'N/A'}</strong></div>
-      </div>
-
-      <div>
-        <span class="font-bold text-on-surface block mb-1">Prompt / Hướng dẫn:</span>
-        <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant font-mono text-on-surface-variant whitespace-pre-wrap">
-          {detailTask.prompt || detailTask.description || 'Không có mô tả'}
+      <!-- Task Prompt / Action breakdown -->
+      <div class="space-y-1">
+        <span class="font-bold text-on-surface block">📌 Prompt / Yêu cầu chi tiết:</span>
+        <div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant font-mono text-on-surface-variant whitespace-pre-wrap text-[11px] leading-relaxed">
+          {detailTask.prompt || detailTask.description || 'Không có prompt'}
         </div>
       </div>
 
-      {#if detailTask.result}
-      <div>
-        <span class="font-bold text-emerald-600 block mb-1 flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">check_circle</span> Kết quả Thực thi AI:
+      <!-- Realtime Log Execution Output Stream -->
+      <div class="space-y-1">
+        <span class="font-bold text-on-surface flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm text-secondary">terminal</span> Realtime Log Stream & Terminal:
         </span>
-        <div class="bg-surface-container-lowest p-3 rounded-xl border border-emerald-500/30 font-mono text-on-surface max-h-60 overflow-y-auto whitespace-pre-wrap text-[11px]">
+        <div class="bg-black/90 text-emerald-400 p-3 rounded-xl border border-slate-800 font-mono text-[11px] h-36 overflow-y-auto space-y-1 shadow-inner leading-relaxed">
+          {#each ($logs || []).slice(-15) as l}
+            <div class="flex items-start gap-2">
+              <span class="text-slate-500 font-mono">[{l.time || 'NOW'}]</span>
+              <span class={l.level === 'ERROR' ? 'text-rose-400' : l.level === 'SUCCESS' ? 'text-emerald-400' : l.level === 'WARN' ? 'text-amber-300' : 'text-slate-300'}>
+                {l.message}
+              </span>
+            </div>
+          {:else}
+            <div class="text-slate-600 italic">Chưa có log thực thi...</div>
+          {/each}
+        </div>
+      </div>
+
+      <!-- AI Result Deliverable -->
+      {#if detailTask.result}
+      <div class="space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">check_circle</span> Kết quả Thực thi AI Deliverable:
+          </span>
+          <button
+            type="button"
+            on:click={() => { if (detailTask?.result) { navigator.clipboard.writeText(detailTask.result); addLog('Đã sao chép kết quả AI!', 'SUCCESS'); } }}
+            class="text-[10px] bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-2 py-0.5 rounded font-bold border border-outline-variant cursor-pointer flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">content_copy</span> Sao chép Kết quả
+          </button>
+        </div>
+        <div class="bg-surface-container-lowest p-3 rounded-xl border border-emerald-500/30 font-mono text-on-surface max-h-52 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed">
           {detailTask.result}
         </div>
       </div>
       {/if}
+
     </div>
 
-    <div class="flex justify-end pt-2 border-t border-outline-variant">
+    <!-- Modal Footer -->
+    <div class="flex justify-between items-center pt-3 border-t border-outline-variant">
+      <div class="text-[11px] text-on-surface-variant font-mono">
+        Session ID: <strong class="text-on-surface">{detailTask.session_id || 'N/A'}</strong>
+      </div>
       <button 
         type="button" 
         on:click={() => detailTask = null} 
-        class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer">
-        Đóng
+        class="px-5 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer shadow-xs">
+        Đóng Panel
       </button>
     </div>
   </div>

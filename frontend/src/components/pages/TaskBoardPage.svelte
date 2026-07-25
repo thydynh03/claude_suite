@@ -3,7 +3,7 @@
   import type { Task } from '../../lib/types';
   import KanbanView from './KanbanView.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, orchestratorRunning, tasksStore } from '../../lib/stores/appState';
+  import { addLog, orchestratorRunning, tasksStore, agentsStore } from '../../lib/stores/appState';
 
   let subTab: 'kanban' | 'builder' | 'reports' = 'kanban';
   let requirementText = '';
@@ -28,22 +28,39 @@
 
   onMount(async () => {
     await loadTasks();
-    let unoff: any;
-    if ((window as any)?.runtime) {
-      unoff = (window as any).runtime.EventsOn('board_updated', () => {
+    await loadAgents();
+    let unoffBoard: any;
+    let unoffAgents: any;
+    if ((window as any)?.runtime?.EventsOn) {
+      unoffBoard = (window as any).runtime.EventsOn('board_updated', () => {
         loadTasks();
+      });
+      unoffAgents = (window as any).runtime.EventsOn('agent_updated', () => {
+        loadAgents();
       });
     }
     return () => {
       unsubscribeTasks();
-      if (unoff && typeof unoff === 'function') unoff();
+      if (unoffBoard && typeof unoffBoard === 'function') unoffBoard();
+      if (unoffAgents && typeof unoffAgents === 'function') unoffAgents();
     };
   });
+
+  async function loadAgents() {
+    try {
+      if ((AppBindings as any).GetAgents) {
+        const res = await (AppBindings as any).GetAgents();
+        if (Array.isArray(res)) {
+          agentsStore.set(res);
+        }
+      }
+    } catch (e) {}
+  }
 
   async function loadTasks() {
     try {
       if ((window as any)?.go?.main?.App) {
-        const res = await AppBindings.GetTasks();
+        const res = await (AppBindings as any).GetTasks();
         const loaded = Array.isArray(res) ? res : [];
         tasksStore.set(loaded);
       }
@@ -123,6 +140,8 @@
 
   async function handleExecutePlan() {
     subTab = 'kanban'; // Auto-switch to Interactive Kanban view
+    await loadTasks();
+    await loadAgents();
     await AppBindings.StartOrchestrator();
     addLog('Orchestrator started! Switched to Interactive Kanban.', 'SUCCESS');
   }
