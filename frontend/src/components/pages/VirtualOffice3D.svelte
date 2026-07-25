@@ -75,7 +75,7 @@
       "Lễ Tân (Receptionist)"
     ];
 
-    const colors = [0x0284c7, 0x7c3aed, 0xd97706, 0x059669, 0xdc2626, 0xdb2777, 0x4f46e5, 0x0d9488, 0x0891b2];
+    const colors = AGENT_ACCENTS;
 
     // 1. CEO Executive Suite (4 Seats)
     createCharacterAvatar(corporateRoles[0], 0xd97706, 13, -9.4, Math.PI); // CEO Chair facing desk North
@@ -201,11 +201,36 @@
     controls.update();
   }
 
+  // Desaturated agent accents. Identity still reads at a glance, but 35 desks
+  // no longer look like a row of arcade cabinets.
+  const AGENT_ACCENTS = [
+    0x5b7f9e, 0x7b6f93, 0x9c7d5a, 0x5f8a72, 0x9c6a63,
+    0x8f6d7e, 0x6c6f96, 0x5e8783, 0x63808f,
+  ];
+
+  // One neutral material vocabulary for the building itself. Real offices are
+  // almost entirely neutral; colour belongs to what people put in them.
+  const MAT = {
+    wall: () => new THREE.MeshStandardMaterial({ color: 0xe6e1d8, roughness: 0.94, metalness: 0 }),
+    wood: () => new THREE.MeshStandardMaterial({ color: 0x7a6650, roughness: 0.72, metalness: 0 }),
+    glass: () => new THREE.MeshStandardMaterial({
+      color: 0xbfd4de, transparent: true, opacity: 0.16, roughness: 0.06, metalness: 0,
+    }),
+    carpetCool: () => new THREE.MeshStandardMaterial({ color: 0x4d525a, roughness: 0.95, metalness: 0 }),
+    carpetWarm: () => new THREE.MeshStandardMaterial({ color: 0x6f6a62, roughness: 0.95, metalness: 0 }),
+    concrete: () => new THREE.MeshStandardMaterial({ color: 0x9b968e, roughness: 0.42, metalness: 0.02 }),
+    deskTop: () => new THREE.MeshStandardMaterial({ color: 0xb09877, roughness: 0.6, metalness: 0 }),
+    plasticDark: () => new THREE.MeshStandardMaterial({ color: 0x2a2c31, roughness: 0.62, metalness: 0 }),
+    fabric: () => new THREE.MeshStandardMaterial({ color: 0x33363c, roughness: 0.95, metalness: 0 }),
+    metal: () => new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.34, metalness: 0.85 }),
+  };
+
   function init3D() {
     if (!container) return;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f172a); // Slate Canvas
+    scene.background = new THREE.Color(0x1b1e24);
+    scene.fog = new THREE.Fog(0x1b1e24, 70, 130);
 
     const aspect = container.clientWidth / container.clientHeight;
     const d = 26;
@@ -213,10 +238,15 @@
     camera.position.set(36, 42, 36);
     camera.lookAt(0, 0, 0);
 
-    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.9);
+    // Hemisphere light stands in for sky bounce and floor bounce, which is what
+    // stops the shadowed sides going dead flat the way a bare ambient does.
+    const hemiLight = new THREE.HemisphereLight(0xdfe7f2, 0x3a3630, 0.85);
+    scene.add(hemiLight);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.35);
+    const dirLight = new THREE.DirectionalLight(0xfff2e0, 2.1);
     dirLight.position.set(32, 58, 38);
     dirLight.castShadow = true;
     dirLight.shadow.camera.left = -34;
@@ -227,26 +257,27 @@
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    const ceoSpot = new THREE.PointLight(0xfef08a, 1.8, 22);
-    ceoSpot.position.set(13, 6.5, -9);
-    scene.add(ceoSpot);
-
-    const confSpot = new THREE.PointLight(0xbae6fd, 1.8, 22);
-    confSpot.position.set(13, 6.5, 8);
-    scene.add(confSpot);
-
-    const recepSpot = new THREE.PointLight(0xfed7aa, 1.8, 22);
-    recepSpot.position.set(0, 6.5, 14);
-    scene.add(recepSpot);
+    // One colour temperature for every fixture. Three different tints made each
+    // zone look lit by a different building.
+    for (const [x, z] of [[13, -9], [13, 8], [0, 14], [-10, -4], [-10, 6]]) {
+      const fixture = new THREE.PointLight(0xffe9c9, 90, 26, 2);
+      fixture.position.set(x, 5.4, z);
+      scene.add(fixture);
+    }
 
     buildArchitecturalStructure();
     rebuildOfficeLayout();
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Without tone mapping, lit surfaces clip to flat white and everything reads
+    // as plastic. ACES is what makes the same geometry look photographed.
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
     controls = new OrbitControls(camera, renderer.domElement);
@@ -257,30 +288,30 @@
   }
 
   function buildArchitecturalStructure() {
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.85 });
-    const woodWallMat = new THREE.MeshStandardMaterial({ color: 0x3b170b, roughness: 0.5 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.25 });
+    const wallMat = MAT.wall();
+    const woodWallMat = MAT.wood();
+    const glassMat = MAT.glass();
 
     // Photorealistic Floor Materials
-    const staffFloorMat = new THREE.MeshStandardMaterial({ color: 0x271c19, roughness: 0.25, metalness: 0.15 });
+    const staffFloorMat = MAT.carpetCool();
     const staffFloor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), staffFloorMat);
     staffFloor.rotation.x = -Math.PI / 2;
     staffFloor.position.set(-10, 0.01, 0);
     staffFloor.receiveShadow = true;
 
-    const ceoFloorMat = new THREE.MeshStandardMaterial({ color: 0x4c0519, roughness: 0.85 });
+    const ceoFloorMat = MAT.wood();
     const ceoFloor = new THREE.Mesh(new THREE.PlaneGeometry(18, 15), ceoFloorMat);
     ceoFloor.rotation.x = -Math.PI / 2;
     ceoFloor.position.set(13, 0.02, -8);
     ceoFloor.receiveShadow = true;
 
-    const confFloorMat = new THREE.MeshStandardMaterial({ color: 0x4a044e, roughness: 0.85 });
+    const confFloorMat = MAT.carpetWarm();
     const confFloor = new THREE.Mesh(new THREE.PlaneGeometry(18, 15), confFloorMat);
     confFloor.rotation.x = -Math.PI / 2;
     confFloor.position.set(13, 0.02, 8);
     confFloor.receiveShadow = true;
 
-    const recepFloorMat = new THREE.MeshStandardMaterial({ color: 0xecfeff, roughness: 0.12, metalness: 0.45 });
+    const recepFloorMat = MAT.concrete();
     const recepFloor = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), recepFloorMat);
     recepFloor.rotation.x = -Math.PI / 2;
     recepFloor.position.set(0, 0.03, 14);
@@ -386,7 +417,7 @@
     buildCEOSuite();
     buildConferenceRoom();
 
-    const colors = [0x0284c7, 0x7c3aed, 0xd97706, 0x059669, 0xdc2626, 0xdb2777, 0x4f46e5, 0x0d9488, 0x0891b2];
+    const colors = AGENT_ACCENTS;
     staffPodPositions.forEach((pos, idx) => {
       createStaffDualMonitorDesk(pos.x, pos.z, colors[idx % colors.length]);
     });
@@ -435,7 +466,7 @@
     desk.position.y = 0.7;
     desk.castShadow = true;
 
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(5.55, 0.35, 0.1), new THREE.MeshStandardMaterial({ color: 0x3b170b }));
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(5.55, 0.35, 0.1), new THREE.MeshStandardMaterial({ color: 0x5c4a3a, roughness: 0.7, metalness: 0 }));
     trim.position.set(0, 0.7, 1.0);
 
     const chair = createRGBGamingChair(0x38bdf8);
@@ -451,7 +482,7 @@
     const group = new THREE.Group();
     group.position.set(13, 0, -8);
 
-    const deskMat = new THREE.MeshStandardMaterial({ color: 0x3b170b, roughness: 0.4 });
+    const deskMat = new THREE.MeshStandardMaterial({ color: 0x5c4a3a, roughness: 0.68, metalness: 0 });
     const top = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.16, 2.8), deskMat);
     top.position.set(0, 1.4, 0);
     top.castShadow = true;
@@ -486,7 +517,7 @@
 
     const tableGeo = new THREE.CylinderGeometry(3.0, 3.0, 0.16, 32);
     tableGeo.scale(2.4, 1, 1);
-    const table = new THREE.Mesh(tableGeo, new THREE.MeshStandardMaterial({ color: 0x3b170b, roughness: 0.3, metalness: 0.3 }));
+    const table = new THREE.Mesh(tableGeo, new THREE.MeshStandardMaterial({ color: 0x5c4a3a, roughness: 0.55, metalness: 0.05 }));
     table.position.y = 1.35;
     table.castShadow = true;
     group.add(table);
@@ -509,14 +540,29 @@
   function createDualMonitors(color: number) {
     const group = new THREE.Group();
     const monitorGeo = new THREE.BoxGeometry(1.5, 0.85, 0.06);
-    const monitorMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.3 });
+    const monitorMat = new THREE.MeshStandardMaterial({ color: 0x1b1d21, roughness: 0.45, metalness: 0.1 });
     const screenGeo = new THREE.PlaneGeometry(1.4, 0.75);
-    const screenMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+
+    // A screen is the one thing in an office that genuinely emits light, so this
+    // is where the agent's colour belongs. emissive keeps it glowing in shadow
+    // without the flat, unlit look MeshBasicMaterial gives everything else.
+    const screenMat = new THREE.MeshStandardMaterial({
+      color: 0x0d1015,
+      emissive: new THREE.Color(color).multiplyScalar(0.25),
+      roughness: 0.9,
+      metalness: 0,
+    });
 
     const codeLinesGroup = new THREE.Group();
+    const lineMat = new THREE.MeshStandardMaterial({
+      color: 0x0d1015,
+      emissive: new THREE.Color(color),
+      emissiveIntensity: 0.85,
+      roughness: 1,
+      metalness: 0,
+    });
     for (let i = 0; i < 5; i++) {
       const lineGeo = new THREE.PlaneGeometry(0.8 + Math.random() * 0.4, 0.05);
-      const lineMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? color : 0x38bdf8 });
       const line = new THREE.Mesh(lineGeo, lineMat);
       line.position.set(-0.2, 0.2 - i * 0.12, 0.001);
       codeLinesGroup.add(line);
@@ -548,13 +594,15 @@
     const chairGroup = new THREE.Group();
 
     const backGeo = new THREE.BoxGeometry(0.85, 1.25, 0.12);
-    const chairMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 });
+    const chairMat = MAT.fabric();
     const back = new THREE.Mesh(backGeo, chairMat);
     back.position.set(0, 1.2, 0);
     back.castShadow = true;
 
     const bolsterGeo = new THREE.BoxGeometry(0.15, 1.1, 0.22);
-    const bolsterMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4 });
+    // The one place the agent's colour appears on furniture, in fabric rather
+    // than in light.
+    const bolsterMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.9, metalness: 0 });
     const leftBolster = new THREE.Mesh(bolsterGeo, bolsterMat);
     leftBolster.position.set(-0.45, 1.2, 0.05);
     const rightBolster = new THREE.Mesh(bolsterGeo, bolsterMat);
@@ -566,11 +614,10 @@
     seat.castShadow = true;
 
     const rgbEdgeGeo = new THREE.BoxGeometry(0.87, 1.27, 0.02);
-    const rgbEdgeMat = new THREE.MeshBasicMaterial({ color: color });
-    const rgbEdge = new THREE.Mesh(rgbEdgeGeo, rgbEdgeMat);
+    const rgbEdge = new THREE.Mesh(rgbEdgeGeo, MAT.plasticDark());
     rgbEdge.position.set(0, 1.2, -0.06);
 
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.9 });
+    const poleMat = MAT.metal();
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5), poleMat);
     pole.position.y = 0.35;
 
@@ -586,14 +633,17 @@
     deskGroup.position.set(x, 0, z);
 
     // Desktop Surface
-    const top = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 1.8), new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.4 }));
+    const top = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 1.8), MAT.deskTop());
     top.position.y = 1.3;
     top.castShadow = true;
+    top.receiveShadow = true;
 
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(3.65, 0.04, 1.85), new THREE.MeshBasicMaterial({ color: color }));
-    edge.position.y = 1.3;
+    // A slim darker rail reads as a desk edge under light; the old version was a
+    // saturated unlit strip that glowed the same in shadow.
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(3.66, 0.05, 1.86), MAT.plasticDark());
+    edge.position.y = 1.26;
 
-    const partition = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.9, 0.04), new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.22 }));
+    const partition = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.9, 0.04), MAT.glass());
     partition.position.set(0, 1.75, -0.9);
 
     // Dual Curved Monitors
@@ -602,26 +652,31 @@
 
     // 1. Extended RGB Desk Mat / Mousepad
     const deskPadGeo = new THREE.BoxGeometry(2.4, 0.015, 1.0);
-    const deskPadMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.6 });
+    const deskPadMat = new THREE.MeshStandardMaterial({ color: 0x24262b, roughness: 0.95, metalness: 0 });
     const deskPad = new THREE.Mesh(deskPadGeo, deskPadMat);
     deskPad.position.set(0, 1.358, -0.05);
 
-    const padEdge = new THREE.Mesh(new THREE.BoxGeometry(2.44, 0.01, 1.04), new THREE.MeshBasicMaterial({ color: color }));
-    padEdge.position.set(0, 1.355, -0.05);
+    // Stitched border, not a light strip.
+    const padEdge = new THREE.Mesh(new THREE.BoxGeometry(2.44, 0.012, 1.04),
+      new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.9, metalness: 0 }));
+    padEdge.position.set(0, 1.354, -0.05);
 
     // 2. Mechanical RGB Keyboard
     const kbGeo = new THREE.BoxGeometry(1.0, 0.04, 0.36);
-    const kbMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.3 });
+    const kbMat = MAT.plasticDark();
     const keyboard = new THREE.Mesh(kbGeo, kbMat);
     keyboard.position.set(-0.2, 1.38, -0.05);
+    keyboard.castShadow = true;
 
-    const keysLight = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.28), new THREE.MeshBasicMaterial({ color: color }));
+    // Keycaps, lit by the room like everything else.
+    const keysLight = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.28),
+      new THREE.MeshStandardMaterial({ color: 0x3d4048, roughness: 0.8, metalness: 0 }));
     keysLight.rotation.x = -Math.PI / 2;
     keysLight.position.set(-0.2, 1.401, -0.05);
 
     // 3. Ergonomic Wireless Gaming Mouse
     const mouseGeo = new THREE.BoxGeometry(0.14, 0.04, 0.24);
-    const mouseMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3 });
+    const mouseMat = MAT.plasticDark();
     const mouse = new THREE.Mesh(mouseGeo, mouseMat);
     mouse.position.set(0.7, 1.38, -0.05);
 
