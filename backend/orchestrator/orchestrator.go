@@ -247,6 +247,22 @@ func (o *Orchestrator) loop(stop <-chan struct{}) {
 	}
 }
 
+// persistTask reports a failed write of a task's own state instead of discarding
+// it. These are the writes that decide what happens next: a lost "done" leaves
+// the row running and the work is never picked up again, and a lost "backlog"
+// costs the retry.
+//
+// Every one of them used to be `_ =`, which is how SQLITE_BUSY stayed invisible
+// while the board quietly stopped matching what the agents were doing. Agent
+// rows are deliberately not routed through here — a stale status or task count
+// is cosmetic, and a warning per agent write would bury these.
+func (o *Orchestrator) persistTask(taskID, what string, err error) {
+	if err == nil {
+		return
+	}
+	o.emitTaskLog(taskID, fmt.Sprintf("⚠️ Không ghi được %s vào cơ sở dữ liệu: %v", what, err), "ERROR")
+}
+
 // baseCtx returns the app context if available, else Background — parent for task runs.
 func (o *Orchestrator) baseCtx() context.Context {
 	if o.ctx != nil {
@@ -285,8 +301,8 @@ func (o *Orchestrator) dispatchAvailable() {
 		}
 
 		// Mark running synchronously so the next NextDispatchable won't repick it.
-		_ = o.taskRepo.AssignTask(task.TaskID, agent.Name)
-		_ = o.taskRepo.UpdateStatus(task.TaskID, "running", "", "")
+		o.persistTask(task.TaskID, "phân công agent", o.taskRepo.AssignTask(task.TaskID, agent.Name))
+		o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "running", "", ""))
 		agent.Status = "running"
 		agent.LastTask = task.Title
 		_ = o.agentRepo.SetStatus(agent.AgentID, "running", task.Title, "")
@@ -343,7 +359,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	defer func() {
 		if r := recover(); r != nil {
 			o.emitTaskLog(task.TaskID, fmt.Sprintf("💥 Panic khi chạy task: %v", r), "ERROR")
-			_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", fmt.Sprintf("panic: %v", r), "")
+			o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "failed", fmt.Sprintf("panic: %v", r), ""))
 			if agent != nil {
 				agent.Status = "idle"
 				_ = o.agentRepo.SetStatus(agent.AgentID, "idle", "", fmt.Sprintf("panic: %v", r))
@@ -373,7 +389,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 			if bRes.ScreenshotBase64 != "" {
 				o.emitTaskScreenshot(task.TaskID, bRes.ScreenshotBase64)
 			}
-			_ = o.taskRepo.AssignTask(task.TaskID, "Web E2E Tester (Chrome CDP)")
+			o.persistTask(task.TaskID, "phân công agent", o.taskRepo.AssignTask(task.TaskID, "Web E2E Tester (Chrome CDP)"))
 			for _, a := range bRes.Assertions {
 				onLog("   "+a, "INFO")
 			}
@@ -382,7 +398,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 				summary += "\nConsole errors:\n- " + strings.Join(bRes.ConsoleErrors, "\n- ")
 			}
 			if bRes.Passed {
-				_ = o.taskRepo.UpdateStatus(task.TaskID, "done", "✅ E2E PASSED\n"+summary, "chrome-cdp-auto-session")
+				o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "done", "✅ E2E PASSED\n"+summary, "chrome-cdp-auto-session"))
 				agent.Status = "idle"
 				_ = o.agentRepo.CompleteTask(agent.AgentID)
 				onLog(fmt.Sprintf("🎉 Chrome CDP E2E '%s' PASSED.", task.Title), "SUCCESS")
@@ -404,14 +420,14 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 						Prompt:   buildE2EFixPrompt(bRes),
 					}
 					if err := o.taskRepo.Create(fix); err == nil {
-						_ = o.taskRepo.RequeueWithDependency(task.TaskID, fix.TaskID)
+						o.persistTask(task.TaskID, "đưa task về hàng đợi", o.taskRepo.RequeueWithDependency(task.TaskID, fix.TaskID))
 						onLog(fmt.Sprintf("🔁 E2E FAILED → tạo task tự sửa '%s'. Sẽ chạy lại E2E sau khi sửa (vòng %d/%d).", fix.Title, task.RetryCount+1, maxFix), "WARN")
 					} else {
-						_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED\n"+summary, "chrome-cdp-auto-session")
+						o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED\n"+summary, "chrome-cdp-auto-session"))
 						onLog("❌ Không tạo được task sửa lỗi, đánh dấu E2E failed.", "ERROR")
 					}
 				} else {
-					_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED (hết số vòng tự sửa)\n"+summary, "chrome-cdp-auto-session")
+					o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "failed", "❌ E2E FAILED (hết số vòng tự sửa)\n"+summary, "chrome-cdp-auto-session"))
 					_ = o.agentRepo.SetStatus(agent.AgentID, "idle", "", "E2E assertions/console failed after auto-fix retries")
 					onLog(fmt.Sprintf("❌ Chrome CDP E2E '%s' FAILED sau %d vòng tự sửa.", task.Title, maxFix), "ERROR")
 				}
@@ -454,7 +470,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		select {
 		case approved := <-approvalCh:
 			if !approved {
-				_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "Rejected by user", "")
+				o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "failed", "Rejected by user", ""))
 				onLog(fmt.Sprintf("Task '%s' rejected by user.", task.Title), "ERROR")
 				agent.Status = "idle"
 				_ = o.agentRepo.SetStatus(agent.AgentID, "idle", "", "")
@@ -470,7 +486,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 			// back in the backlog so the next Start picks it up: leaving the row as
 			// "running" stranded it, because only backlog and queued rows are ever
 			// dispatched, and the agent stayed busy with it until the app restarted.
-			_ = o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", "")
+			o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", ""))
 			agent.Status = "idle"
 			_ = o.agentRepo.SetStatus(agent.AgentID, "idle", "", "")
 			onLog(fmt.Sprintf("Task '%s' returned to the backlog: approval was still pending when the orchestrator stopped.", task.Title), "WARN")
@@ -574,7 +590,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	}
 
 	if result.Success {
-		_ = o.taskRepo.UpdateStatus(task.TaskID, "done", result.Output, result.SessionID)
+		o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "done", result.Output, result.SessionID))
 		agent.Status = "idle"
 		_ = o.agentRepo.CompleteTask(agent.AgentID)
 		costStr := ""
@@ -595,10 +611,10 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		}
 		if retries < maxRetries {
 			backoffSec := time.Duration(1<<uint(retries)) * time.Second
-			_ = o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", "")
+			o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", ""))
 			onLog(fmt.Sprintf("Failed '%s', retrying in %v (%d/%d)...", task.Title, backoffSec, retries, maxRetries), "WARN")
 		} else {
-			_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", result.Error, "")
+			o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "failed", result.Error, ""))
 			onLog(fmt.Sprintf("FAILED '%s' after max retries", task.Title), "ERROR")
 			go o.notifierSvc.NotifyTaskEvent("task_failed", task.Title, "failed", result.Error)
 		}
@@ -611,7 +627,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 }
 
 func (o *Orchestrator) markStopped(task *models.Task, agent *models.Agent) {
-	_ = o.taskRepo.UpdateStatus(task.TaskID, "failed", "⏹️ Đã dừng bởi người dùng (Stopped)", "")
+	o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "failed", "⏹️ Đã dừng bởi người dùng (Stopped)", ""))
 	agent.Status = "idle"
 	_ = o.agentRepo.SetStatus(agent.AgentID, "idle", "", "")
 	o.emitTaskLog(task.TaskID, fmt.Sprintf("⏹️ Task '%s' đã bị dừng bởi người dùng.", task.Title), "WARN")

@@ -2,11 +2,17 @@ package orchestrator
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"claude_suite/backend/cli"
+	"claude_suite/backend/database"
 	"claude_suite/backend/models"
+	"claude_suite/backend/services"
+	"claude_suite/backend/testsupport"
 )
 
 // waitForIdle waits until no run is in flight. Checking the task's status alone
@@ -284,4 +290,59 @@ func TestConcurrentTasksOnOneAgentBothCount(t *testing.T) {
 	if agents[0].TasksDone != 2 {
 		t.Errorf("tasks_done = %d after two finished tasks, want 2", agents[0].TasksDone)
 	}
+}
+
+// A failed write of a task's state used to be discarded, which is how the board
+// could quietly stop matching what the agents were doing. This builds its own
+// database so it can break the connection mid-run and make the writes fail.
+func TestAFailedTaskWriteIsReported(t *testing.T) {
+	db, err := database.OpenAt(filepath.Join(t.TempDir(), "doomed.db"))
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	defer db.Close()
+
+	taskRepo := database.NewTaskRepository(db)
+	agentRepo := database.NewAgentRepository(db)
+	runner := &testsupport.FakeRunner{}
+
+	o := NewOrchestrator(
+		agentRepo, taskRepo, database.NewMemoryRepository(db), runner,
+		services.NewContextManager(), services.NewGitService(),
+		services.NewBrowserAgentService(),
+	)
+	o.SetWorkspaceDir("")
+	o.SetVerifyBuild(false)
+
+	agent := seedAgent(t, agentRepo, "Runner")
+	seedTask(t, taskRepo, "doomed write", agent, nil)
+
+	var logMu sync.Mutex
+	var reported []string
+	o.SetEventHandlers(func(message, level string) {
+		if level != "ERROR" {
+			return
+		}
+		logMu.Lock()
+		reported = append(reported, message)
+		logMu.Unlock()
+	}, nil, nil)
+
+	// Break the connection while the agent works, so every write after it fails.
+	runner.Behaviour = func(context.Context, *models.Agent, string) *cli.RunResult {
+		_ = db.Close()
+		return &cli.RunResult{Success: true, Output: "done"}
+	}
+
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+
+	logMu.Lock()
+	defer logMu.Unlock()
+	for _, message := range reported {
+		if strings.Contains(message, "Không ghi được") {
+			return
+		}
+	}
+	t.Errorf("a failed task write was never reported; errors seen: %v", reported)
 }
