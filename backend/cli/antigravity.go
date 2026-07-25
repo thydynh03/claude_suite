@@ -114,19 +114,23 @@ func NewAntigravityCLI() *AntigravityCLI {
 }
 
 func (a *AntigravityCLI) RunAgent(agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {
-	return a.executeWithRotation(agent.Model, prompt, agent.System, agent.SessionID, onLog, cwd, 0)
+	return a.executeWithRotation(context.Background(), agent.Model, prompt, agent.System, agent.SessionID, onLog, cwd, 0)
+}
+
+func (a *AntigravityCLI) RunAgentCtx(ctx context.Context, agent *models.Agent, prompt string, onLog LogCallback, cwd string) *RunResult {
+	return a.executeWithRotation(ctx, agent.Model, prompt, agent.System, agent.SessionID, onLog, cwd, 0)
 }
 
 func (a *AntigravityCLI) RunOnce(prompt string, model string, system string, onLog LogCallback, cwd string) *RunResult {
-	return a.executeWithRotation(model, prompt, system, "", onLog, cwd, 0)
+	return a.executeWithRotation(context.Background(), model, prompt, system, "", onLog, cwd, 0)
 }
 
 func (a *AntigravityCLI) RunSession(prompt string, model string, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
-	return a.executeWithRotation(model, prompt, system, sessionID, onLog, cwd, 0)
+	return a.executeWithRotation(context.Background(), model, prompt, system, sessionID, onLog, cwd, 0)
 }
 
-func (a *AntigravityCLI) executeWithRotation(model, prompt, system, sessionID string, onLog LogCallback, cwd string, attempt int) *RunResult {
-	res := a.execute(model, prompt, system, sessionID, onLog, cwd)
+func (a *AntigravityCLI) executeWithRotation(ctx context.Context, model, prompt, system, sessionID string, onLog LogCallback, cwd string, attempt int) *RunResult {
+	res := a.execute(ctx, model, prompt, system, sessionID, onLog, cwd)
 
 	// Detect 429 Rate Limit / Quota Exhaustion for Auto-Rotation
 	if !res.Success && attempt < 3 {
@@ -138,7 +142,7 @@ func (a *AntigravityCLI) executeWithRotation(model, prompt, system, sessionID st
 					onLog(fmt.Sprintf("⚠️ Anti CLI gặp lỗi 429 Rate Limit / Quota. Tự động xoay vòng sang %s và thử lại ngay lập tức...", nextKeyName), "WARN")
 				}
 				time.Sleep(1 * time.Second)
-				return a.executeWithRotation(model, prompt, system, sessionID, onLog, cwd, attempt+1)
+				return a.executeWithRotation(ctx, model, prompt, system, sessionID, onLog, cwd, attempt+1)
 			}
 		}
 	}
@@ -146,7 +150,7 @@ func (a *AntigravityCLI) executeWithRotation(model, prompt, system, sessionID st
 	return res
 }
 
-func (a *AntigravityCLI) execute(model, prompt, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
+func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
 	args := []string{"--print", prompt, "--dangerously-skip-permissions"}
@@ -161,7 +165,7 @@ func (a *AntigravityCLI) execute(model, prompt, system string, sessionID string,
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 	defer cancel()
 
 	var cmd *exec.Cmd

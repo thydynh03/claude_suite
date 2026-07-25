@@ -12,4 +12,7 @@ agent_manager.db*
 *.syso
 __pycache__/
 workspace_config.json
+gcp_oauth.json
+.env
+.env.*
 ClaudeSuite_Kanban_Report_*.md

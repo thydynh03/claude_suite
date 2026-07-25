@@ -99,6 +99,23 @@ func (r *TaskRepository) UpdateStatus(taskID, status string, result string, sess
 	return err
 }
 
+// ResetForRetry moves a finished/failed task back to the backlog and clears its
+// retry counter, result and timestamps so the orchestrator re-dispatches it.
+func (r *TaskRepository) ResetForRetry(taskID string) error {
+	_, err := r.db.Exec(
+		`UPDATE tasks SET status='backlog', retry_count=0, result='', last_error='', started_at=NULL, finished_at=NULL WHERE task_id=?`,
+		taskID,
+	)
+	if err != nil {
+		// Fallback for schemas without a last_error column.
+		_, err = r.db.Exec(
+			`UPDATE tasks SET status='backlog', retry_count=0, result='' WHERE task_id=?`,
+			taskID,
+		)
+	}
+	return err
+}
+
 func (r *TaskRepository) AssignTask(taskID string, assignedTo string) error {
 	_, err := r.db.Exec(`UPDATE tasks SET assigned_to=? WHERE task_id=?`, assignedTo, taskID)
 	return err

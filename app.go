@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
@@ -273,8 +274,25 @@ func (a *App) Ping() bool {
 	return true
 }
 
-func (a *App) ResolveApproval(approved bool) {
-	a.orchestrator.ResolveApproval(approved)
+func (a *App) ResolveApproval(taskID string, approved bool) {
+	a.orchestrator.ResolveApproval(taskID, approved)
+}
+
+func (a *App) StopTask(taskID string) bool {
+	return a.orchestrator.StopTask(taskID)
+}
+
+func (a *App) RetryTask(taskID string) error {
+	return a.orchestrator.RetryTask(taskID)
+}
+
+func (a *App) SetMaxConcurrency(n int) int {
+	a.orchestrator.SetMaxConcurrency(n)
+	return a.orchestrator.GetMaxConcurrency()
+}
+
+func (a *App) GetMaxConcurrency() int {
+	return a.orchestrator.GetMaxConcurrency()
 }
 
 func (a *App) SetAutoApproveAll(enabled bool) bool {
@@ -509,9 +527,19 @@ func (a *App) saveWorkspaceConfig() {
 }
 
 func (a *App) addRecentWorkspace(dir string) {
-	var newRecent []string
-	newRecent = append(newRecent, dir)
-
+	if dir == "" {
+		return
+	}
+	// Most-recent-first, de-duplicated, capped at 8 entries.
+	newRecent := []string{dir}
+	for _, prev := range a.workspaceConfig.RecentWorkspaces {
+		if prev != dir {
+			newRecent = append(newRecent, prev)
+		}
+	}
+	if len(newRecent) > 8 {
+		newRecent = newRecent[:8]
+	}
 	a.workspaceConfig.RecentWorkspaces = newRecent
 }
 
@@ -535,26 +563,52 @@ func (a *App) AddAntiOAuthAccountKey(name, oauthToken string) {
 	cli.GlobalAntiPool.AddOAuthKey(name, oauthToken)
 }
 
-func getDefClientID() string {
-	p1 := "1072006483967-"
-	p2 := "hi79hmm245ftvfq5k77jqevjr0oq359k."
-	p3 := "apps.googleusercontent.com"
-	return p1 + p2 + p3
-}
+// oauthCreds resolves GCP OAuth credentials from (1) environment variables,
+// (2) a local gcp_oauth.json config next to the DB, else empty. Secrets must NOT
+// be committed to source — set CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET or
+// drop a gcp_oauth.json ({"client_id":"...","client_secret":"..."}) in the data dir.
+func oauthCreds() (string, string) {
+	id := os.Getenv("CLAUDE_SUITE_GCP_CLIENT_ID")
+	secret := os.Getenv("CLAUDE_SUITE_GCP_CLIENT_SECRET")
+	if id != "" && secret != "" {
+		return id, secret
+	}
 
-func getDefClientSecret() string {
-	p1 := "GOCSPX-"
-	p2 := "j5DCcC2X_aNf9Vn-"
-	p3 := "H1zmTrGiTJku"
-	return p1 + p2 + p3
+	cfgPath := filepath.Join(filepath.Dir(database.GetDBPath()), "gcp_oauth.json")
+	if data, err := os.ReadFile(cfgPath); err == nil {
+		var fileCreds struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+		}
+		if json.Unmarshal(data, &fileCreds) == nil {
+			if id == "" {
+				id = fileCreds.ClientID
+			}
+			if secret == "" {
+				secret = fileCreds.ClientSecret
+			}
+		}
+	}
+	return id, secret
 }
 
 func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
-	clientID := customClientID
-	clientSecret := getDefClientSecret()
+	defID, clientSecret := oauthCreds()
 
+	clientID := customClientID
 	if clientID == "" {
-		clientID = getDefClientID()
+		clientID = defID
+	}
+
+	if clientID == "" || clientSecret == "" {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+				"message": "⚠️ Thiếu GCP OAuth credentials. Đặt biến môi trường CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET hoặc tạo file gcp_oauth.json trong thư mục dữ liệu.",
+				"level":   "ERROR",
+				"time":    time.Now().Format("15:04:05"),
+			})
+		}
+		return ""
 	}
 
 	if a.oauthListener != nil {

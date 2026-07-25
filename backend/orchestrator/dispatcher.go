@@ -1,10 +1,22 @@
 package orchestrator
 
 import (
+	"regexp"
 	"strings"
 
 	"claude_suite/backend/models"
 )
+
+// keywordMatch reports whether kw occurs in text as a whole word (single tokens)
+// or as a substring (multi-word phrases like "WEB TEST"). This prevents false
+// positives such as "DATABASE" matching "BA" or "GOOGLE" matching "GO".
+func keywordMatch(text, kw string) bool {
+	if strings.Contains(kw, " ") {
+		return strings.Contains(text, kw)
+	}
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(kw) + `\b`)
+	return re.MatchString(text)
+}
 
 // AgentDispatcher matches tasks to the most suitable Agent
 type AgentDispatcher struct{}
@@ -30,7 +42,7 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 	// Determine provider and model preferences from tags
 	provider := "claude_cli"
 	model := "claude-sonnet-4-5"
-	if strings.Contains(tagStr, "ANTI") || strings.Contains(tagStr, "GEMINI") {
+	if keywordMatch(tagStr, "ANTI") || keywordMatch(tagStr, "GEMINI") {
 		provider = "anti_cli"
 		model = "gemini-3.6-flash-high"
 	}
@@ -57,10 +69,10 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 
 	for _, r := range roles {
 		for _, kw := range r.Keywords {
-			if strings.Contains(tagStr, kw) {
+			if keywordMatch(tagStr, kw) {
 				// Search for existing matching agent
 				for i, a := range agents {
-					if strings.Contains(strings.ToUpper(a.Name), kw) || strings.Contains(strings.ToUpper(a.Role), kw) || strings.EqualFold(a.Name, r.RoleName) {
+					if keywordMatch(strings.ToUpper(a.Name), kw) || keywordMatch(strings.ToUpper(a.Role), kw) || strings.EqualFold(a.Name, r.RoleName) {
 						return &agents[i]
 					}
 				}
