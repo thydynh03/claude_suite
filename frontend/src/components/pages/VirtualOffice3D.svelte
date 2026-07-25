@@ -13,7 +13,7 @@
 
   let isSimulating = false;
   let isAllSeatsPopulated = false;
-  let globalBubble = 'REALISTIC OFFICE: Photorealistic PBR Office Architecture Active';
+  let globalBubble = 'Văn phòng 35 chỗ đã sẵn sàng';
 
   let agents3D: { mesh: THREE.Group; name: string; targetX: number; targetZ: number; targetRotY?: number; bubbleText: string; parts?: any; isTyping?: boolean }[] = [];
   let uiAgents: { id: number; name: string; text: string; x: number; y: number; visible: boolean }[] = [];
@@ -102,7 +102,7 @@
       createCharacterAvatar(role, colors[idx % colors.length], pod.x, pod.z + 0.9, Math.PI);
     });
 
-    globalBubble = `REALISTIC OFFICE: All 35 Seats Populated Facing Dual Monitors!`;
+    globalBubble = `Đã gắn agent vào toàn bộ 35 chỗ`;
     $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: `Populated all 35 seats facing keyboards & dual monitors correctly` }];
   }
 
@@ -117,7 +117,7 @@
     $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: `Initiating Full-Office Realistic Corporate Simulation (4 Phases)` }];
 
     // Phase 1: Morning Coffee & Watercooler Standup
-    globalBubble = 'PHASE 1: Morning Coffee & Team Watercooler Catchup at Bar';
+    globalBubble = 'Giai đoạn 1 — Cà phê sáng tại quầy';
     const coffeeBarAgents = agents3D.slice(0, 8);
     const originalPositions = coffeeBarAgents.map(a => ({ x: a.targetX, z: a.targetZ, rotY: a.targetRotY }));
 
@@ -131,7 +131,7 @@
     await new Promise(r => setTimeout(r, 3500));
 
     // Phase 2: All-Hands Emergency Release Meeting in Conference Room
-    globalBubble = 'PHASE 2: All-Hands Emergency Release Meeting in Conference Room';
+    globalBubble = 'Giai đoạn 2 — Họp toàn thể tại phòng họp';
     coffeeBarAgents.forEach((a, i) => {
       a.bubbleText = 'Heading to Conference Room for release...';
       a.targetX = 10 + (i % 3) * 2;
@@ -141,7 +141,7 @@
     await new Promise(r => setTimeout(r, 4000));
 
     // Phase 3: CEO Executive Review & Release Signoff
-    globalBubble = 'PHASE 3: Executive Board Approval in CEO Suite';
+    globalBubble = 'Giai đoạn 3 — Duyệt cấp lãnh đạo tại phòng CEO';
     const leadAgent = agents3D[2] || agents3D[0];
     const originalLeadPos = { x: leadAgent.targetX, z: leadAgent.targetZ, rotY: leadAgent.targetRotY };
     leadAgent.targetX = 13;
@@ -180,8 +180,19 @@
     isSimulating = false;
   }
 
+  const CAMERA_VIEWS = [
+    { id: 'floorplan', label: 'Floorplan', icon: 'view_in_ar' },
+    { id: 'staff', label: 'Staff', icon: 'groups' },
+    { id: 'ceo', label: 'CEO', icon: 'badge' },
+    { id: 'conference', label: 'Conference', icon: 'meeting_room' },
+    { id: 'reception', label: 'Reception', icon: 'door_front' },
+  ] as const;
+
+  let cameraView: 'floorplan' | 'staff' | 'ceo' | 'conference' | 'reception' = 'floorplan';
+
   function setCameraView(preset: 'floorplan' | 'staff' | 'ceo' | 'conference' | 'reception') {
     if (!camera || !controls) return;
+    cameraView = preset;
     if (preset === 'floorplan') {
       camera.position.set(36, 42, 36);
       controls.target.set(0, 0, 0);
@@ -851,29 +862,39 @@
   <!-- 3D Canvas Viewport -->
   <div bind:this={container} class="w-full h-full"></div>
 
-  <!-- Global Status Bubble Overlay -->
-  <div class="absolute top-6 left-1/2 -translate-x-1/2 bg-surface-container-lowest border border-outline-variant px-4 py-2 rounded-xl text-xs font-semibold shadow-md animate-bounce flex items-center gap-2">
-    <span class="w-2 h-2 rounded-full {isSimulating ? 'bg-primary animate-ping' : 'bg-emerald-500'}"></span>
-    <span class="text-primary font-bold">{isSimulating ? 'SIMULATING:' : 'REALISTIC OFFICE:'}</span> {globalBubble}
-  </div>
+  <!-- One bar along the top: views on the left, actions on the right. These
+       were three separate floating panels that overlapped each other. -->
+  <div class="absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <div class="pointer-events-auto bg-surface-container-lowest/95 backdrop-blur border border-outline-variant p-1 rounded-xl shadow-sm flex gap-0.5">
+      {#each CAMERA_VIEWS as view}
+        <button
+          type="button"
+          on:click={() => setCameraView(view.id)}
+          class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 {cameraView === view.id ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'}">
+          <span class="material-symbols-outlined text-sm">{view.icon}</span>
+          {view.label}
+        </button>
+      {/each}
+    </div>
 
-  <!-- Camera Presets Bar -->
-  <div class="absolute top-6 left-6 bg-surface-container-lowest border border-outline-variant p-1.5 rounded-xl shadow-md flex gap-1 text-xs">
-    <button on:click={() => setCameraView('floorplan')} class="px-3 py-1.5 rounded-lg font-bold hover:bg-surface-container-high transition-all text-on-surface flex items-center gap-1 cursor-pointer">
-      <span class="material-symbols-outlined text-sm text-primary">view_in_ar</span> Floorplan (35 Seats)
-    </button>
-    <button on:click={() => setCameraView('staff')} class="px-3 py-1.5 rounded-lg font-bold hover:bg-surface-container-high transition-all text-on-surface flex items-center gap-1 cursor-pointer">
-      <span class="material-symbols-outlined text-sm text-primary">groups</span> Staff Zone (18 Pods)
-    </button>
-    <button on:click={() => setCameraView('ceo')} class="px-3 py-1.5 rounded-lg font-bold hover:bg-surface-container-high transition-all text-on-surface flex items-center gap-1 cursor-pointer">
-      <span class="material-symbols-outlined text-sm text-primary">badge</span> CEO Suite
-    </button>
-    <button on:click={() => setCameraView('conference')} class="px-3 py-1.5 rounded-lg font-bold hover:bg-surface-container-high transition-all text-on-surface flex items-center gap-1 cursor-pointer">
-      <span class="material-symbols-outlined text-sm text-primary">meeting_room</span> Conference (12 Seats)
-    </button>
-    <button on:click={() => setCameraView('reception')} class="px-3 py-1.5 rounded-lg font-bold hover:bg-surface-container-high transition-all text-on-surface flex items-center gap-1 cursor-pointer">
-      <span class="material-symbols-outlined text-sm text-primary">door_front</span> Reception
-    </button>
+    <div class="pointer-events-auto flex items-center gap-2">
+      <button
+        type="button"
+        on:click={handlePopulateAllSeats}
+        class="bg-surface-container-lowest/95 backdrop-blur text-on-surface border border-outline-variant px-3 py-2 rounded-xl text-[11px] font-semibold hover:bg-surface-container-high flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm whitespace-nowrap">
+        <span class="material-symbols-outlined text-sm text-primary">person_add</span>
+        Gắn agent vào 35 chỗ
+      </button>
+
+      <button
+        type="button"
+        on:click={handleRunFullOfficeScenario}
+        disabled={isSimulating}
+        class="bg-primary text-on-primary px-3 py-2 rounded-xl text-[11px] font-semibold hover:brightness-110 flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-sm whitespace-nowrap">
+        <span class="material-symbols-outlined text-sm {isSimulating ? 'animate-spin' : ''}">{isSimulating ? 'sync' : 'play_arrow'}</span>
+        {isSimulating ? 'Đang chạy…' : 'Chạy kịch bản'}
+      </button>
+    </div>
   </div>
 
   <!-- Agent Speech Bubbles -->
@@ -889,39 +910,18 @@
     {/if}
   {/each}
 
-  <!-- Control Panel with 2 New Interactive Simulation Buttons -->
-  <div class="absolute top-6 right-6 bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-xl shadow-md space-y-3 w-72">
-    <h3 class="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1">
-      <span class="material-symbols-outlined text-sm text-primary">sports_esports</span> Interactive Simulation
-    </h3>
-    <p class="text-[10px] text-on-surface-variant leading-tight">Photorealistic PBR Office Architecture with 35 seats, Dual Monitors, RGB Keyboards & Gaming Chairs.</p>
-    
-    <div class="space-y-2">
-      <!-- Button 1: Populate All 35 Seats -->
-      <button 
-        on:click={handlePopulateAllSeats}
-        class="w-full bg-surface-container-high text-on-surface border border-outline-variant px-3 py-2 rounded-lg text-xs font-bold hover:bg-surface-container-highest flex items-center justify-center gap-2 transition-all cursor-pointer">
-        <span class="material-symbols-outlined text-sm text-primary">person_add</span> 👥 Gắn Agent vào Tất Cả 35 Vị Trí
-      </button>
-
-      <!-- Button 2: Run Full Office Corporate Scenario -->
-      <button 
-        on:click={handleRunFullOfficeScenario} 
-        disabled={isSimulating}
-        class="w-full bg-primary text-on-primary px-3 py-2 rounded-lg text-xs font-bold hover:brightness-110 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-xs">
-        <span class="material-symbols-outlined text-sm">{isSimulating ? 'sync' : 'movie'}</span> 🎬 Chạy Kịch Bản Giả Lập Toàn Văn Phòng
-      </button>
-    </div>
-  </div>
-
   <!-- Bottom Real-time Console Log Overlay -->
   <div class="absolute bottom-6 left-6 w-96 bg-surface-container-lowest border border-outline-variant rounded-xl p-3 shadow-xl space-y-2">
     <div class="flex items-center justify-between border-b border-outline-variant pb-1">
       <span class="text-[10px] font-bold uppercase text-on-surface-variant flex items-center gap-1">
-        <span class="material-symbols-outlined text-xs">terminal</span> Corporate Scenario Logs
+        <span class="material-symbols-outlined text-xs">terminal</span> Nhật ký mô phỏng
       </span>
-      <span class="text-[9px] font-bold uppercase text-primary bg-primary-container px-2 py-0.5 rounded">35 SEATS ACTIVE</span>
+      <span class="flex items-center gap-1.5 text-[10px] font-semibold text-on-surface-variant">
+        <span class="w-1.5 h-1.5 rounded-full {isSimulating ? 'bg-primary animate-pulse' : 'bg-emerald-500'}"></span>
+        {isSimulating ? 'Đang mô phỏng' : '35 chỗ hoạt động'}
+      </span>
     </div>
+    <p class="text-[10px] text-on-surface-variant leading-snug line-clamp-2">{globalBubble}</p>
     <div class="font-mono text-[11px] space-y-1 max-h-28 overflow-y-auto">
       {#each $logs.slice(-4) as log}
         <div class="flex gap-2">
@@ -929,7 +929,7 @@
           <span class="text-on-surface line-clamp-1">{log.message}</span>
         </div>
       {:else}
-        <div class="text-on-surface-variant italic text-[10px]">Photorealistic 35-seat office active. Click simulation buttons to test...</div>
+        <div class="text-on-surface-variant italic text-[10px]">Chưa có hoạt động. Bấm "Chạy kịch bản" để bắt đầu.</div>
       {/each}
     </div>
   </div>
