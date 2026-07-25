@@ -657,7 +657,10 @@ func (a *App) saveAntiKeys() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
 	data, _ := json.MarshalIndent(cli.GlobalAntiPool.GetKeys(), "", "  ")
-	_ = os.WriteFile(cfgPath, data, 0644)
+	// 0600, not 0644: this file holds OAuth refresh tokens, and a world-readable
+	// copy of them in the user profile is a credential leak waiting for any other
+	// account on the machine.
+	_ = os.WriteFile(cfgPath, data, 0o600)
 }
 
 // ── First-run Onboarding State ─────────────────────────────────────────
@@ -1177,4 +1180,85 @@ type BudgetStatus struct {
 func (a *App) GetBudgetStatus() BudgetStatus {
 	day, spent, limit := a.orchestrator.BudgetSnapshot()
 	return BudgetStatus{Day: day, SpentUSD: spent, LimitUSD: limit}
+}
+
+// ImportGoogleAccounts loads a file of {email, refresh_token} entries into the
+// account pool.
+//
+// A refresh token is the part worth keeping: an access token expires in about an
+// hour, so a pool built from access tokens quietly dies and rotating onto it
+// after a 429 achieves nothing. Each account mints its own access token on
+// demand, and again whenever that one expires.
+//
+// The file stays where it is; only the tokens are read. Keep it outside the
+// repository — anything here is one `git add .` away from being published.
+func (a *App) ImportGoogleAccounts(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("không đọc được tệp: %w", err)
+	}
+
+	accounts, err := services.ParseGoogleAccountsFile(data)
+	if err != nil {
+		return "", err
+	}
+	for _, account := range accounts {
+		cli.GlobalAntiPool.AddRefreshAccount(account.Email, account.RefreshToken)
+	}
+	a.saveAntiKeys()
+
+	refreshed, failed := a.RefreshAccountTokens()
+	a.emitAgentsUpdated()
+	return fmt.Sprintf("Đã nhập %d tài khoản (%d sẵn sàng, %d lỗi).", len(accounts), refreshed, failed), nil
+}
+
+// SelectGoogleAccountsFile asks for the file, then imports it.
+func (a *App) SelectGoogleAccountsFile() (string, error) {
+	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title:   "Chọn tệp tài khoản Google (JSON)",
+		Filters: []wailsRuntime.FileFilter{{DisplayName: "JSON", Pattern: "*.json"}},
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+	return a.ImportGoogleAccounts(path)
+}
+
+// RefreshAccountTokens mints an access token for every account whose one is
+// missing or expired, and reports how many worked. An account Google refuses —
+// a revoked token, most often — is disabled rather than retried every minute.
+func (a *App) RefreshAccountTokens() (refreshed int, failed int) {
+	clientID, clientSecret := oauthCreds()
+	pending := cli.GlobalAntiPool.AccountsNeedingRefresh()
+	if len(pending) == 0 {
+		return 0, 0
+	}
+
+	for id, refreshToken := range pending {
+		token, err := services.RefreshGoogleAccessToken(context.Background(), clientID, clientSecret, refreshToken)
+		if err != nil {
+			failed++
+			cli.GlobalAntiPool.DisableKey(id, err.Error())
+			a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s không làm mới được token: %v", id, err), "WARN")
+			continue
+		}
+		cli.GlobalAntiPool.SetAccessToken(id, token.AccessToken, token.ExpiresAt)
+		refreshed++
+	}
+
+	if refreshed > 0 || failed > 0 {
+		a.saveAntiKeys()
+	}
+	return refreshed, failed
+}
+
+func (a *App) emitLog(message, level string) {
+	if a.ctx == nil {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+		"message": message,
+		"level":   level,
+		"time":    time.Now().Format("15:04:05"),
+	})
 }

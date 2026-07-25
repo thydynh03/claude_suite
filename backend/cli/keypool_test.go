@@ -1,6 +1,9 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func poolWith(keys ...AntiAccountKey) *AccountKeyPool {
 	pool := &AccountKeyPool{}
@@ -180,5 +183,99 @@ func TestWarmupKeysLeavesDisabledAccountsAlone(t *testing.T) {
 				t.Errorf("disabled account status = %q, want it left disabled", k.Status)
 			}
 		}
+	}
+}
+
+func TestIsRotatableAuthError(t *testing.T) {
+	cases := map[string]bool{
+		"http 429 too many requests":            true,
+		"quota exceeded for this project":       true,
+		"401 unauthorized":                      true, // an expired access token
+		"invalid_grant: token has been revoked": true,
+		"connection refused":                    false,
+		"file not found":                        false,
+	}
+	for message, want := range cases {
+		if got := isRotatableAuthError(message); got != want {
+			t.Errorf("isRotatableAuthError(%q) = %v, want %v", message, got, want)
+		}
+	}
+}
+
+// An imported account has only a refresh token; its access token is minted when
+// it is first needed.
+func TestAddRefreshAccountStartsWithoutAnAccessToken(t *testing.T) {
+	pool := &AccountKeyPool{}
+	id := pool.AddRefreshAccount("one@example.com", "1//refresh")
+
+	keys := pool.GetKeys()
+	if len(keys) != 1 || keys[0].RefreshToken != "1//refresh" {
+		t.Fatalf("account was not stored: %+v", keys)
+	}
+	if keys[0].OAuthToken != "" {
+		t.Error("an access token was invented at import time")
+	}
+	if !keys[0].NeedsRefresh() {
+		t.Error("a freshly imported account does not report needing a token")
+	}
+	if id == "" {
+		t.Error("no id was returned")
+	}
+}
+
+// Re-importing the same file must update the token rather than pile up copies.
+func TestAddRefreshAccountReplacesTheSameEmail(t *testing.T) {
+	pool := &AccountKeyPool{}
+	pool.AddRefreshAccount("one@example.com", "1//old")
+	pool.AddRefreshAccount("one@example.com", "1//new")
+
+	keys := pool.GetKeys()
+	if len(keys) != 1 {
+		t.Fatalf("re-import created %d accounts, want 1", len(keys))
+	}
+	if keys[0].RefreshToken != "1//new" {
+		t.Errorf("refresh token = %q, want the re-imported one", keys[0].RefreshToken)
+	}
+}
+
+func TestSetAccessTokenSatisfiesTheRefreshCheck(t *testing.T) {
+	pool := &AccountKeyPool{}
+	id := pool.AddRefreshAccount("one@example.com", "1//refresh")
+
+	if pending := pool.AccountsNeedingRefresh(); len(pending) != 1 {
+		t.Fatalf("expected one account awaiting a token, got %d", len(pending))
+	}
+
+	pool.SetAccessToken(id, "ya29.fresh", time.Now().Add(time.Hour))
+
+	if pending := pool.AccountsNeedingRefresh(); len(pending) != 0 {
+		t.Errorf("the account still wants a token after being given one")
+	}
+	if got := pool.GetCurrentKey(); got != "ya29.fresh" {
+		t.Errorf("current key = %q, want the fresh access token", got)
+	}
+}
+
+// An hour later the same token is no longer usable and has to be minted again.
+func TestAnExpiredAccessTokenIsRefreshedAgain(t *testing.T) {
+	pool := &AccountKeyPool{}
+	id := pool.AddRefreshAccount("one@example.com", "1//refresh")
+	pool.SetAccessToken(id, "ya29.stale", time.Now().Add(-time.Minute))
+
+	if pending := pool.AccountsNeedingRefresh(); len(pending) != 1 {
+		t.Error("an expired access token was treated as still good")
+	}
+}
+
+// A revoked refresh token is switched off rather than retried every minute.
+func TestDisableKeyStopsAnAccountBeingRetried(t *testing.T) {
+	pool := &AccountKeyPool{}
+	id := pool.AddRefreshAccount("gone@example.com", "1//revoked")
+
+	if !pool.DisableKey(id, "invalid_grant") {
+		t.Fatal("DisableKey did not find the account")
+	}
+	if pending := pool.AccountsNeedingRefresh(); len(pending) != 0 {
+		t.Error("a disabled account is still queued for refresh")
 	}
 }

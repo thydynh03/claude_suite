@@ -28,6 +28,8 @@ export namespace cli {
 	    api_key: string;
 	    oauth_token: string;
 	    refresh_token: string;
+	    // Go type: time
+	    token_expires_at: any;
 	    status: string;
 	    tier: string;
 	    is_current: boolean;
@@ -47,6 +49,7 @@ export namespace cli {
 	        this.api_key = source["api_key"];
 	        this.oauth_token = source["oauth_token"];
 	        this.refresh_token = source["refresh_token"];
+	        this.token_expires_at = this.convertValues(source["token_expires_at"], null);
 	        this.status = source["status"];
 	        this.tier = source["tier"];
 	        this.is_current = source["is_current"];

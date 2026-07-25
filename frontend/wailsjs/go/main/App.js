@@ -186,6 +186,10 @@ export function GetWorkspaceDiff() {
   return window['go']['main']['App']['GetWorkspaceDiff']();
 }
 
+export function ImportGoogleAccounts(arg1) {
+  return window['go']['main']['App']['ImportGoogleAccounts'](arg1);
+}
+
 export function IsOrchestratorRunning() {
   return window['go']['main']['App']['IsOrchestratorRunning']();
 }
@@ -220,6 +224,10 @@ export function Ping() {
 
 export function ReadFileContent(arg1) {
   return window['go']['main']['App']['ReadFileContent'](arg1);
+}
+
+export function RefreshAccountTokens() {
+  return window['go']['main']['App']['RefreshAccountTokens']();
 }
 
 export function ResetAgentsToDefaults() {
@@ -292,6 +300,10 @@ export function ScheduleKind(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function SchedulePrompt(arg1, arg2, arg3) {
   return window['go']['main']['App']['SchedulePrompt'](arg1, arg2, arg3);
+}
+
+export function SelectGoogleAccountsFile() {
+  return window['go']['main']['App']['SelectGoogleAccountsFile']();
 }
 
 export function SelectWorkspaceFolder() {

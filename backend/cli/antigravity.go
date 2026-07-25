@@ -24,18 +24,21 @@ type ModelQuota struct {
 }
 
 type AntiAccountKey struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name"`
-	Email        string       `json:"email"`
-	Type         string       `json:"type"` // "api_key" or "oauth_token"
-	APIKey       string       `json:"api_key"`
-	OAuthToken   string       `json:"oauth_token"`
-	RefreshToken string       `json:"refresh_token"`
-	Status       string       `json:"status"` // "active", "rate_limited_429", "disabled"
-	Tier         string       `json:"tier"`   // "PRO", "ULTRA", "FREE"
-	IsCurrent    bool         `json:"is_current"`
-	LastUsed     string       `json:"last_used"`
-	ModelQuotas  []ModelQuota `json:"model_quotas"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	Type         string `json:"type"` // "api_key" or "oauth_token"
+	APIKey       string `json:"api_key"`
+	OAuthToken   string `json:"oauth_token"`
+	RefreshToken string `json:"refresh_token"`
+	// TokenExpiresAt is when OAuthToken stops working. An access token lasts about
+	// an hour, so without this the pool rotates onto accounts that are already dead.
+	TokenExpiresAt time.Time    `json:"token_expires_at"`
+	Status         string       `json:"status"` // "active", "rate_limited_429", "disabled"
+	Tier           string       `json:"tier"`   // "PRO", "ULTRA", "FREE"
+	IsCurrent      bool         `json:"is_current"`
+	LastUsed       string       `json:"last_used"`
+	ModelQuotas    []ModelQuota `json:"model_quotas"`
 }
 
 type AccountKeyPool struct {
@@ -299,7 +302,7 @@ func (a *AntigravityCLI) executeWithRotation(ctx context.Context, model, prompt,
 	// Detect 429 Rate Limit / Quota Exhaustion for Auto-Rotation
 	if !res.Success && attempt < 3 {
 		errLower := strings.ToLower(res.Error)
-		if strings.Contains(errLower, "429") || strings.Contains(errLower, "quota") || strings.Contains(errLower, "limit") || strings.Contains(errLower, "exhausted") {
+		if isRotatableAuthError(errLower) {
 			nextKeyName := GlobalAntiPool.RotateNextKey()
 			if nextKeyName != "" {
 				if onLog != nil {
@@ -483,4 +486,103 @@ func atoi64(s string) int64 {
 	var n int64
 	fmt.Sscanf(s, "%d", &n)
 	return n
+}
+
+// NeedsRefresh reports whether an account has a refresh token and an access
+// token that is missing or about to expire.
+func (k AntiAccountKey) NeedsRefresh() bool {
+	if k.RefreshToken == "" || k.Status == statusDisabled {
+		return false
+	}
+	return k.OAuthToken == "" || k.TokenExpiresAt.IsZero() || time.Now().After(k.TokenExpiresAt)
+}
+
+// AddRefreshAccount adds an account the user imported from their own Google
+// sign-ins. It carries no access token yet: one is minted from the refresh token
+// when the account is first used, and again whenever it expires.
+func (p *AccountKeyPool) AddRefreshAccount(email, refreshToken string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Re-importing the same file should update the token, not pile up duplicates.
+	for i := range p.keys {
+		if p.keys[i].Email == email {
+			p.keys[i].RefreshToken = refreshToken
+			p.keys[i].OAuthToken = ""
+			p.keys[i].TokenExpiresAt = time.Time{}
+			return p.keys[i].ID
+		}
+	}
+
+	id := fmt.Sprintf("key-%d", len(p.keys)+1)
+	p.keys = append(p.keys, AntiAccountKey{
+		ID:           id,
+		Name:         email,
+		Email:        email,
+		Type:         "oauth_token",
+		RefreshToken: refreshToken,
+		Status:       "active",
+		Tier:         "PRO",
+		LastUsed:     time.Now().Format("1/2/2006 03:04 PM"),
+		ModelQuotas:  defaultQuotas("PRO"),
+	})
+	return id
+}
+
+// AccountsNeedingRefresh returns the id and refresh token of every account whose
+// access token has to be minted again. Returning copies keeps the network call
+// out of the lock.
+func (p *AccountKeyPool) AccountsNeedingRefresh() map[string]string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	pending := make(map[string]string)
+	for _, key := range p.keys {
+		if key.NeedsRefresh() {
+			pending[key.ID] = key.RefreshToken
+		}
+	}
+	return pending
+}
+
+// SetAccessToken stores a freshly minted access token against an account.
+func (p *AccountKeyPool) SetAccessToken(id, accessToken string, expiresAt time.Time) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i := range p.keys {
+		if p.keys[i].ID == id {
+			p.keys[i].OAuthToken = accessToken
+			p.keys[i].TokenExpiresAt = expiresAt
+			p.keys[i].Type = "oauth_token"
+			return true
+		}
+	}
+	return false
+}
+
+// DisableKey switches an account off and records why. Used when Google refuses
+// its refresh token: retrying a revoked one every minute helps nobody.
+func (p *AccountKeyPool) DisableKey(id, reason string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i := range p.keys {
+		if p.keys[i].ID == id {
+			p.keys[i].Status = statusDisabled
+			p.keys[i].OAuthToken = ""
+			return true
+		}
+	}
+	return false
+}
+
+// isRotatableAuthError reports whether a failure is one another account might
+// survive: an exhausted quota, or an access token that expired mid-run.
+func isRotatableAuthError(errLower string) bool {
+	for _, sign := range []string{"429", "quota", "limit", "exhausted", "401", "unauthorized", "invalid_grant", "token expired"} {
+		if strings.Contains(errLower, sign) {
+			return true
+		}
+	}
+	return false
 }

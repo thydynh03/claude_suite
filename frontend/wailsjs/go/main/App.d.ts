@@ -97,6 +97,8 @@ export function GetWorkspaceConfig():Promise<models.WorkspaceConfig>;
 
 export function GetWorkspaceDiff():Promise<string>;
 
+export function ImportGoogleAccounts(arg1:string):Promise<string>;
+
 export function IsOrchestratorRunning():Promise<boolean>;
 
 export function IsWebhookRunning():Promise<boolean>;
@@ -114,6 +116,8 @@ export function PerformAutoUpdate():Promise<cli.RunResult>;
 export function Ping():Promise<boolean>;
 
 export function ReadFileContent(arg1:string):Promise<string>;
+
+export function RefreshAccountTokens():Promise<number|number>;
 
 export function ResetAgentsToDefaults():Promise<void>;
 
@@ -150,6 +154,8 @@ export function ScheduleJob(arg1:string,arg2:string,arg3:boolean,arg4:string,arg
 export function ScheduleKind(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:string,arg6:string):Promise<string>;
 
 export function SchedulePrompt(arg1:string,arg2:string,arg3:boolean):Promise<string>;
+
+export function SelectGoogleAccountsFile():Promise<string>;
 
 export function SelectWorkspaceFolder():Promise<string>;
 
