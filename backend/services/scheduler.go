@@ -32,11 +32,19 @@ func NewSchedulerService() *SchedulerService {
 	}
 }
 
+// SetContext and SetTriggerCallback are currently called before Start, where the
+// `go` statement itself orders the write ahead of the loop's reads. They take the
+// lock anyway: checkJobs reads both fields from the loop goroutine, so a caller
+// that ever sets one afterwards would be racing.
 func (s *SchedulerService) SetContext(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ctx = ctx
 }
 
 func (s *SchedulerService) SetTriggerCallback(cb func(prompt string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.onTrigger = cb
 }
 
@@ -48,9 +56,12 @@ func (s *SchedulerService) Start() {
 	}
 	s.running = true
 	s.stopCh = make(chan struct{})
+	// Hand this run its own channel: a later Start replaces the field while the
+	// old loop is still reading it. Same defect the orchestrator had.
+	stop := s.stopCh
 	s.mu.Unlock()
 
-	go s.loop()
+	go s.loop(stop)
 }
 
 func (s *SchedulerService) Stop() {
@@ -64,13 +75,13 @@ func (s *SchedulerService) Stop() {
 	s.mu.Unlock()
 }
 
-func (s *SchedulerService) loop() {
+func (s *SchedulerService) loop(stop <-chan struct{}) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-s.stopCh:
+		case <-stop:
 			return
 		case <-ticker.C:
 			s.checkJobs()
