@@ -47,6 +47,20 @@ has built it. A test that cannot run in CI guards nothing.
 
 ---
 
+### The TUI is deliberately the smaller frontend
+
+Name parity is enforced; *depth* parity is not. The desktop app's
+`RunBrowserTask` takes eight parameters and drives a multi-step ReAct loop with a
+persistent Chrome profile and interactive forms. The TUI's takes two — a URL and
+whether to screenshot — and that is on purpose: the TUI is a keyboard inspector,
+not a second full client.
+
+If you port that loop to the TUI, it needs its own input flow for the prompt,
+model and step limit, plus somewhere to render each step. Treat it as a feature,
+not as a consistency fix.
+
+---
+
 ## 2. `sqliteURI` looks like string-fiddling around `url.URL`. It is not.
 
 `backend/tui/loader.go`:

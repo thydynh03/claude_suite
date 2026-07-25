@@ -1,136 +1,198 @@
 <div align="center">
 
-# 🚀 Claude Suite (Antigravity Manager)
+# Claude Suite
 
-### *Next-Generation Enterprise AI Agent Orchestrator, Photorealistic 3D Virtual Office & Multi-Account OAuth Pool*
+**An AI agent orchestrator with a desktop app and a terminal UI.**
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://golang.org)
-[![Wails Version](https://img.shields.io/badge/Wails-v2.13-red?style=for-the-badge&logo=wails&logoColor=white)](https://wails.io)
-[![Svelte Version](https://img.shields.io/badge/Svelte-5.0-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
-[![Three.js](https://img.shields.io/badge/Three.js-PBR_3D-black?style=for-the-badge&logo=three.js&logoColor=white)](https://threejs.org)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+Describe what you want built. It decomposes the work into tasks, dispatches them
+to Claude and Gemini CLI sub-agents running in parallel against your project
+folder, then verifies the result actually builds and the page actually works.
 
-<br/>
+[![CI](https://github.com/thydynh03/claude_suite/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/claude_suite/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[✨ Features](#-highlights--features) • [💻 Tech Stack](#-tech-stack) • [⚙️ Quick Start](#%EF%B8%8F-quick-start) • [🏛 Architecture](#-architecture) • [📜 License](#-license)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Terminal UI](#terminal-ui) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## ✨ Highlights & Features
+## What it does
 
-- 🔑 **Multi-Account OAuth Key Pool (Antigravity Manager)** — Automated Google OAuth 2.0 token rotation with rate limit 429 protection, custom GCP Client ID support, and a 100% automated local callback listener server (`:8045`). Zero copy-pasting required!
-- 🏢 **Photorealistic PBR 3D Virtual Office Engine** — Expanded 35-seat floorplan featuring dual curved monitors, mechanical RGB keyboards, ergonomic gaming chairs, Burgundy velvet & Carrara marble PBR materials, corporate role assignments, and a 4-phase simulated corporate workflow.
-- 🌐 **Native Chrome CDP Browser Agent** — Built-in Chrome DevTools Protocol E2E browser automation agent written natively in Go. Supports automated web testing, DOM element inspection, screenshot galleries, and HTTP network logging.
-- ⚡️ **High-Performance Go Core Backend** — Ultra-fast Go application engine utilizing SQLite WAL journaling, automated task decomposition pipelines, cron-based automated scheduling, and real-time WebSocket IPC event streaming.
-- 🌐 **Internationalization (i18n)** — Runtime bilingual switching between **Tiếng Việt (🇻🇳 VI)** and **English (🇺🇸 EN)** for the primary sidebar navigation, with more UI surfaces being translated over time.
-- 📊 **Real-time System Telemetry & Cost Analytics** — Live monitoring of RAM allocation (MB), CPU usage, active Goroutines, active API keys, and an estimated AI token cost estimator.
-- 🛠 **Integrated Code Studio & Prompt Architect** — Pre-built prompt engineering template library (Refactor, Security Audit, Performance Boost, Unit Tests) and multi-language code studio.
+You give it a goal. It plans, executes, checks its own work, and fixes what it
+broke:
 
----
+1. **Plans.** An AI decomposes your requirement into tasks tagged by role — BA,
+   architecture, code, QA, DevOps — with dependencies between them.
+2. **Dispatches.** A worker pool runs several sub-agents at once, respecting
+   those dependencies. Each task can be stopped or retried on its own.
+3. **Verifies.** When a task finishes, the workspace must still build
+   (`go build`, `npm run build`) before the task is marked done.
+4. **Tests in a real browser.** Tasks tagged `[E2E]` drive Chrome, assert the
+   text you listed with `[EXPECT: ...]`, and capture console errors.
+5. **Fixes itself.** A failing browser test spawns a repair task seeded with the
+   exact console errors and failed assertions, then re-runs the test. Bounded by
+   a retry limit.
 
-## 💻 Tech Stack
-
-| Layer | Technologies & Libraries |
-|---|---|
-| **Core Desktop Engine** | Go 1.22, Wails v2 (Native WebView2 Engine) |
-| **Frontend Framework** | Svelte 5, TypeScript 5, Vite 6 |
-| **UI Design System** | Tailwind CSS 3, Material Design 3 (M3) Tokens |
-| **3D Graphics & WebGL** | Three.js, OrbitControls, PBR Materials, Directional Lighting |
-| **Database & Persistence** | SQLite3, WAL Journaling, Dynamic Schema Migration Engine |
-| **Browser Automation** | Chrome DevTools Protocol (CDP Native Go Service) |
-| **Internationalization** | Svelte Derived Store i18n (`vi` / `en`) |
-| **CI/CD & Releases** | GitHub Actions Automated Cross-Platform Release Pipeline |
+Everything the agent does is visible while it happens: streamed output, the
+tools it calls, the git diff it produced, and the screenshot it captured.
 
 ---
 
-## ⚙️ Quick Start
+## Features
+
+**Orchestration**
+- Parallel sub-agents (1–6) with dependency-aware dispatch
+- Per-task stop and retry; approval gates for architecture and BA roles
+- Automatic fallback to another provider when a quota is exhausted
+- Real token usage and cost, parsed from the Claude CLI's `stream-json` output
+
+**Working on your code**
+- Sub-agents create and edit files directly in the workspace you choose
+- A git snapshot is taken before each task, so the task's changes stay reviewable
+  as an uncommitted diff
+- Source Control panel: stage, commit, branch, revert, and a safe git command box
+- "AI wrote this commit" — a Conventional Commits message generated from the diff
+
+**Browser agent**
+- Chrome DevTools Protocol, driven natively from Go
+- Assertion-based E2E runs with console-error capture and screenshots
+- A multi-step ReAct loop with its own persistent Chrome profile, so sites stay
+  signed in between runs (desktop app only)
+
+**Providers**
+- Claude CLI and Antigravity/Gemini CLI
+- Multi-account key pool with automatic rotation on HTTP 429
+- Google OAuth sign-in handled by a local callback listener on `:8045`
+
+**Two frontends, one backend**
+- Wails desktop app (Svelte 5) with Kanban board, task inspector, command
+  palette (`Ctrl+K`), and a 3D office view
+- Keyboard-native terminal UI (Bubble Tea), read-only unless you pass `--write`
+
+---
+
+## Quick start
 
 ### Prerequisites
-- **Go**: `1.22` or higher
-- **Node.js**: `20.x` or higher
-- **Wails CLI**: `v2.13.0` (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
 
-### 1. Clone the Repository
+- **Go** — the version pinned in `go.mod`
+- **Node.js** 20.x
+- **Wails CLI** v2.13.0 — `go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0`
+- At least one agent CLI on `PATH`: `claude`, or `agy` / `antigravity`
+
+SQLite is a pure-Go driver, so no C toolchain is needed.
+
+### Run it
+
 ```bash
 git clone https://github.com/thydynh03/claude_suite.git
 cd claude_suite
+
+wails dev          # desktop app with hot reload
 ```
 
-### 2. Live Development Mode
-Run the application in hot-reloading development mode:
-```bash
-wails dev
-```
-- Frontend Dev Server runs at: `http://localhost:5173`
-- Backend IPC Dev Server runs at: `http://localhost:34115`
+### Build a release binary
 
-### 3. Build Production Executable
-Compile a standalone redistributable binary package:
 ```bash
 wails build -platform windows/amd64 -clean
+# -> build/bin/ClaudeSuite.exe
 ```
-The compiled executable will be located in `build/bin/ClaudeSuite.exe`.
+
+Windows is the shipping platform: the CLI runners use Windows-specific process
+flags to keep sub-agent consoles hidden.
+
+### Configuration
+
+| What | Where |
+|---|---|
+| Google OAuth client | `CLAUDE_SUITE_GCP_CLIENT_ID` / `CLAUDE_SUITE_GCP_CLIENT_SECRET`, or `gcp_oauth.json` in the data directory |
+| Database, config, logs | the app data directory (`%LOCALAPPDATA%\ClaudeSuite` on Windows) |
+| Outbound notifications | Settings → Integrations: a webhook URL that receives task-completed and task-failed events |
+
+Credentials are never read from the repository, and the files above are
+gitignored.
 
 ---
 
-## 🏛 Architecture
+## How it works
 
 ```mermaid
 graph TD
-    User([User Interface]) --> |Events & IPC| SvelteUI[Svelte 5 Frontend + TailwindCSS]
-    SvelteUI --> |Wails JS Bindings| GoApp[Go Application Backend]
-    
-    subgraph Go Core Services
-        GoApp --> OAuthSvc[OAuth Listener Server :8045]
-        GoApp --> KeyPool[Multi-Account Key Pool Router]
-        GoApp --> Orch[AI Task Orchestrator]
-        GoApp --> BrowserSvc[Chrome CDP Browser Agent]
-        GoApp --> DB[SQLite Database WAL]
-    end
+    Desktop["Desktop app<br/>(Wails + Svelte 5)"] --> Adapters
+    Terminal["Terminal UI<br/>(Bubble Tea)"] --> Adapters
 
-    OAuthSvc --> |Auto Token Capture| KeyPool
-    KeyPool --> |Rotated Keys| AIProviders[Gemini / Claude APIs]
-    Orch --> |Subagent Dispatch| AIProviders
-    BrowserSvc --> |CDP Automation| HeadlessChrome[Chromium Browser]
+    Adapters["Adapters<br/>app.go · task_actions.go"] --> Orchestrator
+    Adapters --> Services
+    Adapters --> DB[("SQLite<br/>tasks · agents · memory")]
+
+    Orchestrator["Orchestrator<br/>worker pool · dependencies · retry"] --> Runners
+    Orchestrator --> DB
+
+    Runners["CLI runners"] --> Claude["Claude CLI"]
+    Runners --> Anti["Antigravity / Gemini CLI<br/>key pool, rotates on 429"]
+
+    Services["Services"] --> Git["git snapshot & diff"]
+    Services --> Browser["Chrome CDP agent"]
+    Services --> Verify["build verification"]
 ```
 
----
-
-## 📊 4-Layer Dynamic Versioning
-
-Claude Suite features zero-hardcode dynamic versioning:
-1. **Local Persisted Version**: Reads `%APPDATA%/ClaudeSuite/version.json` updated upon auto-update.
-2. **Git Describe Tag**: Queries `git describe --tags --abbrev=0` dynamically during development.
-3. **Linker Flag Injection**: Injected at compile time via `wails build -ldflags "-X claude_suite/backend/version.BuildVersion=v..."`.
-4. **Fallback Release**: Default build release version.
+Both frontends are thin adapters over the same services. A capability must use
+the **same method name on both**, and `backend/contract` fails the build when it
+does not — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-## 🖥️ Terminal UI
+## Terminal UI
 
-Claude Suite also ships a keyboard-native Bubble Tea frontend backed by the
-same Go repositories and orchestration services as the desktop application.
+The TUI is a keyboard-native frontend over the same database and services. It
+opens **read-only by default**: no migrations, no writes.
 
 ```bash
-# Safe default: inspect an existing database without migrations or writes.
+# Inspect an existing database safely
 go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db
 
-# Explicitly enable task mutations and orchestration.
+# Enable task mutations and orchestration
 go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db --write
+
+# Validate a database without starting the UI
+go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db --check
 ```
 
-Use `Tab`/`Shift+Tab` to select a page, `Enter` to move into its content,
-`Esc` to return to navigation, `:` for Command Center, and `?` for contextual
-key bindings. Cockpit uses `Enter` for a new line and `Ctrl+Enter` to submit.
+| Key | Action |
+|---|---|
+| `Tab` / `Shift+Tab` | move between pages |
+| `Enter` | enter the page content |
+| `Esc` | back to navigation |
+| `:` | command centre |
+| `?` | contextual key bindings |
+| `Ctrl+Enter` | submit in Cockpit (`Enter` inserts a newline) |
+
+The TUI covers the board, agents, pipeline, git and a simple browser run. The
+autonomous multi-step browser agent is desktop-only, by design — the TUI stays a
+lightweight inspector.
 
 ---
 
-## 📜 License & Contribution
+## Versioning
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+The version shown in the app is resolved in order: a persisted `version.json` in
+the data directory, then `git describe --tags`, then a value injected at build
+time with `-ldflags "-X claude_suite/backend/version.BuildVersion=..."`, then a
+compiled-in fallback.
 
-Developed with ❤️ by **thydynh03**. Contributions and pull requests are welcome!
+---
+
+## Documentation
+
+| Document | For |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | setting up, what CI checks, the non-obvious rules |
+| [docs/ARCHITECTURE_DECISIONS.md](docs/ARCHITECTURE_DECISIONS.md) | decisions that look redundant but are load-bearing |
+| [CLAUDE.md](CLAUDE.md) | orientation for AI coding agents working in this repo |
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
