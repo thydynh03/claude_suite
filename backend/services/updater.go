@@ -30,6 +30,10 @@ type GitHubRelease struct {
 	Assets  []ReleaseAsset `json:"assets"`
 }
 
+type GitHubTag struct {
+	Name string `json:"name"`
+}
+
 type UpdaterService struct{}
 
 func NewUpdaterService() *UpdaterService {
@@ -45,42 +49,72 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	req.Header.Set("User-Agent", "ClaudeSuite-App")
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github api returned status %d", resp.StatusCode)
-	}
-
-	var rel GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return nil, err
-	}
-
-	if rel.TagName != "" && rel.TagName != version.CurrentVersion {
-		var downloadUrl string
-		for _, asset := range rel.Assets {
-			if filepath.Ext(asset.Name) == ".exe" {
-				downloadUrl = asset.BrowserDownloadURL
-				break
+	if err == nil && resp.StatusCode == http.StatusOK {
+		var rel GitHubRelease
+		if err := json.NewDecoder(resp.Body).Decode(&rel); err == nil && rel.TagName != "" {
+			resp.Body.Close()
+			if rel.TagName != version.CurrentVersion {
+				var downloadUrl string
+				for _, asset := range rel.Assets {
+					if filepath.Ext(asset.Name) == ".exe" {
+						downloadUrl = asset.BrowserDownloadURL
+						break
+					}
+				}
+				if downloadUrl == "" {
+					downloadUrl = "https://github.com/thydynh03/claude_suite/archive/refs/tags/" + rel.TagName + ".zip"
+				}
+				return &UpdateInfo{
+					HasUpdate:   true,
+					Version:     rel.TagName,
+					DownloadURL: downloadUrl,
+					Body:        rel.Body,
+				}, nil
 			}
+			return &UpdateInfo{HasUpdate: false, Version: version.CurrentVersion}, nil
 		}
-		return &UpdateInfo{
-			HasUpdate:   true,
-			Version:     rel.TagName,
-			DownloadURL: downloadUrl,
-			Body:        rel.Body,
-		}, nil
+		resp.Body.Close()
+	}
+
+	// Fallback: Check tags API if releases API is empty
+	tagsUrl := "https://api.github.com/repos/thydynh03/claude_suite/tags"
+	tReq, err := http.NewRequest("GET", tagsUrl, nil)
+	if err == nil {
+		tReq.Header.Set("User-Agent", "ClaudeSuite-App")
+		tResp, err := http.DefaultClient.Do(tReq)
+		if err == nil && tResp.StatusCode == http.StatusOK {
+			var tags []GitHubTag
+			if err := json.NewDecoder(tResp.Body).Decode(&tags); err == nil && len(tags) > 0 {
+				tResp.Body.Close()
+				latestTag := tags[0].Name
+				if latestTag != version.CurrentVersion {
+					return &UpdateInfo{
+						HasUpdate:   true,
+						Version:     latestTag,
+						DownloadURL: "https://github.com/thydynh03/claude_suite/archive/refs/tags/" + latestTag + ".zip",
+						Body:        "Bản phát hành mới " + latestTag + " trên GitHub Repository.",
+					}, nil
+				}
+			}
+			tResp.Body.Close()
+		}
 	}
 
 	return &UpdateInfo{HasUpdate: false, Version: version.CurrentVersion}, nil
 }
 
 func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(downloaded, total int64)) error {
+	// 1. Try Git Pull first if inside local git repository
+	if _, err := os.Stat(".git"); err == nil {
+		cmd := exec.Command("git", "pull", "origin", "master")
+		if out, err := cmd.CombinedOutput(); err == nil {
+			fmt.Println("Git pull auto-update output:", string(out))
+			return nil
+		}
+	}
+
 	if downloadUrl == "" {
-		return fmt.Errorf("empty download url")
+		return fmt.Errorf("URL cập nhật trống")
 	}
 
 	exePath, err := os.Executable()
@@ -128,13 +162,10 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 	out.Close()
 
 	batPath := filepath.Join(exeDir, "updater.bat")
-	// Wait 3s for the old process to fully exit, then move new exe over old one,
-	// then start the updated app. /b flag keeps the bat's console hidden.
 	batContent := fmt.Sprintf(`@echo off
 set "NEW_EXE=%s"
 set "OLD_EXE=%s"
 
-rem Wait for the running process to fully exit
 timeout /t 3 /nobreak > NUL
 
 :RETRY
@@ -144,7 +175,6 @@ if errorlevel 1 (
     goto RETRY
 )
 
-rem Relaunch the updated app
 start "" "%%OLD_EXE%%"
 del "%%~f0"
 `, newExePath, exePath)
@@ -153,7 +183,6 @@ del "%%~f0"
 		return err
 	}
 
-	// Start the bat as a completely detached process so it survives this process exiting
 	cmd := exec.Command("cmd.exe", "/c", "start", "/b", "", batPath)
 	cmd.Dir = exeDir
 	if err := cmd.Start(); err != nil {
