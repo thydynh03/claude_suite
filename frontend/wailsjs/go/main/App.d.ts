@@ -3,6 +3,7 @@
 import {services} from '../models';
 import {models} from '../models';
 import {main} from '../models';
+import {claims} from '../models';
 import {cli} from '../models';
 
 export function AddAntiAccountKey(arg1:string,arg2:string):Promise<void>;
@@ -18,6 +19,8 @@ export function CheckChromeDebugMode():Promise<Record<string, any>>;
 export function CheckForUpdates():Promise<services.UpdateInfo>;
 
 export function CheckoutGitBranch(arg1:string):Promise<void>;
+
+export function ClaimsHostStatus():Promise<Record<string, any>>;
 
 export function ClearActiveSession(arg1:string):Promise<void>;
 
@@ -49,6 +52,10 @@ export function DownloadAndUpdate(arg1:string):Promise<main.UpdateResponse>;
 
 export function ExportKanbanReport():Promise<string>;
 
+export function FinishClaimSession(arg1:string):Promise<claims.Outcome>;
+
+export function ForceAdjudicateClaims(arg1:string):Promise<void>;
+
 export function GenerateCommitMessage():Promise<string>;
 
 export function GetActiveSession(arg1:string):Promise<string>;
@@ -62,6 +69,8 @@ export function GetAppVersion():Promise<string>;
 export function GetAutoApproveAll():Promise<boolean>;
 
 export function GetBudgetStatus():Promise<main.BudgetStatus>;
+
+export function GetClaimSession(arg1:string):Promise<Record<string, any>>;
 
 export function GetGCPOAuthCredentials():Promise<Record<string, string>>;
 
@@ -106,6 +115,8 @@ export function IsWebhookRunning():Promise<boolean>;
 export function ListRoles():Promise<Array<string>>;
 
 export function OpenAgentChromeWindow(arg1:string):Promise<Record<string, any>>;
+
+export function OpenClaimSession(arg1:string,arg2:number):Promise<Record<string, any>>;
 
 export function OpenGoogleOAuthLogin(arg1:string):Promise<string>;
 
@@ -179,9 +190,13 @@ export function SetVerifyBuild(arg1:boolean):Promise<boolean>;
 
 export function ShouldShowOnboarding():Promise<boolean>;
 
+export function StartClaimsHost(arg1:number):Promise<Record<string, any>>;
+
 export function StartOrchestrator():Promise<boolean>;
 
 export function StopBrowserTask():Promise<void>;
+
+export function StopClaimsHost():Promise<void>;
 
 export function StopOrchestrator():Promise<boolean>;
 

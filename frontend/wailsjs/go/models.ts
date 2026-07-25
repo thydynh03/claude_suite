@@ -1,3 +1,189 @@
+export namespace claims {
+	
+	export class Claim {
+	    id: string;
+	    session_id: string;
+	    author: string;
+	    provider: string;
+	    subject: string;
+	    assertion: string;
+	    falsifier: string;
+	    kind: string;
+	    verdict: string;
+	    evidence: string;
+	    exit_code: number;
+	    // Go type: time
+	    submitted_at: any;
+	    // Go type: time
+	    settled_at?: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Claim(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.session_id = source["session_id"];
+	        this.author = source["author"];
+	        this.provider = source["provider"];
+	        this.subject = source["subject"];
+	        this.assertion = source["assertion"];
+	        this.falsifier = source["falsifier"];
+	        this.kind = source["kind"];
+	        this.verdict = source["verdict"];
+	        this.evidence = source["evidence"];
+	        this.exit_code = source["exit_code"];
+	        this.submitted_at = this.convertValues(source["submitted_at"], null);
+	        this.settled_at = this.convertValues(source["settled_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Participant {
+	    author: string;
+	    provider: string;
+	    // Go type: time
+	    joined_at: any;
+	    // Go type: time
+	    last_seen: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Participant(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.author = source["author"];
+	        this.provider = source["provider"];
+	        this.joined_at = this.convertValues(source["joined_at"], null);
+	        this.last_seen = this.convertValues(source["last_seen"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Remark {
+	    round: number;
+	    author: string;
+	    claim_id: string;
+	    text: string;
+	    // Go type: time
+	    at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Remark(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.round = source["round"];
+	        this.author = source["author"];
+	        this.claim_id = source["claim_id"];
+	        this.text = source["text"];
+	        this.at = this.convertValues(source["at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Outcome {
+	    session_id: string;
+	    subject: string;
+	    // Go type: time
+	    closed_at: any;
+	    blocking: Claim[];
+	    refuted: Claim[];
+	    escalated: Claim[];
+	    dissent: Remark[];
+	    warnings: string[];
+	    participants: Participant[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Outcome(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.subject = source["subject"];
+	        this.closed_at = this.convertValues(source["closed_at"], null);
+	        this.blocking = this.convertValues(source["blocking"], Claim);
+	        this.refuted = this.convertValues(source["refuted"], Claim);
+	        this.escalated = this.convertValues(source["escalated"], Claim);
+	        this.dissent = this.convertValues(source["dissent"], Remark);
+	        this.warnings = source["warnings"];
+	        this.participants = this.convertValues(source["participants"], Participant);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+
+}
+
 export namespace cli {
 	
 	export class ModelQuota {

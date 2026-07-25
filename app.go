@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"claude_suite/backend/claims"
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
 	"claude_suite/backend/defaults"
@@ -41,6 +42,7 @@ type App struct {
 	planBuilder     *pipeline.PlanBuilder
 	pipelineEngine  *pipeline.PipelineEngine
 	oauthListener   *services.OAuthListenerService
+	claimsHost      *services.ClaimsHostService
 
 	workspaceConfig    models.WorkspaceConfig
 	integrationsConfig models.IntegrationsConfig
@@ -69,6 +71,7 @@ func NewApp() *App {
 	exporterSvc := services.NewExporterService()
 	schedulerSvc := services.NewSchedulerService()
 	browserSvc := services.NewBrowserAgentService()
+	claimsHostSvc := services.NewClaimsHostService()
 
 	orch := orchestrator.NewOrchestrator(agentRepo, taskRepo, memoryRepo, cliRunner, contextMgr, gitSvc, browserSvc)
 	planBuilder := pipeline.NewPlanBuilder(cliRunner)
@@ -90,6 +93,7 @@ func NewApp() *App {
 		planBuilder:     planBuilder,
 		pipelineEngine:  pipelineEng,
 		oauthListener:   services.NewOAuthListenerService(),
+		claimsHost:      claimsHostSvc,
 	}
 
 	app.schedulerSvc.SetTriggerCallback(app.runScheduledJob)
@@ -132,6 +136,18 @@ func (a *App) startup(ctx context.Context) {
 			"time":    time.Now().Format("15:04:05"),
 		})
 	}
+
+	// Adjudication progress goes to the same log stream as everything else, so a
+	// session running on this machine is visible without a separate console.
+	a.claimsHost.SetEventHandler(func(sessionID, message string) {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "claims_event", map[string]string{
+				"session_id": sessionID,
+				"message":    message,
+				"time":       time.Now().Format("15:04:05"),
+			})
+		}
+	})
 
 	// Browser Agent asks the user through the live log instead of dying on a
 	// blocked step, so it needs a way to push forms onto the event bus.
@@ -1271,4 +1287,105 @@ func (a *App) emitLog(message, level string) {
 		"level":   level,
 		"time":    time.Now().Format("15:04:05"),
 	})
+}
+
+// ── Claim adjudication ─────────────────────────────────────────────────
+//
+// Two members' agents reaching opposite conclusions is settled by running the
+// check each of them named, not by letting them argue. These methods drive that
+// from the desktop app; agents on other machines take part through
+// cmd/claude-suite-claim.
+
+// ClaimsHostStatus reports whether agents can currently connect.
+func (a *App) ClaimsHostStatus() map[string]interface{} {
+	checks, err := a.claimsHost.CatalogueNames(a.workspaceConfig.LastWorkspaceFolder)
+	warning := ""
+	if err != nil {
+		warning = err.Error()
+	} else if len(checks) == 0 {
+		// Worth saying plainly: with no catalogue every claim becomes an opinion
+		// and nothing can ever block, which looks like the feature is broken.
+		warning = "No checks in .claude-suite/checks.json — every claim will be an opinion and nothing can block."
+	}
+	return map[string]interface{}{
+		"running":  a.claimsHost.IsRunning(),
+		"addr":     a.claimsHost.Addr(),
+		"checks":   checks,
+		"warning":  warning,
+		"sessions": a.claimsHost.SessionIDs(),
+	}
+}
+
+// StartClaimsHost begins accepting agents on port.
+func (a *App) StartClaimsHost(port int) map[string]interface{} {
+	workspace := a.workspaceConfig.LastWorkspaceFolder
+	if workspace == "" {
+		return map[string]interface{}{"success": false, "error": "Chọn workspace trước: catalogue check và falsifier đều chạy trong đó."}
+	}
+	if err := a.claimsHost.Start(port, workspace); err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}
+	}
+	return map[string]interface{}{"success": true, "addr": a.claimsHost.Addr()}
+}
+
+// StopClaimsHost stops accepting agents.
+func (a *App) StopClaimsHost() error {
+	return a.claimsHost.Stop()
+}
+
+// OpenClaimSession starts a session and returns what a teammate needs to join.
+func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interface{} {
+	if ttlMinutes <= 0 {
+		ttlMinutes = 60
+	}
+	id, token, err := a.claimsHost.Open(subject, ttlMinutes)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}
+	}
+
+	addr := a.claimsHost.Addr()
+	host := "ws://" + strings.Replace(addr, "[::]", "YOUR-HOST", 1)
+	return map[string]interface{}{
+		"success": true,
+		"id":      id,
+		"token":   token,
+		"host":    host,
+		// The exact command a teammate's agent runs. Handing over a ready line
+		// avoids the flag-by-flag reconstruction that goes wrong over chat.
+		"join_command": fmt.Sprintf(
+			`claude-suite-claim --host %s --session %s --token %s `+
+				`--author YOU/your-agent --provider claude `+
+				`--subject "file.go:12" --assert "what is wrong" --falsify "check-name"`,
+			host, id, token),
+	}
+}
+
+// GetClaimSession returns a session's current state for the UI.
+func (a *App) GetClaimSession(sessionID string) map[string]interface{} {
+	session, ok := a.claimsHost.Session(sessionID)
+	if !ok {
+		return map[string]interface{}{"found": false}
+	}
+	// Everything visible: the UI is the operator's view, not an agent's, so the
+	// blind-collect restriction does not apply to it.
+	return map[string]interface{}{
+		"found":    true,
+		"id":       session.ID,
+		"subject":  session.Subject,
+		"phase":    string(session.Phase()),
+		"claims":   session.VisibleTo(""),
+		"warnings": session.Warnings(),
+		"round":    session.DebateRound(),
+	}
+}
+
+// ForceAdjudicateClaims ends a collect window waiting on an agent that will not
+// report finished.
+func (a *App) ForceAdjudicateClaims(sessionID string) error {
+	return a.claimsHost.ForceAdjudicate(sessionID)
+}
+
+// FinishClaimSession closes a session and returns its outcome.
+func (a *App) FinishClaimSession(sessionID string) (*claims.Outcome, error) {
+	return a.claimsHost.Finish(sessionID)
 }

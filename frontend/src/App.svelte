@@ -7,6 +7,7 @@
   import SettingsPage from './components/pages/SettingsPage.svelte';
   import VirtualOffice3D from './components/pages/VirtualOffice3D.svelte';
   import SchedulerPage from './components/pages/SchedulerPage.svelte';
+  import ClaimsPage from './components/pages/ClaimsPage.svelte';
   import DocsPage from './components/pages/DocsPage.svelte';
   import SupportPage from './components/pages/SupportPage.svelte';
   import CodeStudioPage from './components/pages/CodeStudioPage.svelte';
@@ -187,6 +188,8 @@
         <SchedulerPage />
       {:else if $activeTab === 'browser'}
         <BrowserAgentPage />
+      {:else if $activeTab === 'claims'}
+        <ClaimsPage />
       {:else if $activeTab === 'git'}
         <GitPanel />
       {:else if $activeTab === 'roles'}

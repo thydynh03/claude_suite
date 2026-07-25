@@ -112,6 +112,19 @@
 
     <button
       type="button"
+      on:click|preventDefault={() => activeTab.set('claims')}
+      title="Adjudication"
+      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+      {$activeTab === 'claims' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+    >
+      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">gavel</span>
+      {#if !$sidebarCollapsed}
+        <span class="truncate">Phân xử Agent</span>
+      {/if}
+    </button>
+
+    <button
+      type="button"
       on:click|preventDefault={() => activeTab.set('browser')}
       title="Browser Agent"
       class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer

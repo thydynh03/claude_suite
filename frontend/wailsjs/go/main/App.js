@@ -30,6 +30,10 @@ export function CheckoutGitBranch(arg1) {
   return window['go']['main']['App']['CheckoutGitBranch'](arg1);
 }
 
+export function ClaimsHostStatus() {
+  return window['go']['main']['App']['ClaimsHostStatus']();
+}
+
 export function ClearActiveSession(arg1) {
   return window['go']['main']['App']['ClearActiveSession'](arg1);
 }
@@ -90,6 +94,14 @@ export function ExportKanbanReport() {
   return window['go']['main']['App']['ExportKanbanReport']();
 }
 
+export function FinishClaimSession(arg1) {
+  return window['go']['main']['App']['FinishClaimSession'](arg1);
+}
+
+export function ForceAdjudicateClaims(arg1) {
+  return window['go']['main']['App']['ForceAdjudicateClaims'](arg1);
+}
+
 export function GenerateCommitMessage() {
   return window['go']['main']['App']['GenerateCommitMessage']();
 }
@@ -116,6 +128,10 @@ export function GetAutoApproveAll() {
 
 export function GetBudgetStatus() {
   return window['go']['main']['App']['GetBudgetStatus']();
+}
+
+export function GetClaimSession(arg1) {
+  return window['go']['main']['App']['GetClaimSession'](arg1);
 }
 
 export function GetGCPOAuthCredentials() {
@@ -204,6 +220,10 @@ export function ListRoles() {
 
 export function OpenAgentChromeWindow(arg1) {
   return window['go']['main']['App']['OpenAgentChromeWindow'](arg1);
+}
+
+export function OpenClaimSession(arg1, arg2) {
+  return window['go']['main']['App']['OpenClaimSession'](arg1, arg2);
 }
 
 export function OpenGoogleOAuthLogin(arg1) {
@@ -350,12 +370,20 @@ export function ShouldShowOnboarding() {
   return window['go']['main']['App']['ShouldShowOnboarding']();
 }
 
+export function StartClaimsHost(arg1) {
+  return window['go']['main']['App']['StartClaimsHost'](arg1);
+}
+
 export function StartOrchestrator() {
   return window['go']['main']['App']['StartOrchestrator']();
 }
 
 export function StopBrowserTask() {
   return window['go']['main']['App']['StopBrowserTask']();
+}
+
+export function StopClaimsHost() {
+  return window['go']['main']['App']['StopClaimsHost']();
 }
 
 export function StopOrchestrator() {
