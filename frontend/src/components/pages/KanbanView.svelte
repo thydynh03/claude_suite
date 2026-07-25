@@ -70,15 +70,24 @@
 
   async function handleAddTask() {
     if (!newTaskTitle.trim()) return;
+    const title = newTaskTitle;
+    const desc = newTaskDescription || newTaskTitle;
+    const priority = newTaskPriority;
+    const assignedTo = newTaskAssignedTo;
+
+    newTaskTitle = '';
+    newTaskDescription = '';
+    showAddModal = false;
+
     try {
       await AppBindings.CreateTask({
         task_id: '',
-        title: newTaskTitle,
-        description: newTaskDescription,
-        prompt: newTaskTitle,
-        priority: newTaskPriority,
+        title: title,
+        description: desc,
+        prompt: desc,
+        priority: priority,
         status: 'backlog',
-        assigned_to: newTaskAssignedTo,
+        assigned_to: assignedTo,
         depends_on: [],
         retry_count: 0,
         max_retries: 3,
@@ -86,11 +95,8 @@
         session_id: '',
         parent_id: '',
       });
-      newTaskTitle = '';
-      newTaskDescription = '';
-      showAddModal = false;
-      addLog(`Đã tạo Task mới: ${newTaskTitle}`, 'SUCCESS');
-      if (onRefresh) onRefresh();
+      addLog(`Đã tạo Task mới: ${title}`, 'SUCCESS');
+      if (onRefresh) await onRefresh();
     } catch (e) {
       console.error('CreateTask error:', e);
     }

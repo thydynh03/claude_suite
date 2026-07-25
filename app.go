@@ -201,6 +201,10 @@ func (a *App) emitBoardUpdated() {
 	}
 }
 
+func (a *App) GetTasks() ([]models.Task, error) {
+	return a.taskRepo.GetAll()
+}
+
 func (a *App) CreateTask(task models.Task) error {
 	err := a.taskRepo.Create(&task)
 	if err == nil {

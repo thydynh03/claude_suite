@@ -126,6 +126,10 @@ export function GetSystemMetrics() {
   return window['go']['main']['App']['GetSystemMetrics']();
 }
 
+export function GetTasks() {
+  return window['go']['main']['App']['GetTasks']();
+}
+
 export function GetWorkspaceConfig() {
   return window['go']['main']['App']['GetWorkspaceConfig']();
 }
