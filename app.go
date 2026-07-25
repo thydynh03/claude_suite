@@ -208,9 +208,16 @@ func (a *App) ReadFileContent(relPath string) (string, error) {
 }
 
 func (a *App) SaveFileContent(relPath string, content string) error {
+	workspace := a.workspaceConfig.LastWorkspaceFolder
 	fullPath := relPath
-	if !filepath.IsAbs(relPath) && a.workspaceConfig.LastWorkspaceFolder != "" {
-		fullPath = filepath.Join(a.workspaceConfig.LastWorkspaceFolder, relPath)
+	if !filepath.IsAbs(relPath) && workspace != "" {
+		fullPath = filepath.Join(workspace, relPath)
+	}
+	// Writing needs this more than reading did. ReadFileContent has been
+	// containment-checked for a while; this one was not, so a symlink inside the
+	// workspace was enough to overwrite any file the user could write to.
+	if err := services.EnsureWithinWorkspace(workspace, fullPath); err != nil {
+		return err
 	}
 	return os.WriteFile(fullPath, []byte(content), 0644)
 }
@@ -1303,11 +1310,11 @@ func (a *App) ClaimsHostStatus() map[string]interface{} {
 	if err != nil {
 		warning = err.Error()
 	} else if len(checks) == 0 {
-		// Worth saying plainly: with no catalogue every claim becomes an opinion
-		// and nothing can ever block, which looks like the feature is broken.
-		// The catalogue is read from the workspace under review, not from this
-		// repository, so an empty one usually means the wrong folder is selected.
-		warning = "Workspace này chưa có .claude-suite/checks.json — mọi claim sẽ thành ý kiến và không có gì chặn được merge."
+		// Worth saying plainly: with no checks every claim becomes an opinion and
+		// nothing can ever block, which looks like the feature is broken. Checks
+		// are discovered from the workspace under review, not from this
+		// repository, so an empty list usually means the wrong folder is selected.
+		warning = "Không tìm thấy check nào trong workspace này (không có go.mod, cũng không có package.json với script test/lint/check/build). Mọi claim sẽ thành ý kiến và không có gì chặn được merge."
 	}
 	return map[string]interface{}{
 		"running":  a.claimsHost.IsRunning(),
@@ -1378,7 +1385,20 @@ func (a *App) GetClaimSession(sessionID string) map[string]interface{} {
 		"claims":   session.VisibleTo(""),
 		"warnings": session.Warnings(),
 		"round":    session.DebateRound(),
+		"maxRound": claims.MaxDebateRounds,
+		"opinions": session.OpenOpinions(),
+		"remarks":  session.Remarks(),
 	}
+}
+
+// OpenClaimDebate opens a discussion round for the claims no check could settle.
+//
+// Deliberately a separate, explicit step rather than something the session slides
+// into. Discussion is the weakest part of this protocol — agents drift toward
+// whichever side sounds most certain — so it happens only when someone asks for
+// it, only for opinions, and only twice.
+func (a *App) OpenClaimDebate(sessionID string) error {
+	return a.claimsHost.OpenDebateRound(sessionID)
 }
 
 // ForceAdjudicateClaims ends a collect window waiting on an agent that will not

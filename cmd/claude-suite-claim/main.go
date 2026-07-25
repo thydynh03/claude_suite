@@ -3,8 +3,8 @@
 //
 // It exists because agents cannot speak websockets but can all run a shell
 // command, and because a conclusion that arrives without a way to check it is
-// not worth much. Every claim either names a check from the repository's
-// catalogue or is recorded as an opinion that cannot block anything.
+// not worth much. A claim names a check or is recorded as an opinion that cannot
+// block anything — it never supplies a command of its own.
 package main
 
 import (
@@ -63,17 +63,21 @@ func main() {
 }
 
 func listChecks(workspace string) {
-	cat, err := claims.LoadCatalogue(workspace)
+	cat, err := claims.CatalogueFor(workspace)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
 		os.Exit(1)
 	}
 	if len(cat.Checks) == 0 {
-		fmt.Printf("No checks in %s.\nWithout it every claim is an opinion and nothing can block.\n",
-			claims.CatalogueFile)
+		fmt.Printf("Nothing to check against in %s.\n\n"+
+			"Checks come from the project's own tooling: a go.mod, or a package.json\n"+
+			"with a test, lint, check or build script. %s can add more.\n"+
+			"With none, every claim is an opinion and nothing can block.\n",
+			workspace, claims.CatalogueFile)
 		return
 	}
-	fmt.Printf("Checks a claim may name (from %s).\n", claims.CatalogueFile)
+	fmt.Println("Checks a claim may name. Most are discovered from the project's own")
+	fmt.Printf("tooling; %s can add or override entries.\n", claims.CatalogueFile)
 	fmt.Println("A falsifier PASSES when the claim is wrong, so a failing check confirms the defect.")
 	fmt.Println()
 	for _, check := range cat.Checks {

@@ -270,3 +270,58 @@ func mustAdvance(t *testing.T, s *Session, to Phase) {
 		t.Fatalf("advance to %s: %v", to, err)
 	}
 }
+
+// The operator opens a debate round explicitly, and only where there is
+// something a check could not settle.
+func TestOpenDebateNeedsAnUnsettledOpinion(t *testing.T) {
+	s := newSessionWith(t, map[string]string{"an": "claude", "binh": "claude"})
+	submit(t, s, "c1", "an", "/k hangs cmd.Wait()", "cli-visible-console")
+
+	mustAdvance(t, s, PhaseAdjudicate)
+	if err := s.Settle("c1", VerdictConfirmed, "exit 1", 1); err != nil {
+		t.Fatal(err)
+	}
+	mustAdvance(t, s, PhaseReveal)
+
+	// Every claim was settled by evidence; there is nothing to argue about.
+	if err := s.Advance(PhaseDebate); err == nil {
+		t.Fatal("a debate round opened with no opinions to discuss")
+	}
+	if got := s.OpenOpinions(); len(got) != 0 {
+		t.Fatalf("OpenOpinions returned %d claims, want none", len(got))
+	}
+}
+
+func TestRemarksAreReadableAndKeepLosingPositions(t *testing.T) {
+	s := newSessionWith(t, map[string]string{"an": "claude", "binh": "claude"})
+	submit(t, s, "c1", "an", "this file should be split up", "")
+
+	mustAdvance(t, s, PhaseAdjudicate)
+	mustAdvance(t, s, PhaseReveal)
+
+	if got := s.OpenOpinions(); len(got) != 1 {
+		t.Fatalf("OpenOpinions returned %d, want the one opinion", len(got))
+	}
+
+	mustAdvance(t, s, PhaseDebate)
+	if err := s.Remark("binh", "c1", "splitting it would make blame useless"); err != nil {
+		t.Fatal(err)
+	}
+	mustAdvance(t, s, PhaseDebate)
+	if err := s.Remark("an", "c1", "the file is 3000 lines"); err != nil {
+		t.Fatal(err)
+	}
+
+	got := s.Remarks()
+	if len(got) != 2 {
+		t.Fatalf("Remarks returned %d, want both turns", len(got))
+	}
+	if got[0].Round != 1 || got[1].Round != 2 {
+		t.Fatalf("rounds recorded as %d and %d", got[0].Round, got[1].Round)
+	}
+	// Both sides survive: nothing is pruned for losing.
+	joined := got[0].Text + " " + got[1].Text
+	if !strings.Contains(joined, "blame useless") || !strings.Contains(joined, "3000 lines") {
+		t.Fatalf("a position was dropped: %q", joined)
+	}
+}

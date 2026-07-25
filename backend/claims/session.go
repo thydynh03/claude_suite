@@ -329,6 +329,30 @@ func (s *Session) Remark(author, claimID, text string) error {
 	return fmt.Errorf("no claim %s in session %s", claimID, s.ID)
 }
 
+// Remarks returns the discussion so far, including positions that lost. Nothing
+// is pruned: a minority view that turns out right months later is only
+// recoverable if it was kept.
+func (s *Session) Remarks() []Remark {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Remark(nil), s.remarks...)
+}
+
+// OpenOpinions lists the claims that can still be discussed — the ones no check
+// could settle.
+func (s *Session) OpenOpinions() []*Claim {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*Claim
+	for _, c := range s.claims {
+		if c.Kind == KindOpinion {
+			snapshot := *c
+			out = append(out, &snapshot)
+		}
+	}
+	return out
+}
+
 // DebateRound is how many rounds of discussion have opened.
 func (s *Session) DebateRound() int {
 	s.mu.Lock()

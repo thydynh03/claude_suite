@@ -116,6 +116,8 @@ export function ListRoles():Promise<Array<string>>;
 
 export function OpenAgentChromeWindow(arg1:string):Promise<Record<string, any>>;
 
+export function OpenClaimDebate(arg1:string):Promise<void>;
+
 export function OpenClaimSession(arg1:string,arg2:number):Promise<Record<string, any>>;
 
 export function OpenGoogleOAuthLogin(arg1:string):Promise<string>;

@@ -419,6 +419,27 @@ func (h *Host) adjudicate(hs *hosted) {
 	h.broadcastState(hs)
 }
 
+// OpenDebateRound moves a revealed session into discussion.
+//
+// Only opinions can be discussed. Everything the checks settled stays settled,
+// and the host refuses a round past the cap rather than trusting the agents to
+// stop — past a couple of exchanges, further rounds mostly measure who repeats
+// themselves most confidently.
+func (h *Host) OpenDebateRound(sessionID string) error {
+	h.mu.Lock()
+	hs, ok := h.sessions[sessionID]
+	h.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("no session %s", sessionID)
+	}
+	if err := hs.session.Advance(PhaseDebate); err != nil {
+		return err
+	}
+	h.emit(sessionID, fmt.Sprintf("debate round %d open", hs.session.DebateRound()))
+	h.broadcastState(hs)
+	return nil
+}
+
 // Finish closes a session and sends the outcome to everyone still connected.
 func (h *Host) Finish(sessionID string) (*Outcome, error) {
 	h.mu.Lock()

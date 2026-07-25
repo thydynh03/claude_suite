@@ -27,10 +27,16 @@
   let subject = '';
   let joinCommand = '';
 
+  interface Remark { round: number; author: string; claim_id: string; text: string; }
+
   let phase = '';
   let claims: Claim[] = [];
   let warnings: string[] = [];
   let events: string[] = [];
+  let opinions: Claim[] = [];
+  let remarks: Remark[] = [];
+  let round = 0;
+  let maxRound = 2;
 
   let poll: ReturnType<typeof setInterval> | undefined;
 
@@ -56,6 +62,10 @@
       phase = s.phase || '';
       claims = s.claims || [];
       warnings = s.warnings || [];
+      opinions = s.opinions || [];
+      remarks = s.remarks || [];
+      round = s.round || 0;
+      maxRound = s.maxRound || 2;
     } catch (e: any) {
       console.warn('GetClaimSession:', e);
     }
@@ -133,6 +143,23 @@
     } finally {
       busy = false;
     }
+  }
+
+  async function openDebate() {
+    if (!selected) return;
+    busy = true;
+    try {
+      await (AppBindings as any).OpenClaimDebate(selected);
+      await refreshSession();
+    } catch (e: any) {
+      addLog(`Không mở được vòng thảo luận: ${e?.message || e}`, 'ERROR');
+    } finally {
+      busy = false;
+    }
+  }
+
+  function remarksFor(claimId: string) {
+    return remarks.filter((r) => r.claim_id === claimId);
   }
 
   function copyJoin() {
@@ -280,6 +307,12 @@
               Chạy kiểm chứng ngay
             </button>
           {/if}
+          {#if (phase === 'reveal' || phase === 'debate') && opinions.length > 0 && round < maxRound}
+            <button type="button" on:click={openDebate} disabled={busy}
+              class="border border-outline-variant text-on-surface px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:bg-surface-container-high disabled:opacity-50 cursor-pointer">
+              Mở vòng thảo luận {round + 1}/{maxRound}
+            </button>
+          {/if}
           {#if phase && phase !== 'record'}
             <button type="button" on:click={finishSession} disabled={busy}
               class="bg-primary text-on-primary px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer">
@@ -293,6 +326,20 @@
         <p class="text-[11px] text-on-surface-variant">
           Đang thu thập <b>mù</b>: agent chưa thấy claim của nhau. Chỉ sau khi chạy xong check
           chúng mới được đối chiếu — đảo thứ tự này là biến review thành cuộc thi ai tự tin hơn.
+        </p>
+      {:else if phase === 'reveal' && opinions.length > 0}
+        <p class="text-[11px] text-on-surface-variant">
+          Check đã chạy xong. Còn <b>{opinions.length} ý kiến</b> không có gì kiểm chứng được —
+          chỉ những cái đó mới đưa ra thảo luận, và tối đa {maxRound} vòng.
+        </p>
+      {:else if phase === 'debate'}
+        <p class="text-[11px] text-on-surface-variant">
+          Vòng <b>{round}/{maxRound}</b>. Chỉ ý kiến mới thảo luận được; những gì check đã
+          kết luận thì không mở lại bằng lời. Ý kiến thiểu số vẫn được ghi lại nguyên vẹn.
+        </p>
+      {:else if phase === 'reveal'}
+        <p class="text-[11px] text-on-surface-variant">
+          Check đã chạy xong và mọi claim đều có kết luận — không còn gì để thảo luận.
         </p>
       {/if}
 
@@ -331,6 +378,18 @@
 
           {#if c.evidence}
             <pre class="bg-slate-950 text-emerald-400 rounded-lg p-2 text-[10px] font-mono max-h-32 overflow-y-auto whitespace-pre-wrap break-all">{c.evidence}</pre>
+          {/if}
+
+          {#if remarksFor(c.id).length}
+            <div class="border-l-2 border-outline-variant pl-2.5 space-y-1">
+              {#each remarksFor(c.id) as r}
+                <div class="text-[10px] text-on-surface-variant">
+                  <span class="font-semibold text-on-surface">{r.author}</span>
+                  <span class="opacity-60">vòng {r.round}</span>
+                  <div class="whitespace-pre-wrap">{r.text}</div>
+                </div>
+              {/each}
+            </div>
           {/if}
         </div>
       {:else}

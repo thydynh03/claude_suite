@@ -77,3 +77,49 @@ func TestEnsureWithinWorkspaceSkipsWhenNoWorkspace(t *testing.T) {
 		}
 	}
 }
+
+// Writing has to work for a file that does not exist yet, which is every new
+// file. EvalSymlinks fails outright on a missing path, so the guard resolves the
+// nearest existing ancestor instead.
+func TestEnsureWithinWorkspaceAllowsNewFiles(t *testing.T) {
+	root := t.TempDir()
+
+	newFile := filepath.Join(root, "does-not-exist-yet.txt")
+	if err := EnsureWithinWorkspace(root, newFile); err != nil {
+		t.Errorf("a new file directly in the workspace was rejected: %v", err)
+	}
+
+	nested := filepath.Join(root, "sub", "deeper", "new.txt")
+	if err := EnsureWithinWorkspace(root, nested); err != nil {
+		t.Errorf("a new file in a new subdirectory was rejected: %v", err)
+	}
+}
+
+func TestEnsureWithinWorkspaceRejectsNewFileOutside(t *testing.T) {
+	root := t.TempDir()
+	elsewhere := filepath.Join(t.TempDir(), "new.txt")
+
+	if err := EnsureWithinWorkspace(root, elsewhere); err == nil {
+		t.Fatal("a new file outside the workspace was accepted")
+	}
+}
+
+// The dangerous case for writing: the file does not exist, but the directory it
+// would land in is a symlink pointing somewhere else entirely.
+func TestEnsureWithinWorkspaceRejectsNewFileUnderSymlinkedDir(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+
+	link := filepath.Join(root, "innocent-dir")
+	if err := os.Symlink(outside, link); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("cannot create symlinks on this machine: %v", err)
+		}
+		t.Fatal(err)
+	}
+
+	target := filepath.Join(link, "payload.txt")
+	if err := EnsureWithinWorkspace(root, target); err == nil {
+		t.Fatal("a new file under a symlinked directory escaped the workspace")
+	}
+}

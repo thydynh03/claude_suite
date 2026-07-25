@@ -54,7 +54,7 @@ func (s *ClaimsHostService) Start(port int, workspace string) error {
 		port = 9111
 	}
 
-	catalogue, err := claims.LoadCatalogue(workspace)
+	catalogue, err := claims.CatalogueFor(workspace)
 	if err != nil {
 		return fmt.Errorf("load check catalogue: %w", err)
 	}
@@ -113,7 +113,7 @@ func (s *ClaimsHostService) Addr() string {
 
 // CatalogueNames lists the checks a claim may point at.
 func (s *ClaimsHostService) CatalogueNames(workspace string) ([]string, error) {
-	catalogue, err := claims.LoadCatalogue(workspace)
+	catalogue, err := claims.CatalogueFor(workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +169,18 @@ func (s *ClaimsHostService) ForceAdjudicate(sessionID string) error {
 		return fmt.Errorf("the claims host is not running")
 	}
 	return host.ForceAdjudicate(sessionID)
+}
+
+// OpenDebateRound moves a revealed session into discussion. Only opinions are
+// discussable; everything the checks settled stays settled.
+func (s *ClaimsHostService) OpenDebateRound(sessionID string) error {
+	s.mu.Lock()
+	host := s.host
+	s.mu.Unlock()
+	if host == nil {
+		return fmt.Errorf("the claims host is not running")
+	}
+	return host.OpenDebateRound(sessionID)
 }
 
 // Finish closes a session and returns its outcome.

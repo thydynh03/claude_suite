@@ -222,6 +222,10 @@ export function OpenAgentChromeWindow(arg1) {
   return window['go']['main']['App']['OpenAgentChromeWindow'](arg1);
 }
 
+export function OpenClaimDebate(arg1) {
+  return window['go']['main']['App']['OpenClaimDebate'](arg1);
+}
+
 export function OpenClaimSession(arg1, arg2) {
   return window['go']['main']['App']['OpenClaimSession'](arg1, arg2);
 }
