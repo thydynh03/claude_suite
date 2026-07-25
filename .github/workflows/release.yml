@@ -38,11 +38,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # Scoped like ci.yml, and for the same reason: the repo root embeds
+      # frontend/dist, which does not exist until the frontend is built. This job
+      # never builds it, so ./... cannot compile here.
       - name: Go Vet
-        run: go vet ./...
+        run: go vet ./backend/... ./cmd/...
 
       - name: Go Test
-        run: go test ./... -count=1
+        run: go test ./backend/... ./cmd/... -count=1
 
       - name: Go Test (race, TUI)
         run: go test -race ./backend/tui ./cmd/claude-suite-tui
@@ -96,10 +99,6 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
-      # -nsis produces an installer alongside the bare binary. Without it the
-      # release is a loose .exe: nothing puts it in Program Files, nothing adds a
-      # Start menu entry, and nothing registers an uninstaller, so it never looks
-      # like an installed application. NSIS ships on the windows-latest image.
       # The tag is the single source of truth for the version. Without this the
       # binary reports whatever the default in version.go happens to be, which is
       # why every release kept calling itself v2.8.0.
@@ -111,6 +110,10 @@ jobs:
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Building version $tag"
 
+      # -nsis produces an installer alongside the bare binary. Without it the
+      # release is a loose .exe: nothing puts it in Program Files, nothing adds a
+      # Start menu entry, and nothing registers an uninstaller, so it never looks
+      # like an installed application. NSIS ships on the windows-latest image.
       - name: Build Production Wails App + Installer
         run: |
           wails build -platform windows/amd64 -clean -nsis -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"

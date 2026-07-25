@@ -11,7 +11,10 @@ import (
 
 // devVersion is what an untagged local build reports. Seeing it in the UI means
 // the binary was not built by the release workflow.
-const devVersion = "dev"
+//
+// It keeps the leading "v" every tag has: TestVersionString asserts that shape,
+// and a version that does not look like a version is its own kind of confusing.
+const devVersion = "v0.0.0-dev"
 
 // BuildVersion is injected at release time with
 // -ldflags "-X claude_suite/backend/version.BuildVersion=$TAG".
