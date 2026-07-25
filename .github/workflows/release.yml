@@ -99,6 +99,20 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
+      # NSIS is not on the windows-latest image. Wails only warns when makensis
+      # is missing — "Cannot create installer: makensis not found" — and still
+      # exits 0, so without this the job goes green and publishes the bare
+      # executable exactly as before.
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Confirm makensis is on PATH
+        shell: pwsh
+        run: makensis /VERSION
+
       # The tag is the single source of truth for the version. Without this the
       # binary reports whatever the default in version.go happens to be, which is
       # why every release kept calling itself v2.8.0.
