@@ -15,6 +15,13 @@ export const agentsStore = writable<any[]>([]);
 // Per-task streaming logs keyed by task_id (fed by the backend "task_log" event).
 export const taskLogsStore = writable<Record<string, LogEntry[]>>({});
 
+// Per-task E2E screenshot (data URL) keyed by task_id.
+export const taskScreenshotsStore = writable<Record<string, string>>({});
+export function setTaskScreenshot(taskId: string, dataUrl: string) {
+  if (!taskId || !dataUrl) return;
+  taskScreenshotsStore.update((m) => ({ ...m, [taskId]: dataUrl }));
+}
+
 export function addLog(msg: string, level = 'INFO', time = '') {
   const t = time || new Date().toLocaleTimeString('en-US', { hour12: false });
   logs.update((l) => [...l.slice(-1000), { message: msg, level, time: t }]);

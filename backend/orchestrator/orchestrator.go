@@ -28,9 +28,11 @@ type Orchestrator struct {
 	contextMgr   *services.ContextManager
 	gitService   *services.GitService
 	browserSvc   *services.BrowserAgentService
+	verifySvc    *services.VerifyService
 	dispatcher   *AgentDispatcher
 	fallback     *FallbackHandler
 	workspaceDir string
+	verifyBuild  bool
 
 	running        bool
 	autoApproveAll bool
@@ -63,6 +65,8 @@ func NewOrchestrator(
 		contextMgr:     ctxMgr,
 		gitService:     gitSvc,
 		browserSvc:     browserSvc,
+		verifySvc:      services.NewVerifyService(),
+		verifyBuild:    true,
 		dispatcher:     NewAgentDispatcher(),
 		fallback:       NewFallbackHandler(),
 		approvalChans:  make(map[string]chan bool),
@@ -95,6 +99,19 @@ func (o *Orchestrator) GetMaxConcurrency() int {
 	o.runMu.Lock()
 	defer o.runMu.Unlock()
 	return o.maxConcurrency
+}
+
+func (o *Orchestrator) SetVerifyBuild(enabled bool) {
+	o.mu.Lock()
+	o.verifyBuild = enabled
+	o.mu.Unlock()
+	o.emitLog(fmt.Sprintf("🔧 Build verify trước khi Done: %v", enabled), "INFO")
+}
+
+func (o *Orchestrator) GetVerifyBuild() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.verifyBuild
 }
 
 func (o *Orchestrator) Start() {
@@ -304,6 +321,9 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		onLog(fmt.Sprintf("🌐 Chrome CDP E2E Skill: đang mở & kiểm thử %s (%d assertion)...", testUrl, len(expects)), "INFO")
 		bRes, bErr := o.browserSvc.RunE2ETest(testUrl, expects, true)
 		if bErr == nil && bRes != nil && bRes.Success {
+			if bRes.ScreenshotBase64 != "" {
+				o.emitTaskScreenshot(task.TaskID, bRes.ScreenshotBase64)
+			}
 			_ = o.taskRepo.AssignTask(task.TaskID, "Web E2E Tester (Chrome CDP)")
 			for _, a := range bRes.Assertions {
 				onLog("   "+a, "INFO")
@@ -446,6 +466,21 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		}
 	}
 
+	// Build verification: an agent's task is only "done" if the workspace still
+	// builds. A failed build is turned into a task failure so the retry loop makes
+	// the agent fix it.
+	if result.Success && o.GetVerifyBuild() && o.workspaceDir != "" {
+		onLog("🔧 Đang verify build workspace (go build / npm build)...", "SEND")
+		vr := o.verifySvc.Verify(o.workspaceDir)
+		if vr.Ran && !vr.Passed {
+			result.Success = false
+			result.Error = "Build verification FAILED:\n" + vr.Report
+			onLog("❌ Build verify FAILED — trả task về để agent sửa.", "ERROR")
+		} else if vr.Ran {
+			onLog("✅ Build verify passed.", "SUCCESS")
+		}
+	}
+
 	if result.Success {
 		_ = o.taskRepo.UpdateStatus(task.TaskID, "done", result.Output, result.SessionID)
 		agent.Status = "idle"
@@ -557,6 +592,17 @@ func extractExpectedTexts(s string) []string {
 		}
 	}
 	return out
+}
+
+// emitTaskScreenshot sends a base64 screenshot (data URL) for a task so the Task
+// Inspector can display the E2E capture.
+func (o *Orchestrator) emitTaskScreenshot(taskID, dataURL string) {
+	if o.ctx != nil {
+		runtime.EventsEmit(o.ctx, "task_screenshot", map[string]string{
+			"task_id": taskID,
+			"data":    dataURL,
+		})
+	}
 }
 
 func (o *Orchestrator) emitBoard() {

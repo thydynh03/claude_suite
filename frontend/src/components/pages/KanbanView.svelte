@@ -3,7 +3,7 @@
   import type { Task } from '../../lib/types';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { tick } from 'svelte';
-  import { addLog, tasksStore, agentsStore, taskLogsStore, clearTaskLog } from '../../lib/stores/appState';
+  import { addLog, tasksStore, agentsStore, taskLogsStore, taskScreenshotsStore, clearTaskLog } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
   export let tasks: Task[] = [];
@@ -19,6 +19,9 @@
         if ((AppBindings as any).GetMaxConcurrency) {
           const n = await (AppBindings as any).GetMaxConcurrency();
           if (typeof n === 'number' && n > 0) maxConcurrency = n;
+        }
+        if ((AppBindings as any).GetVerifyBuild) {
+          verifyBuild = await (AppBindings as any).GetVerifyBuild();
         }
       } catch (e) {}
     })();
@@ -57,6 +60,12 @@
   async function updateConcurrency(n: number) {
     maxConcurrency = n;
     try { await (AppBindings as any).SetMaxConcurrency(n); addLog(`Số agent song song tối đa: ${n}`, 'INFO'); } catch (e) { console.error(e); }
+  }
+
+  let verifyBuild = true;
+  async function toggleVerify() {
+    verifyBuild = !verifyBuild;
+    try { await (AppBindings as any).SetVerifyBuild(verifyBuild); addLog(`Verify build trước khi Done: ${verifyBuild ? 'BẬT' : 'TẮT'}`, 'INFO'); } catch (e) {}
   }
 
   // Git diff viewer — shows what the agent changed in the workspace.
@@ -327,6 +336,14 @@
           {/each}
         </select>
       </div>
+      <!-- Verify build before Done -->
+      <button type="button" on:click={toggleVerify}
+        title="Agent tự chạy go build / npm build để verify trước khi báo Done"
+        class="flex items-center gap-1.5 border rounded-xl px-2.5 py-1.5 text-[10px] font-bold uppercase transition-all cursor-pointer
+        {verifyBuild ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-surface-container-low text-on-surface-variant border-outline-variant'}">
+        <span class="material-symbols-outlined text-sm">{verifyBuild ? 'verified' : 'block'}</span>
+        Verify build
+      </button>
       {#if selectedTaskIDs.length > 0}
         <button type="button" on:click|preventDefault={handleDeleteSelected} class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 animate-pulse cursor-pointer">
           <span class="material-symbols-outlined text-sm">delete</span> Xóa đã chọn ({selectedTaskIDs.length})
@@ -626,6 +643,19 @@
         <div class="bg-surface-container-lowest p-3 rounded-xl border border-emerald-500/30 font-mono text-on-surface max-h-52 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed">
           {detailTask.result}
         </div>
+      </div>
+      {/if}
+
+      <!-- E2E screenshot capture -->
+      {#if detailTaskId && $taskScreenshotsStore[detailTaskId]}
+      <div class="space-y-1">
+        <span class="font-bold text-on-surface flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm text-secondary">photo_camera</span> Ảnh chụp E2E (Chrome CDP):
+        </span>
+        <a href={$taskScreenshotsStore[detailTaskId]} target="_blank" rel="noreferrer" class="block">
+          <img src={$taskScreenshotsStore[detailTaskId]} alt="E2E screenshot"
+            class="w-full rounded-xl border border-outline-variant max-h-72 object-contain object-top bg-black/40 hover:opacity-90 transition-opacity" />
+        </a>
       </div>
       {/if}
 

@@ -126,6 +126,14 @@ export function GetMaxConcurrency() {
   return window['go']['main']['App']['GetMaxConcurrency']();
 }
 
+export function SetVerifyBuild(arg1) {
+  return window['go']['main']['App']['SetVerifyBuild'](arg1);
+}
+
+export function GetVerifyBuild() {
+  return window['go']['main']['App']['GetVerifyBuild']();
+}
+
 export function GetPipelineSteps() {
   return window['go']['main']['App']['GetPipelineSteps']();
 }

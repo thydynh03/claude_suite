@@ -67,6 +67,10 @@ export function GenerateCommitMessage():Promise<string>;
 
 export function GetMaxConcurrency():Promise<number>;
 
+export function SetVerifyBuild(arg1:boolean):Promise<boolean>;
+
+export function GetVerifyBuild():Promise<boolean>;
+
 export function SetTaskTimeoutMinutes(arg1:number):Promise<number>;
 
 export function GetTaskTimeoutMinutes():Promise<number>;

@@ -15,7 +15,7 @@
 
   import ToastHost from './components/ui/ToastHost.svelte';
   import CommandPalette from './components/ui/CommandPalette.svelte';
-  import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
+  import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, setTaskScreenshot, sidebarCollapsed, tasksStore, agentsStore } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -77,6 +77,11 @@
       EventsOn('task_log', (data: any) => {
         if (data && data.task_id) {
           addTaskLog(data.task_id, data.message || '', data.level || 'INFO', data.time || '');
+        }
+      });
+      EventsOn('task_screenshot', (data: any) => {
+        if (data && data.task_id && data.data) {
+          setTaskScreenshot(data.task_id, data.data);
         }
       });
       EventsOn('ask_approval', (data: any) => {

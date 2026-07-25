@@ -304,6 +304,15 @@ func (a *App) GetMaxConcurrency() int {
 	return a.orchestrator.GetMaxConcurrency()
 }
 
+func (a *App) SetVerifyBuild(enabled bool) bool {
+	a.orchestrator.SetVerifyBuild(enabled)
+	return enabled
+}
+
+func (a *App) GetVerifyBuild() bool {
+	return a.orchestrator.GetVerifyBuild()
+}
+
 func (a *App) SetTaskTimeoutMinutes(minutes int) int {
 	cli.SetTaskTimeout(time.Duration(minutes) * time.Minute)
 	return int(cli.TaskTimeout() / time.Minute)
