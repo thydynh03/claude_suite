@@ -31,6 +31,12 @@
   let updateStatusMessage = '';
   let updateStatusType: 'info' | 'success' | 'error' = 'info';
 
+  // Daily spending cap: the app can spend money unattended, so the ceiling and
+  // what has gone against it belong where the user can see them.
+  let budget: { day: string; spent_usd: number; limit_usd: number } | null = null;
+  let budgetLimit = 0;
+  let isSavingBudget = false;
+
   let showCLIConsole = false;
   let antiAccountKeys: any[] = [];
   let newKeyName = '';
@@ -39,6 +45,7 @@
   async function initSettings() {
     await loadAgents();
     await loadAntiKeys();
+    await loadBudget();
     try {
       if ((AppBindings as any).GetIntegrationsConfig) {
         const cfg = await (AppBindings as any).GetIntegrationsConfig();
@@ -192,6 +199,26 @@
       addLog(`Đã xóa Agent ${agent.name}.`, 'WARN');
     } catch (e) {
       addLog(`Lỗi xóa agent: ${e}`, 'ERROR');
+    }
+  }
+
+  async function loadBudget() {
+    try {
+      budget = await (AppBindings as any).GetBudgetStatus();
+      if (budget) budgetLimit = budget.limit_usd;
+    } catch (e) {}
+  }
+
+  async function saveBudget() {
+    isSavingBudget = true;
+    try {
+      await (AppBindings as any).SetDailyBudgetUSD(Number(budgetLimit) || 0);
+      await loadBudget();
+      addLog(Number(budgetLimit) > 0 ? `Trần chi phí mỗi ngày: $${Number(budgetLimit).toFixed(2)}` : "Đã bỏ trần chi phí mỗi ngày.", "SUCCESS");
+    } catch (e) {
+      addLog(`Lỗi lưu trần chi phí: ${e}`, "ERROR");
+    } finally {
+      isSavingBudget = false;
     }
   }
 
@@ -615,6 +642,58 @@
       {/if}
     </div>
   {:else if subTab === 'integrations'}
+    <!-- Daily spending cap -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-4 max-w-2xl mx-auto shadow-sm mb-4">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary text-2xl">savings</span>
+        <h3 class="font-bold text-lg text-on-surface">Trần chi phí mỗi ngày</h3>
+      </div>
+      <p class="text-xs text-on-surface-variant">
+        Orchestrator tự thử lại task thất bại và lịch có thể khởi động nó lúc 2 giờ sáng. Đặt trần để một lỗi
+        chạy lặp thành hàng đợi tạm dừng, thay vì một hoá đơn. Task đang chạy vẫn được chạy nốt.
+      </p>
+
+      {#if budget}
+        <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-on-surface-variant">Đã dùng hôm nay</span>
+            <span class="font-mono font-bold text-on-surface">
+              ${budget.spent_usd.toFixed(2)}{#if budget.limit_usd > 0} / ${budget.limit_usd.toFixed(2)}{/if}
+            </span>
+          </div>
+          {#if budget.limit_usd > 0}
+            {@const pct = Math.min(100, (budget.spent_usd / budget.limit_usd) * 100)}
+            <div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-500 {pct >= 100 ? 'bg-rose-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}"
+                style="width: {pct}%"></div>
+            </div>
+            {#if pct >= 100}
+              <p class="text-[11px] font-bold text-rose-600">Đã chạm trần — không giao việc mới cho tới ngày mai.</p>
+            {/if}
+          {:else}
+            <p class="text-[11px] text-on-surface-variant">Chưa đặt trần — agent chạy không giới hạn chi phí.</p>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="flex items-end gap-2">
+        <div class="flex-1 space-y-1">
+          <label for="daily-budget" class="text-xs font-bold text-on-surface">Giới hạn (USD/ngày)</label>
+          <input id="daily-budget" type="number" min="0" step="0.5" bind:value={budgetLimit}
+            placeholder="0 = không giới hạn"
+            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-sm text-on-surface outline-none focus:border-primary" />
+        </div>
+        <button type="button" on:click={saveBudget} disabled={isSavingBudget}
+          class="bg-primary text-on-primary px-5 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer">
+          {isSavingBudget ? 'Đang lưu...' : 'Lưu'}
+        </button>
+      </div>
+      <p class="text-[11px] text-on-surface-variant">
+        Chỉ Claude CLI báo được chi phí thật (lấy từ usage event của chính nó). Lượt chạy không báo chi phí thì
+        tính bằng 0 — trần này canh phần đo được, không đoán.
+      </p>
+    </div>
+
     <!-- Integrations View -->
     <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-6 max-w-2xl mx-auto shadow-sm">
       <div class="flex items-center gap-2 mb-4">

@@ -875,17 +875,27 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 	}
 
 	if a.oauthListener != nil {
-		_ = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, token string) {
+		_ = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, accessToken, refreshToken string) {
+			if refreshToken != "" {
+				cli.GlobalAntiPool.AddRefreshAccount(email, refreshToken)
+				a.saveAntiKeys()
+			} else {
+				// Fallback if user didn't grant offline access or no refresh token was returned
+				cli.GlobalAntiPool.AddOAuthKey("Google ("+email+")", accessToken)
+			}
+			a.emitAgentsUpdated() // Update UI
+
 			if a.ctx != nil {
 				wailsRuntime.EventsEmit(a.ctx, "oauth_success", map[string]string{
 					"email": email,
-					"token": token,
+					"token": accessToken,
 				})
 			}
 		})
 	}
 
-	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email"
+	// Added access_type=offline and prompt=consent to ensure Google returns a refresh_token
+	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&access_type=offline&prompt=consent"
 	if a.ctx != nil {
 		wailsRuntime.BrowserOpenURL(a.ctx, authURL)
 	}

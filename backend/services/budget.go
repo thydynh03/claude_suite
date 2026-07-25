@@ -138,5 +138,5 @@ func (b *BudgetGuard) saveLocked() {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(b.storePath, data, 0o600)
+	_ = WriteFileAtomic(b.storePath, data, 0o600)
 }

@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-
-	"claude_suite/backend/cli"
 )
 
 type OAuthListenerService struct {
@@ -33,7 +31,7 @@ type UserInfoResponse struct {
 	Name  string `json:"name"`
 }
 
-func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string, onSuccess func(email, token string)) error {
+func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string, onSuccess func(email, accessToken, refreshToken string)) error {
 	s.mu.Lock()
 	if s.server != nil {
 		_ = s.server.Shutdown(context.Background())
@@ -58,12 +56,14 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 		})
 
 		var accessToken string
+		var refreshToken string
 		var userEmail string = "Account Google"
 
 		if err == nil && resp.StatusCode == http.StatusOK {
 			var tokResp TokenResponse
-			if err := json.NewDecoder(resp.Body).Decode(&tokResp); err == nil && tokResp.AccessToken != "" {
+			if err := json.NewDecoder(resp.Body).Decode(&tokResp); err == nil {
 				accessToken = tokResp.AccessToken
+				refreshToken = tokResp.RefreshToken
 			}
 			resp.Body.Close()
 		}
@@ -86,11 +86,11 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 			}
 		}
 
-		// Automatically save token into Key Pool
-		cli.GlobalAntiPool.AddOAuthKey("Google ("+userEmail+")", accessToken)
+		// We no longer add a temporary AccessToken to GlobalAntiPool here.
+		// We pass both to onSuccess, where the app will save the RefreshToken persistently.
 
 		if onSuccess != nil {
-			onSuccess(userEmail, accessToken)
+			onSuccess(userEmail, accessToken, refreshToken)
 		}
 
 		// Return clean HTML response to browser

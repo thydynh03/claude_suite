@@ -164,7 +164,7 @@ func (s *SchedulerService) saveLocked() {
 		s.logLocked(fmt.Sprintf("Không lưu được lịch: %v", err), "ERROR")
 		return
 	}
-	if err := os.WriteFile(s.storePath, data, 0o600); err != nil {
+	if err := WriteFileAtomic(s.storePath, data, 0o600); err != nil {
 		s.logLocked(fmt.Sprintf("Không lưu được lịch vào %s: %v", s.storePath, err), "ERROR")
 	}
 }
