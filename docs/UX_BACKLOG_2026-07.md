@@ -365,6 +365,44 @@ thích**: người đã cài bản cũ sẽ có hai thư mục và hai mục tro
 gỡ bản cũ trong `.onInit` của installer, hoặc chấp nhận và ghi rõ trong release note. Nên làm
 sớm, càng nhiều người cài thì càng khó đổi.
 
+### 9.1c 🐛 Lệnh join hiện tại **không dùng được cho người ở máy khác**
+
+`thydynh03` không cản trở việc mở phiên: người khác cài app lên máy họ thì thư mục cài trên
+*máy họ* cũng tên như vậy, và `claimToolCommand()` vẫn giải ra đúng đường dẫn thật. Xấu về mặt
+thương hiệu, nhưng không hỏng chức năng.
+
+Cái thật sự hỏng là hai chỗ khác, và cả hai đều lộ ra đúng lúc có người thứ hai ở **máy khác**:
+
+**Một — `localhost` là địa chỉ của chính máy người nhận.** `app.go:1365`:
+
+```go
+host := "ws://" + strings.Replace(addr, "[::]", "localhost", 1)
+```
+
+Listener bind mọi giao diện mạng (in ra `[::]`), nhưng chuỗi đưa cho người dùng lại là
+`ws://localhost:9111`. Đồng đội dán lệnh đó vào máy họ → `localhost` trỏ về **máy của chính
+họ**, nơi không có phiên nào → kết nối thất bại. Lệnh chỉ đúng khi agent thứ hai chạy trên
+cùng một máy (mở IDE khác), đúng như ghi chú trong code đã nói. Với đúng kịch bản người dùng
+đang hỏi thì nó sai.
+
+**Hai — đường dẫn công cụ trong lệnh là đường dẫn của máy chủ phiên, không phải máy người
+nhận.** `claimToolCommand()` chạy trên máy đang mở phiên, nên nó nhét vào chuỗi vị trí cài
+đặt *ở đây*. Người nhận có thể đã cài sang ổ D, hoặc dùng bản portable. Hiện tại nó hay chạy
+được chỉ vì hai bên tình cờ cùng thư mục mặc định — một sự may mắn, không phải thiết kế.
+
+Việc phải làm:
+
+- **Địa chỉ**: liệt kê IP LAN thật của máy (`net.Interfaces`) và cho chọn; mặc định hiện cả
+  hai dòng — *"cùng máy này"* dùng `localhost`, *"máy khác trong mạng"* dùng `ws://192.168.x.x:9111`.
+  Kèm cảnh báo tường lửa Windows sẽ hỏi cho phép ở lần đầu.
+- **Đường dẫn**: bỏ đường dẫn tuyệt đối ra khỏi lệnh chia sẻ, chỉ dùng `claude-suite-claim`
+  (bộ cài nên thêm thư mục app vào PATH — sửa `project.nsi`). Muốn giữ đường dẫn tuyệt đối
+  thì phải sinh **hai phiên bản lệnh**: một để chạy tại chỗ, một để gửi cho người khác.
+- **Kiểm tra được**: thêm `claude-suite-claim --ping --host ... --session ...` để đồng đội thử
+  kết nối trước, thay vì phát hiện sai lúc đang nộp claim.
+- Ngoài mạng LAN (khác nơi làm việc) thì cần tunnel — ghi rõ trong tài liệu là chưa hỗ trợ,
+  đừng để người dùng tưởng dán lệnh là xong.
+
 ### 9.2 ➕ Chat nhiều agent + trọng tài
 
 Hiện `ClaimsPage.svelte` chỉ có nộp claim và xem verdict. Cần dựng thêm:
@@ -451,6 +489,7 @@ Xếp theo **tác động chia cho công sức**, không theo thứ tự ngườ
 4. Checkbox pool + hành động hàng loạt (§1.6)
 5. Render markdown trang Docs, bỏ emoji hardcode (§12)
 6. `--author` tự lấy tên máy (§9.1) + báo rõ khi không tìm thấy công cụ claim (§9.1b)
+6c. **Lệnh join dùng được cho máy khác**: chọn IP LAN thay vì `localhost`, bỏ đường dẫn tuyệt đối của máy chủ phiên (§9.1c) — không có mục này thì tính năng phân xử chỉ chạy trong một máy
 
 **Đợt 2 — dữ liệu phải thật**
 6b. Đổi `companyName` khỏi tên tài khoản cá nhân, xử lý gỡ bản cũ (§9.1b)
