@@ -160,20 +160,34 @@ jobs:
 
       # Checking build/bin is not enough: NSIS `File` resolves relative paths from
       # makensis's working directory, and the first version of this silently
-      # produced an installer with none of the tools in it. 7-Zip reads an NSIS
-      # archive, so this asserts what the user will actually unpack.
-      - name: The installer really contains the companion tools
+      # produced an installer with none of the tools in it.
+      #
+      # This runs the installer instead of inspecting it. Reading the archive with
+      # `7z l` was the obvious check and it was tried first, but it reported the
+      # tools missing from an installer built without /nonfatal — which cannot
+      # skip a file — so the listing, not the packaging, was wrong. A silent
+      # install asserts the only thing that actually matters: what lands on a
+      # user's disk. The runner is a throwaway VM, so installing on it is free.
+      - name: The installer really delivers the companion tools
         shell: pwsh
         run: |
           $installer = (Get-ChildItem build/bin -Filter *installer*.exe | Select-Object -First 1).FullName
-          $listing = & 7z l $installer 2>$null | Out-String
+          $target = "$env:RUNNER_TEMP\install-check"
+          & $installer /S "/D=$target" | Out-Null
+          # /S returns before the files are written; NSIS detaches from the console.
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Get-Process makensis,ClaudeSuite-amd64-installer -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 2
+          }
+          Start-Sleep -Seconds 5
+          Get-ChildItem $target -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "installed: $($_.Name)" }
           foreach ($tool in 'claude-suite-claim.exe','claude-suite-tui.exe','ClaudeSuite.exe') {
-            if ($listing -notmatch [regex]::Escape($tool)) {
-              Write-Error "$tool is not inside the installer"
+            if (-not (Test-Path "$target\$tool")) {
+              Write-Error "$tool was not installed — the installer does not carry it"
               exit 1
             }
-            Write-Host "packaged: $tool"
           }
+          Write-Host "all three binaries installed to $target"
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
