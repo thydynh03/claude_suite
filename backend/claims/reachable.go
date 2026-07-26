@@ -37,15 +37,77 @@ func JoinTargets(addr string) []JoinTarget {
 		Scope: "local",
 	}}
 
+	// VPN addresses go before plain LAN ones: they are the only listed
+	// addresses a teammate in another city can actually reach.
+	var lan []JoinTarget
 	for _, ip := range lanAddresses() {
-		targets = append(targets, JoinTarget{
-			Host:  "ws://" + net.JoinHostPort(ip, port),
-			Label: "Người khác trong cùng mạng LAN",
-			Scope: "lan",
-		})
+		scope, label := classifyAddr(ip)
+		t := JoinTarget{Host: "ws://" + net.JoinHostPort(ip, port), Label: label, Scope: scope}
+		if scope == "vpn" {
+			targets = append(targets, t)
+		} else {
+			lan = append(lan, t)
+		}
+	}
+	return append(targets, lan...)
+}
+
+// classifyAddr separates addresses a remote teammate can use from ones only
+// the local network can. Tailscale hands every node an address in the CGNAT
+// range 100.64.0.0/10; labelling that "same LAN" told a teammate in another
+// city the address was useless to them, when it is precisely the one that
+// works from anywhere in the tailnet.
+func classifyAddr(ip string) (scope, label string) {
+	parsed := net.ParseIP(ip)
+	if parsed != nil {
+		if _, cgnat, _ := net.ParseCIDR("100.64.0.0/10"); cgnat != nil && cgnat.Contains(parsed) {
+			return "vpn", "Qua VPN (Tailscale) — người ở XA dùng được nếu cùng tailnet"
+		}
+	}
+	return "lan", "Người khác trong cùng mạng LAN"
+}
+
+// NormalizeJoinHost turns whatever a person pastes for a remote member — a
+// tunnel URL, a domain behind a reverse proxy, an ip:port from a port
+// forward — into the ws(s) host the join commands need. https becomes wss
+// (the CLI dials TLS; the MCP builder maps it back to https); a bare
+// host:port is a direct socket, a bare domain is assumed to sit on 443.
+func NormalizeJoinHost(raw string) (string, error) {
+	h := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if h == "" {
+		return "", fmt.Errorf("địa chỉ trống")
 	}
 
-	return targets
+	scheme := ""
+	rest := h
+	lower := strings.ToLower(h)
+	for _, s := range []struct{ in, out string }{
+		{"wss://", "wss://"}, {"ws://", "ws://"},
+		{"https://", "wss://"}, {"http://", "ws://"},
+	} {
+		if strings.HasPrefix(lower, s.in) {
+			scheme, rest = s.out, h[len(s.in):]
+			break
+		}
+	}
+
+	// Whatever the scheme, the commands need an origin: a pasted URL with a
+	// path (someone copying the MCP endpoint back in) would silently produce
+	// commands that dial the wrong place.
+	if strings.Contains(rest, "/") {
+		return "", fmt.Errorf("chỉ cần origin, không kèm đường dẫn — ví dụ https://abc.trycloudflare.com")
+	}
+	if rest == "" {
+		return "", fmt.Errorf("địa chỉ trống")
+	}
+
+	if scheme != "" {
+		return scheme + rest, nil
+	}
+	if _, _, err := net.SplitHostPort(rest); err == nil {
+		return "ws://" + rest, nil
+	}
+	return "wss://" + rest, nil
 }
 
 // portOf pulls the port out of a listener address such as "[::]:9111".
@@ -147,7 +209,14 @@ func BootstrapJoinCommand(host, sessionID, token string) string {
 // being handed over; it is as secret as the join command that carries the
 // same token.
 func MCPJoinURL(host, sessionID, token string) string {
-	return strings.Replace(host, "ws://", "http://", 1) + "/mcp/" + sessionID + "?token=" + token
+	base := host
+	// wss first: a plain ws-replace would turn "wss://" into "http://s...".
+	if strings.HasPrefix(base, "wss://") {
+		base = "https://" + strings.TrimPrefix(base, "wss://")
+	} else {
+		base = strings.Replace(base, "ws://", "http://", 1)
+	}
+	return base + "/mcp/" + sessionID + "?token=" + token
 }
 
 // MCPJoinCommand registers the session as an MCP server with a teammate's

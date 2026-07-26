@@ -65,6 +65,33 @@
     addToast('Đã sao chép lệnh.', 'SUCCESS');
   }
 
+  // ── Remote members (no shared LAN, no shared tailnet) ─────────────────
+  // The session owner runs a tunnel on THIS machine and pastes its public
+  // URL; the backend turns it into the same four hand-outs the discovered
+  // addresses get.
+  let joinToken = '';
+  let publicHost = '';
+  let remoteTarget: { host: string; command: string; bootstrap: string; mcp: string; prompt: string } | null = null;
+  let remoteBusy = false;
+
+  async function buildRemoteCommands() {
+    if (!publicHost.trim() || !selected) return;
+    remoteBusy = true;
+    try {
+      const res = await (AppBindings as any).BuildJoinCommands(publicHost.trim(), selected, joinToken, subject.trim());
+      if (res?.error) {
+        addToast(res.error, 'ERROR');
+        remoteTarget = null;
+      } else {
+        remoteTarget = res;
+      }
+    } catch (e) {
+      addToast(`Không tạo được lệnh: ${e}`, 'ERROR');
+    } finally {
+      remoteBusy = false;
+    }
+  }
+
   function copyText(text: string, what: string) {
     navigator.clipboard?.writeText(text);
     addToast(`Đã sao chép ${what}.`, 'SUCCESS');
@@ -187,6 +214,11 @@
         joinCommand = res.join_command || '';
         joinTargets = res.targets || [];
         toolInstalled = res.tool_installed !== false;
+        // Kept for the remote-member panel: building commands for a pasted
+        // tunnel URL needs the same session credentials.
+        joinToken = res.token || '';
+        remoteTarget = null;
+        publicHost = '';
         // Open on the door that will actually work here: without the CLI tool
         // the main command only produces "not found".
         joinMode = toolInstalled ? 'cli' : 'mcp';
@@ -473,6 +505,78 @@
               <b>Allow</b> thì đồng đội mới vào được.
             </p>
           {/if}
+
+          <!-- Neither LAN nor tailnet reaches this host; a tunnel does. The
+               owner runs it here, pastes the public URL, and the backend
+               mints the same four hand-outs for it. -->
+          <details class="border border-outline-variant rounded-xl px-3 py-2">
+            <summary class="cursor-pointer text-[11px] font-semibold text-on-surface">
+              🌍 Thành viên ở XA — không chung LAN, không chung VPN?
+            </summary>
+            <div class="mt-2 space-y-2">
+              {#if joinTargets.some((t) => t.scope === 'vpn')}
+                <p class="text-[11px] text-on-surface-variant">
+                  Máy này có Tailscale — cách gọn nhất là mời đồng đội vào tailnet của bạn, rồi họ dùng
+                  địa chỉ <b>"Qua VPN (Tailscale)"</b> ở trên từ bất kỳ đâu.
+                </p>
+              {/if}
+              <p class="text-[11px] text-on-surface-variant">
+                Không dùng VPN: mở một tunnel trên <b>chính máy này</b> rồi đưa URL công khai cho đồng đội.
+                Chạy một trong hai lệnh (cần cài <span class="font-mono">cloudflared</span> hoặc <span class="font-mono">ngrok</span>):
+              </p>
+              <div class="flex items-center gap-2">
+                <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[10px] font-mono text-on-surface overflow-x-auto">cloudflared tunnel --url http://localhost:{port}</pre>
+                <button type="button" on:click={() => copyCommand(`cloudflared tunnel --url http://localhost:${port}`)}
+                  class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[10px] font-mono text-on-surface overflow-x-auto">ngrok http {port}</pre>
+                <button type="button" on:click={() => copyCommand(`ngrok http ${port}`)}
+                  class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
+              </div>
+              <p class="text-[11px] text-on-surface-variant">
+                Lệnh in ra một URL dạng <span class="font-mono">https://…</span> — dán vào đây để tạo bộ lệnh cho URL đó
+                (URL + token trong lệnh là chìa khoá vào phiên: chỉ gửi cho người mình mời):
+              </p>
+              <div class="flex items-center gap-2">
+                <input
+                  type="text"
+                  bind:value={publicHost}
+                  placeholder="https://abc.trycloudflare.com"
+                  class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs font-mono text-on-surface outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  on:click={buildRemoteCommands}
+                  disabled={remoteBusy || !publicHost.trim()}
+                  class="bg-primary text-on-primary px-3 py-2 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                >
+                  {remoteBusy ? 'Đang tạo...' : 'Tạo lệnh'}
+                </button>
+              </div>
+              {#if remoteTarget}
+                {@const rt = remoteTarget}
+                {@const rcmd = joinMode === 'cli' ? rt.command : joinMode === 'bootstrap' ? rt.bootstrap : rt.mcp}
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-[11px] font-semibold text-on-surface-variant">
+                      Qua tunnel <span class="font-mono opacity-70">({rt.host})</span>
+                    </span>
+                    <span class="flex items-center gap-3">
+                      <button type="button" on:click={() => copyText(rt.prompt, 'prompt cho AI agent')}
+                        class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">🤖 Prompt cho AI</button>
+                      <button type="button" on:click={() => copyCommand(rcmd)}
+                        class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
+                    </span>
+                  </div>
+                  <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{rcmd}</pre>
+                  <p class="text-[10px] text-on-surface-variant">
+                    Tunnel phải chạy suốt phiên; tắt tunnel là đồng đội mất kết nối. URL trycloudflare đổi mỗi lần chạy — phiên mới thì tạo lệnh lại.
+                  </p>
+                </div>
+              {/if}
+            </div>
+          </details>
         </div>
       </div>
     {/if}

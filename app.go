@@ -2064,6 +2064,24 @@ func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interf
 	}
 }
 
+// BuildJoinCommands builds the join hand-outs for a host this machine cannot
+// discover by itself — a tunnel URL (cloudflared/ngrok), a domain behind a
+// reverse proxy, or a router port-forward. This is the door for a teammate
+// who shares neither the LAN nor a tailnet: they only need to reach the URL.
+func (a *App) BuildJoinCommands(rawHost, sessionID, token, subject string) map[string]string {
+	host, err := claims.NormalizeJoinHost(rawHost)
+	if err != nil {
+		return map[string]string{"error": err.Error()}
+	}
+	return map[string]string{
+		"host":      host,
+		"command":   claims.JoinCommand(host, sessionID, token),
+		"bootstrap": claims.BootstrapJoinCommand(host, sessionID, token),
+		"mcp":       claims.MCPJoinCommand(host, sessionID, token),
+		"prompt":    claims.AgentJoinPrompt(host, sessionID, token, subject),
+	}
+}
+
 // CreateChecksFile writes a starter .claude-suite/checks.json for the current
 // workspace, seeded with whatever the project's own tooling implies.
 //

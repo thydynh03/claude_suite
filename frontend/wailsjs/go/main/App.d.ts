@@ -19,6 +19,8 @@ export function ApproveRegressionGuard(arg1:string,arg2:string,arg3:Array<string
 
 export function AssignTask(arg1:string,arg2:string):Promise<void>;
 
+export function BuildJoinCommands(arg1:string,arg2:string,arg3:string,arg4:string):Promise<Record<string, string>>;
+
 export function CancelScheduledJob(arg1:string):Promise<void>;
 
 export function CheckChromeDebugMode():Promise<Record<string, any>>;

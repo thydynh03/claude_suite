@@ -19,10 +19,11 @@ func TestJoinTargetsOfferMoreThanLocalhostWhenTheMachineIsOnANetwork(t *testing.
 	}
 
 	// A machine with no network is legitimate (offline laptop), so the LAN
-	// entries are checked for shape rather than for existence.
+	// entries are checked for shape rather than for existence. A Tailscale
+	// interface classifies as vpn — the address a remote teammate can use.
 	for _, tgt := range got[1:] {
-		if tgt.Scope != "lan" {
-			t.Errorf("target %+v: scope should be lan", tgt)
+		if tgt.Scope != "lan" && tgt.Scope != "vpn" {
+			t.Errorf("target %+v: scope should be lan or vpn", tgt)
 		}
 		if !strings.HasPrefix(tgt.Host, "ws://") || !strings.HasSuffix(tgt.Host, ":9111") {
 			t.Errorf("target %+v: not a ws address on the listener port", tgt)
@@ -36,6 +37,61 @@ func TestJoinTargetsOfferMoreThanLocalhostWhenTheMachineIsOnANetwork(t *testing.
 func TestJoinTargetsRefuseAnAddressWithNoPort(t *testing.T) {
 	if got := JoinTargets(""); got != nil {
 		t.Errorf("JoinTargets(\"\") = %+v, want nil rather than a broken command", got)
+	}
+}
+
+// Tailscale's CGNAT range is the one listed address a teammate in another
+// city can actually reach; calling it "same LAN" told them it was useless.
+func TestClassifyAddrSeparatesVPNFromLAN(t *testing.T) {
+	if scope, _ := classifyAddr("100.84.122.101"); scope != "vpn" {
+		t.Errorf("a 100.64.0.0/10 address classified %q, want vpn", scope)
+	}
+	if scope, _ := classifyAddr("100.63.255.255"); scope != "lan" {
+		t.Errorf("an address just below the CGNAT range classified %q, want lan", scope)
+	}
+	if scope, _ := classifyAddr("192.168.1.92"); scope != "lan" {
+		t.Errorf("a private LAN address classified %q, want lan", scope)
+	}
+}
+
+// Whatever a person pastes for a remote member — tunnel URL, domain, ip:port
+// — must come out as the ws(s) host the join commands need, or be refused
+// with a reason.
+func TestNormalizeJoinHost(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"https://abc.trycloudflare.com", "wss://abc.trycloudflare.com"},
+		{"https://abc.trycloudflare.com/", "wss://abc.trycloudflare.com"},
+		{"http://203.0.113.7:9111", "ws://203.0.113.7:9111"},
+		{"wss://already.fine", "wss://already.fine"},
+		{"ws://192.168.1.5:9111", "ws://192.168.1.5:9111"},
+		{"203.0.113.7:9111", "ws://203.0.113.7:9111"},
+		{"suite.example.com", "wss://suite.example.com"},
+		{"  https://padded.example  ", "wss://padded.example"},
+	}
+	for _, c := range cases {
+		got, err := NormalizeJoinHost(c.in)
+		if err != nil {
+			t.Errorf("NormalizeJoinHost(%q) errored: %v", c.in, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("NormalizeJoinHost(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+
+	for _, bad := range []string{"", "https://abc.example/mcp/x", "abc.example/path"} {
+		if _, err := NormalizeJoinHost(bad); err == nil {
+			t.Errorf("NormalizeJoinHost(%q) accepted input it should refuse", bad)
+		}
+	}
+}
+
+// A wss host must become an https MCP endpoint — the naive ws-replace turned
+// "wss://" into "http://s…".
+func TestMCPJoinURLHandlesTLSHosts(t *testing.T) {
+	got := MCPJoinURL("wss://abc.trycloudflare.com", "s1", "t1")
+	if got != "https://abc.trycloudflare.com/mcp/s1?token=t1" {
+		t.Errorf("MCPJoinURL over wss = %q", got)
 	}
 }
 
