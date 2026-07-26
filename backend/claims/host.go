@@ -28,18 +28,23 @@ type Message struct {
 	Text  string `json:"text,omitempty"`
 
 	// server → client
-	Phase    Phase    `json:"phase,omitempty"`
-	Claims   []*Claim `json:"claims,omitempty"`
-	Outcome  *Outcome `json:"outcome,omitempty"`
-	Warnings []string `json:"warnings,omitempty"`
-	Error    string   `json:"error,omitempty"`
-	Note     string   `json:"note,omitempty"`
+	Phase    Phase         `json:"phase,omitempty"`
+	Claims   []*Claim      `json:"claims,omitempty"`
+	Outcome  *Outcome      `json:"outcome,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
+	Chat     []ChatMessage `json:"chat,omitempty"`
+	Error    string        `json:"error,omitempty"`
+	Note     string        `json:"note,omitempty"`
 }
 
 const (
-	MsgJoin    = "join"
-	MsgClaim   = "claim"
-	MsgRemark  = "remark"
+	MsgJoin   = "join"
+	MsgClaim  = "claim"
+	MsgRemark = "remark"
+	// MsgChat is free-form talk between the agents in a session, not tied to a
+	// claim. Remarks require a claim id and are only accepted during debate; a
+	// teammate's agent that simply wants to say something had nowhere to put it.
+	MsgChat    = "chat"
 	MsgDone    = "done" // "I have nothing further to submit"
 	MsgState   = "state"
 	MsgOutcome = "outcome"
@@ -280,9 +285,24 @@ func (h *Host) handle(hs *hosted, c *connection, msg Message) error {
 		if c.author == "" {
 			return fmt.Errorf("join before speaking")
 		}
+		// A remark with no claim attached used to dereference a nil pointer and
+		// take down the host, which every connected agent then lost.
+		if msg.Claim == nil || msg.Claim.ID == "" {
+			return fmt.Errorf("remark must name the claim it is about")
+		}
 		if err := hs.session.Remark(c.author, msg.Claim.ID, msg.Text); err != nil {
 			return err
 		}
+		h.broadcastState(hs)
+		return nil
+	case MsgChat:
+		if c.author == "" {
+			return fmt.Errorf("join before speaking")
+		}
+		if strings.TrimSpace(msg.Text) == "" {
+			return fmt.Errorf("empty message")
+		}
+		hs.session.Say(c.author, msg.Text)
 		h.broadcastState(hs)
 		return nil
 	default:
@@ -466,6 +486,10 @@ func (h *Host) broadcastState(hs *hosted) {
 	for _, c := range conns {
 		_ = c.send(Message{
 			Type: MsgState, Phase: hs.session.Phase(), Claims: hs.session.VisibleTo(c.author),
+			// Chat goes to everyone, unlike claims, which stay hidden until the
+			// collect window closes so agents cannot anchor on each other's
+			// findings. Talk is meant to be seen — that is the point of it.
+			Chat: hs.session.Chat(),
 		})
 	}
 }

@@ -46,6 +46,10 @@ export function ClearAllTasks() {
   return window['go']['main']['App']['ClearAllTasks']();
 }
 
+export function CreateChecksFile() {
+  return window['go']['main']['App']['CreateChecksFile']();
+}
+
 export function CreateGitBranch(arg1) {
   return window['go']['main']['App']['CreateGitBranch'](arg1);
 }
@@ -132,6 +136,10 @@ export function GetAutoApproveAll() {
 
 export function GetBudgetStatus() {
   return window['go']['main']['App']['GetBudgetStatus']();
+}
+
+export function GetClaimChat(arg1) {
+  return window['go']['main']['App']['GetClaimChat'](arg1);
 }
 
 export function GetClaimSession(arg1) {
@@ -332,6 +340,10 @@ export function SaveIntegrationsConfig(arg1) {
 
 export function SaveRoleContent(arg1, arg2) {
   return window['go']['main']['App']['SaveRoleContent'](arg1, arg2);
+}
+
+export function SayInClaimSession(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SayInClaimSession'](arg1, arg2, arg3);
 }
 
 export function ScanWorkspaceFiles() {

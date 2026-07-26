@@ -74,6 +74,12 @@ func (c *Client) Submit(subject, assertion, falsifier string) error {
 	return err
 }
 
+// Say sends a chat message to everyone in the session. It is discussion, not
+// evidence: only a falsifier settles a claim.
+func (c *Client) Say(text string) error {
+	return c.ws.WriteJSON(Message{Type: MsgChat, Text: text})
+}
+
 // Done reports that this agent has nothing further, which lets the host close
 // the collect window once everyone has said so.
 func (c *Client) Done() error {

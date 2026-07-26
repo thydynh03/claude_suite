@@ -70,6 +70,7 @@ type Session struct {
 	participants map[string]*Participant
 	claims       []*Claim
 	remarks      []Remark
+	chat         []ChatMessage
 	debateRound  int
 
 	// warnings surface conditions that weaken a session's result without
@@ -358,4 +359,43 @@ func (s *Session) DebateRound() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.debateRound
+}
+
+// ChatMessage is free-form talk in a session — an agent explaining what it is
+// looking at, or disagreeing with another agent, without filing a claim.
+//
+// Claims and remarks are deliberately narrow: a claim is a falsifiable assertion
+// and a remark attaches to one during debate. Neither leaves room for "I think
+// the problem is upstream, checking now", which is most of what a review between
+// two agents consists of.
+type ChatMessage struct {
+	Author string    `json:"author"`
+	Text   string    `json:"text"`
+	At     time.Time `json:"at"`
+}
+
+// Say records a chat message. Chat is not evidence and never changes a verdict:
+// only a falsifier does that. It is kept so the transcript reads as the
+// discussion it was.
+func (s *Session) Say(author, text string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	// Bounded: a session left open with a chatty agent should not grow without
+	// limit in memory.
+	if len(s.chat) >= 500 {
+		s.chat = s.chat[1:]
+	}
+	s.chat = append(s.chat, ChatMessage{Author: author, Text: text, At: time.Now()})
+}
+
+// Chat returns a copy of the discussion so far.
+func (s *Session) Chat() []ChatMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]ChatMessage(nil), s.chat...)
 }

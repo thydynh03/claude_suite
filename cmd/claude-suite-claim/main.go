@@ -43,6 +43,8 @@ func main() {
 		wait     = flag.Duration("wait", 30*time.Minute, "how long to wait for the outcome")
 		list     = flag.Bool("checks", false, "list the checks a claim may name, and exit")
 		wsPath   = flag.String("workspace", ".", "workspace root, for --checks")
+		say      = flag.String("say", "", "post a message to the session and exit (discussion, not a claim)")
+		ping     = flag.Bool("ping", false, "check the session can be reached, then exit")
 	)
 
 	var c claimFlag
@@ -63,6 +65,26 @@ func main() {
 	who := *author
 	if who == "" {
 		who = defaultAuthor(*provider)
+	}
+
+	// Both are cheap ways to answer "does this work at all" before an agent
+	// discovers otherwise mid-review.
+	if *ping {
+		if err := pingSession(*host, *session, *token, who, *provider); err != nil {
+			fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+			os.Exit(1)
+		}
+		fmt.Println("ok: connected to", *host, "session", *session)
+		return
+	}
+
+	if *say != "" {
+		if err := sayInSession(*host, *session, *token, who, *provider, *say); err != nil {
+			fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+			os.Exit(1)
+		}
+		fmt.Println("sent")
+		return
 	}
 
 	if err := run(*host, *session, *token, who, *provider, *outDir, *wait, c); err != nil {
@@ -92,6 +114,40 @@ func listChecks(workspace string) {
 	for _, check := range cat.Checks {
 		fmt.Printf("  %-24s %s\n", check.Name, check.Description)
 	}
+}
+
+// newClient builds a connected client, which --ping, --say and a claim run all
+// need identically.
+func newClient(host, session, token, author, provider string) (*claims.Client, error) {
+	client := &claims.Client{
+		HostURL: strings.TrimRight(host, "/"), SessionID: session, Token: token,
+		Author: author, Provider: provider,
+	}
+	if err := client.Connect(); err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// pingSession exists because the failure it detects — wrong host, expired token,
+// firewall — used to surface only when an agent tried to submit, halfway through
+// a review, with an error that named none of those causes.
+func pingSession(host, session, token, author, provider string) error {
+	client, err := newClient(host, session, token, author, provider)
+	if err != nil {
+		return err
+	}
+	client.Close()
+	return nil
+}
+
+func sayInSession(host, session, token, author, provider, text string) error {
+	client, err := newClient(host, session, token, author, provider)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	return client.Say(text)
 }
 
 func run(host, session, token, author, provider, outDir string, wait time.Duration, c claimFlag) error {

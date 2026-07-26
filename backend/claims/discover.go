@@ -51,6 +51,58 @@ func Discover(workspace string) *Catalogue {
 		)
 	}
 
+	// Rust, Python, Java and Make. Without these a workspace in any of those
+	// languages discovered nothing, every claim became an unfalsifiable opinion,
+	// and the UI could only say so — which is what a user pointing the app at
+	// their own project ran into first.
+	if exists(filepath.Join(workspace, "Cargo.toml")) {
+		found = append(found,
+			Check{
+				Name: "cargo-build", Description: "Cargo build",
+				Command: []string{"cargo", "build"}, TimeoutSec: 600,
+			},
+			Check{
+				Name: "cargo-test", Description: "Cargo test suite",
+				Command: []string{"cargo", "test"}, TimeoutSec: 900,
+			},
+			Check{
+				Name: "cargo-clippy", Description: "Clippy lints",
+				Command: []string{"cargo", "clippy", "--", "-D", "warnings"}, TimeoutSec: 600,
+			},
+		)
+	}
+
+	if exists(filepath.Join(workspace, "pyproject.toml")) ||
+		exists(filepath.Join(workspace, "requirements.txt")) ||
+		exists(filepath.Join(workspace, "setup.py")) {
+		// pytest and ruff are named rather than probed for: a project that has
+		// neither gets a check that fails loudly with "command not found", which
+		// is more useful than silently having no checks at all.
+		found = append(found,
+			Check{
+				Name: "pytest", Description: "Python test suite",
+				Command: []string{"python", "-m", "pytest", "-q"}, TimeoutSec: 900,
+			},
+			Check{
+				Name: "ruff", Description: "Ruff lints",
+				Command: []string{"python", "-m", "ruff", "check", "."}, TimeoutSec: 300,
+			},
+		)
+	}
+
+	if exists(filepath.Join(workspace, "pom.xml")) {
+		found = append(found, Check{
+			Name: "maven-test", Description: "Maven test suite",
+			Command: []string{"mvn", "-q", "test"}, TimeoutSec: 1200,
+		})
+	}
+	if exists(filepath.Join(workspace, "build.gradle")) || exists(filepath.Join(workspace, "build.gradle.kts")) {
+		found = append(found, Check{
+			Name: "gradle-test", Description: "Gradle test suite",
+			Command: []string{"gradle", "test"}, TimeoutSec: 1200,
+		})
+	}
+
 	for dir, prefix := range nodeProjects(workspace) {
 		for _, script := range scriptsIn(dir) {
 			desc, ok := safeScripts[script]

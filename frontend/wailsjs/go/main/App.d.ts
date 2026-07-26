@@ -29,6 +29,8 @@ export function ClearActiveSession(arg1:string):Promise<void>;
 
 export function ClearAllTasks():Promise<void>;
 
+export function CreateChecksFile():Promise<string>;
+
 export function CreateGitBranch(arg1:string):Promise<void>;
 
 export function CreateGitCommit(arg1:string):Promise<void>;
@@ -72,6 +74,8 @@ export function GetAppVersion():Promise<string>;
 export function GetAutoApproveAll():Promise<boolean>;
 
 export function GetBudgetStatus():Promise<main.BudgetStatus>;
+
+export function GetClaimChat(arg1:string):Promise<Array<claims.ChatMessage>>;
 
 export function GetClaimSession(arg1:string):Promise<Record<string, any>>;
 
@@ -172,6 +176,8 @@ export function SaveGCPOAuthCredentials(arg1:string,arg2:string):Promise<void>;
 export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
 
 export function SaveRoleContent(arg1:string,arg2:string):Promise<void>;
+
+export function SayInClaimSession(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ScanWorkspaceFiles():Promise<Array<string>>;
 

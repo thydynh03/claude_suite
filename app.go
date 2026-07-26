@@ -1613,6 +1613,77 @@ func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interf
 	}
 }
 
+// CreateChecksFile writes a starter .claude-suite/checks.json for the current
+// workspace, seeded with whatever the project's own tooling implies.
+//
+// Without a catalogue every claim is an opinion and nothing can block a merge —
+// the UI said so, but had no way to help. This gives the user a file to edit
+// rather than a format to look up.
+func (a *App) CreateChecksFile() (string, error) {
+	workspace := a.workspaceConfig.LastWorkspaceFolder
+	if workspace == "" {
+		return "", fmt.Errorf("chưa chọn workspace")
+	}
+
+	dir := filepath.Join(workspace, ".claude-suite")
+	path := filepath.Join(dir, "checks.json")
+	// Never overwrite: the existing file is the user's, and it may be the only
+	// copy of checks they wrote by hand.
+	if _, err := os.Stat(path); err == nil {
+		return "", fmt.Errorf("%s đã tồn tại — mở tệp đó để sửa", path)
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+
+	discovered := claims.Discover(workspace)
+	if len(discovered.Checks) == 0 {
+		// A template beats an empty file: it shows the shape without the user
+		// having to find documentation for it.
+		discovered.Checks = []claims.Check{{
+			Name:        "my-test",
+			Description: "Đổi thành lệnh kiểm thử của dự án bạn",
+			Command:     []string{"echo", "thay-bang-lenh-that"},
+			TimeoutSec:  600,
+		}}
+	}
+
+	data, err := json.MarshalIndent(discovered, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// SayInClaimSession posts a chat message from the person running the app, so the
+// arbiter is a participant in the discussion rather than a spectator to it.
+func (a *App) SayInClaimSession(sessionID, author, text string) error {
+	session, ok := a.claimsHost.Session(sessionID)
+	if !ok {
+		return fmt.Errorf("không tìm thấy phiên %q", sessionID)
+	}
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("tin nhắn trống")
+	}
+	if author == "" {
+		author = "trọng tài"
+	}
+	session.Say(author, text)
+	return nil
+}
+
+// GetClaimChat returns the discussion in a session.
+func (a *App) GetClaimChat(sessionID string) []claims.ChatMessage {
+	session, ok := a.claimsHost.Session(sessionID)
+	if !ok {
+		return nil
+	}
+	return session.Chat()
+}
+
 // GetClaimSession returns a session's current state for the UI.
 func (a *App) GetClaimSession(sessionID string) map[string]interface{} {
 	session, ok := a.claimsHost.Session(sessionID)

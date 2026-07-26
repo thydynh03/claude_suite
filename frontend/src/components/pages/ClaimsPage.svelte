@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, addToast } from '../../lib/stores/appState';
 
   interface Claim {
     id: string;
@@ -26,6 +26,52 @@
   let selected = '';
   let subject = '';
   let joinCommand = '';
+  let joinTargets: { scope: string; label: string; host: string; command: string }[] = [];
+  let toolInstalled = true;
+
+  let chat: { author: string; text: string; at: string }[] = [];
+  let chatDraft = '';
+  let arbiterName = 'trọng tài';
+
+  function copyCommand(cmd: string) {
+    navigator.clipboard?.writeText(cmd);
+    addToast('Đã sao chép lệnh.', 'SUCCESS');
+  }
+
+  async function sendChat() {
+    const text = chatDraft.trim();
+    if (!text || !selected) return;
+    chatDraft = '';
+    try {
+      await (AppBindings as any).SayInClaimSession(selected, arbiterName, text);
+      await refreshChat();
+    } catch (e) {
+      addToast(`Không gửi được tin nhắn: ${e}`, 'ERROR');
+      chatDraft = text;
+    }
+  }
+
+  async function refreshChat() {
+    if (!selected) {
+      chat = [];
+      return;
+    }
+    try {
+      chat = (await (AppBindings as any).GetClaimChat(selected)) || [];
+    } catch {
+      chat = [];
+    }
+  }
+
+  async function createChecksFile() {
+    try {
+      const path = await (AppBindings as any).CreateChecksFile();
+      addToast(`Đã tạo ${path} — sửa lại cho khớp dự án của bạn.`, 'SUCCESS', 9000);
+      await refreshStatus();
+    } catch (e) {
+      addToast(`Không tạo được tệp checks: ${e}`, 'ERROR', 8000);
+    }
+  }
 
   interface Remark { round: number; author: string; claim_id: string; text: string; }
 
@@ -66,6 +112,7 @@
       remarks = s.remarks || [];
       round = s.round || 0;
       maxRound = s.maxRound || 2;
+      await refreshChat();
     } catch (e: any) {
       console.warn('GetClaimSession:', e);
     }
@@ -104,6 +151,8 @@
       if (res?.success) {
         selected = res.id;
         joinCommand = res.join_command || '';
+        joinTargets = res.targets || [];
+        toolInstalled = res.tool_installed !== false;
         await refreshStatus();
         await refreshSession();
       } else {
@@ -245,7 +294,19 @@
   {#if hostWarning}
     <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
       <span class="material-symbols-outlined text-sm">warning</span>
-      <span>{hostWarning}</span>
+      <div class="flex-1">
+        <p>{hostWarning}</p>
+        <!-- The warning used to state the problem and stop there. A workspace
+             with no checks makes every claim an unfalsifiable opinion, so the
+             feature does nothing for the user's own project until this exists. -->
+        <button
+          type="button"
+          on:click={createChecksFile}
+          class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-bold cursor-pointer hover:bg-amber-500/30"
+        >
+          Tạo tệp checks.json cho dự án này
+        </button>
+      </div>
     </div>
   {/if}
 
@@ -261,14 +322,43 @@
       </button>
     </div>
 
-    {#if joinCommand}
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] font-semibold text-on-surface-variant">Gửi lệnh này cho đồng đội — agent IDE nào cũng chạy được:</span>
-          <button type="button" on:click={copyJoin}
-            class="text-[11px] text-primary font-semibold hover:underline cursor-pointer">Sao chép</button>
-        </div>
-        <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{joinCommand}</pre>
+    {#if joinTargets.length}
+      <!-- One command per case, because the single localhost line was only ever
+           correct for a second agent on this same machine: on a teammate's
+           computer "localhost" is their computer, where no session is listening. -->
+      <div class="space-y-2">
+        {#if !toolInstalled}
+          <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
+            <span class="material-symbols-outlined text-sm">warning</span>
+            <span>
+              Không tìm thấy <b>claude-suite-claim</b> trên máy này. Lệnh dưới đây chỉ chạy được
+              trên máy đã cài app bằng file installer (công cụ được cài kèm), hoặc đã thêm nó vào PATH.
+            </span>
+          </div>
+        {/if}
+
+        {#each joinTargets as target}
+          <div class="space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-semibold text-on-surface-variant">
+                {target.label}
+                <span class="font-mono opacity-70">({target.host})</span>
+              </span>
+              <button
+                type="button"
+                on:click={() => copyCommand(target.command)}
+                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
+              >
+                Sao chép
+              </button>
+            </div>
+            <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{target.command}</pre>
+          </div>
+        {/each}
+
+        <p class="text-[10px] text-on-surface-variant">
+          Máy khác trong LAN: lần đầu Windows Firewall sẽ hỏi cho phép — phải chọn Allow thì đồng đội mới kết nối được.
+        </p>
       </div>
     {/if}
 
@@ -397,6 +487,63 @@
           Chưa có claim nào. Đồng đội chạy lệnh ở trên để nộp.
         </div>
       {/each}
+    </div>
+  {/if}
+
+  <!-- Discussion. Claims are narrow by design — a falsifiable assertion, and a
+       remark that attaches to one during debate — which left nowhere for "I think
+       the problem is upstream, checking now", i.e. most of a real review. Chat is
+       never evidence: only a falsifier settles anything. -->
+  {#if selected}
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-primary">forum</span>
+          Thảo luận trong phiên
+        </h4>
+        <input
+          bind:value={arbiterName}
+          title="Tên hiển thị của bạn trong phiên"
+          class="w-36 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] outline-none focus:border-primary"
+        />
+      </div>
+
+      <div class="max-h-56 overflow-y-auto space-y-2 pr-1">
+        {#each chat as m}
+          <div class="flex gap-2 text-[11px]">
+            <span class="font-bold text-primary whitespace-nowrap">{m.author}</span>
+            <span class="flex-1 text-on-surface whitespace-pre-wrap break-words">{m.text}</span>
+            <span class="text-outline font-mono whitespace-nowrap">
+              {m.at ? new Date(m.at).toLocaleTimeString('vi-VN') : ''}
+            </span>
+          </div>
+        {:else}
+          <p class="text-[11px] text-on-surface-variant italic py-3 text-center">
+            Chưa có tin nhắn nào. Agent ở máy khác gửi bằng <span class="font-mono">claude-suite-claim</span>,
+            bạn nhắn trực tiếp ở ô dưới.
+          </p>
+        {/each}
+      </div>
+
+      <div class="flex gap-2">
+        <input
+          bind:value={chatDraft}
+          on:keydown={(e) => { if (e.key === 'Enter') sendChat(); }}
+          placeholder="Nhắn cho các agent trong phiên…"
+          class="flex-1 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-xs outline-none focus:border-primary"
+        />
+        <button
+          type="button"
+          on:click={sendChat}
+          disabled={!chatDraft.trim()}
+          class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-40 cursor-pointer"
+        >
+          Gửi
+        </button>
+      </div>
+      <p class="text-[10px] text-on-surface-variant">
+        Thảo luận không phải bằng chứng — chỉ falsifier mới kết luận được một claim.
+      </p>
     </div>
   {/if}
 
