@@ -174,6 +174,10 @@ export function GetGitStatus() {
   return window['go']['main']['App']['GetGitStatus']();
 }
 
+export function GetGitWatchConfig() {
+  return window['go']['main']['App']['GetGitWatchConfig']();
+}
+
 export function GetIntegrationsConfig() {
   return window['go']['main']['App']['GetIntegrationsConfig']();
 }
@@ -378,6 +382,10 @@ export function SaveGCPOAuthCredentials(arg1, arg2) {
   return window['go']['main']['App']['SaveGCPOAuthCredentials'](arg1, arg2);
 }
 
+export function SaveGitWatchConfig(arg1) {
+  return window['go']['main']['App']['SaveGitWatchConfig'](arg1);
+}
+
 export function SaveIntegrationsConfig(arg1) {
   return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
 }
@@ -402,8 +410,8 @@ export function ScheduleJob(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['ScheduleJob'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function ScheduleKind(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['ScheduleKind'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function ScheduleKind(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['ScheduleKind'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function SchedulePrompt(arg1, arg2, arg3) {

@@ -56,6 +56,7 @@ type App struct {
 	oauthListener   *services.OAuthListenerService
 	claimsHost      *services.ClaimsHostService
 	mcpStore        *services.MCPStore
+	gitWatch        *services.GitWatchService
 
 	workspaceConfig    models.WorkspaceConfig
 	integrationsConfig models.IntegrationsConfig
@@ -148,6 +149,16 @@ func NewApp() *App {
 
 	app.schedulerSvc.SetTriggerCallback(app.runScheduledJob)
 
+	// WaitForQuota jobs hold until the anti pool has a usable account; the
+	// pool is the only party that measured anything, so it answers. Claude
+	// runs are never held — this app has no quota data about them.
+	app.schedulerSvc.SetQuotaGate(func(jobProvider string) (bool, string) {
+		if !provider.IsAnti(provider.ResolveProvider(jobProvider, "")) {
+			return true, ""
+		}
+		return cli.GlobalAntiPool.QuotaReady(cli.QuotaCooldown)
+	})
+
 	return app
 }
 
@@ -164,6 +175,36 @@ func (a *App) startup(ctx context.Context) {
 		fmt.Printf("Scheduler store warning: %v\n", err)
 	}
 	a.schedulerSvc.Start()
+
+	// Git watch: AutoSnapshot guards the diff during each task, this guards
+	// what comes after — a night of agent work sitting as one loose diff.
+	a.gitWatch = services.NewGitWatchService(filepath.Dir(database.GetDBPath()))
+	a.gitWatch.SetHooks(
+		func() (bool, error) {
+			ws := a.workspaceConfig.LastWorkspaceFolder
+			if ws == "" {
+				return false, nil
+			}
+			st, err := a.gitService.GetStatus(ws)
+			if err != nil {
+				return false, err
+			}
+			isRepo, _ := st["is_repo"].(bool)
+			clean, _ := st["clean"].(bool)
+			return isRepo && !clean, nil
+		},
+		func(dirtyFor time.Duration) {
+			a.emitLog(fmt.Sprintf("⏰ Workspace đã bẩn %.1f giờ chưa commit — vào Git panel hoặc bật tự commit trong Lịch tự động.", dirtyFor.Hours()), "WARN")
+		},
+		func() error {
+			if err := a.runScheduledCommit(); err != nil {
+				return err
+			}
+			a.emitLog("✅ Git watch: đã tự commit phần thay đổi để lâu với message do AI soạn.", "SUCCESS")
+			return nil
+		},
+	)
+	a.gitWatch.Start()
 
 	// Loaded here rather than in the constructor: the data directory is only
 	// settled once the runtime has started.
@@ -1738,9 +1779,31 @@ func firstLine(s string) string {
 }
 
 // ScheduleKind schedules a job of a given kind (prompt, plan, e2e, git-commit,
-// digest).
-func (a *App) ScheduleKind(kind, prompt, targetTime string, repeat bool, provider, model string) (string, error) {
-	return a.schedulerSvc.ScheduleKind(kind, prompt, targetTime, repeat, provider, model)
+// digest). waitForQuota holds the job past its due time until the anti pool
+// reports usable quota — scheduling work for the moment a quota resets.
+func (a *App) ScheduleKind(kind, prompt, targetTime string, repeat bool, provider, model string, waitForQuota bool) (string, error) {
+	id, err := a.schedulerSvc.ScheduleKind(kind, prompt, targetTime, repeat, provider, model)
+	if err != nil {
+		return "", err
+	}
+	if waitForQuota {
+		a.schedulerSvc.SetJobWaitForQuota(id, true)
+	}
+	return id, nil
+}
+
+// ── Git watch ──────────────────────────────────────────────────────────
+
+func (a *App) GetGitWatchConfig() services.GitWatchConfig {
+	return a.gitWatch.Config()
+}
+
+func (a *App) SaveGitWatchConfig(cfg services.GitWatchConfig) error {
+	if err := a.gitWatch.SaveConfig(cfg); err != nil {
+		return err
+	}
+	a.emitLog("💾 "+a.gitWatch.String(), "INFO")
+	return nil
 }
 
 // GetJobKinds lists the kinds the scheduler accepts, for the UI to offer.

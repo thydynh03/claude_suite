@@ -12,6 +12,7 @@
     provider: string;
     model: string;
     enabled: boolean;
+    wait_for_quota: boolean;
     last_run_at: string;
     last_status: string;
     last_error: string;
@@ -46,7 +47,45 @@
   let prompt = '';
   let repeat = true;
   let modelChoice = MODELS[0].value;
+  // Hold a due job until the anti pool has measured-usable quota — the way to
+  // land heavy work on the moment a Gemini quota cycle resets.
+  let waitForQuota = false;
   let busy = false;
+
+  $: usesAntiPool = needsModel && modelChoice.startsWith('anti:');
+
+  // ── Git watch (canh chừng workspace bẩn) ─────────────────────────────
+  let gw = { enabled: false, threshold_hours: 4, auto_commit: false };
+  let gwSaving = false;
+
+  async function loadGitWatch() {
+    try {
+      if ((AppBindings as any).GetGitWatchConfig) {
+        const cfg = await (AppBindings as any).GetGitWatchConfig();
+        if (cfg) gw = cfg;
+      }
+    } catch (e) {}
+  }
+
+  async function saveGitWatch() {
+    gwSaving = true;
+    try {
+      const hours = Math.max(1, Math.floor(Number(gw.threshold_hours) || 4));
+      gw.threshold_hours = hours;
+      await (AppBindings as any).SaveGitWatchConfig(gw);
+      addToast(
+        gw.enabled
+          ? `Đã bật canh chừng Git: ${gw.auto_commit ? 'tự commit' : 'nhắc'} sau ${hours}h workspace bẩn.`
+          : 'Đã tắt canh chừng Git.',
+        'SUCCESS'
+      );
+      await loadGitWatch();
+    } catch (e: any) {
+      addToast('Không lưu được cài đặt canh chừng Git: ' + (e?.message ?? e), 'ERROR');
+    } finally {
+      gwSaving = false;
+    }
+  }
 
   let jobs: Job[] = [];
   let logs: { msg: string; level: string; time: string }[] = [];
@@ -58,6 +97,7 @@
 
   onMount(() => {
     refreshJobs();
+    loadGitWatch();
     const runtime = (window as any)?.runtime;
     if (!runtime?.EventsOn) return;
     // Cancel functions returned so the listeners die with the page: left
@@ -110,7 +150,7 @@
     const [provider, model] = needsModel ? modelChoice.split(':') : ['', ''];
     busy = true;
     try {
-      await (AppBindings as any).ScheduleKind(kind, prompt, targetTime().toISOString(), repeat, provider, model);
+      await (AppBindings as any).ScheduleKind(kind, prompt, targetTime().toISOString(), repeat, provider, model, usesAntiPool && waitForQuota);
       addToast(`Đã đặt lịch: ${activeKind.label}`, 'SUCCESS');
       prompt = '';
       await refreshJobs();
@@ -225,6 +265,18 @@
           <p class="text-[11px] text-on-surface-variant">
             Hai nhà cung cấp có hạn mức riêng — hẹn việc nặng vào bên vừa reset quota.
           </p>
+          {#if usesAntiPool}
+            <label class="flex items-start gap-2 cursor-pointer pt-1">
+              <input type="checkbox" bind:checked={waitForQuota} class="w-4 h-4 rounded accent-primary cursor-pointer mt-0.5" />
+              <span class="min-w-0">
+                <span class="block text-xs font-medium text-on-surface">⏳ Chờ quota hồi rồi mới chạy</span>
+                <span class="block text-[11px] leading-snug text-on-surface-variant">
+                  Đến giờ mà cả pool đang cạn (bị 429 trong vòng 24h đo được), lịch sẽ đợi và
+                  tự chạy ngay khi có tài khoản sẵn sàng — không đốt lượt chạy vào tường.
+                </span>
+              </span>
+            </label>
+          {/if}
         </div>
       {/if}
 
@@ -297,6 +349,47 @@
 
     <!-- Jobs + log -->
     <div class="col-span-12 lg:col-span-7 space-y-4">
+      <!-- Git watch: AutoSnapshot guards the diff during each task; this
+           guards what comes after — a night of agent work sitting as one
+           loose diff until somebody remembers. -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-lg text-primary">visibility</span>
+            <div>
+              <span class="block text-xs font-bold text-on-surface">Canh chừng Git</span>
+              <span class="block text-[11px] text-on-surface-variant">Workspace bẩn quá lâu chưa commit thì nhắc — hoặc để AI tự commit.</span>
+            </div>
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" bind:checked={gw.enabled} class="w-4 h-4 rounded accent-primary cursor-pointer" />
+            <span class="text-xs font-bold {gw.enabled ? 'text-primary' : 'text-on-surface-variant'}">{gw.enabled ? 'BẬT' : 'TẮT'}</span>
+          </label>
+        </div>
+        {#if gw.enabled}
+          <div class="flex flex-wrap items-center gap-4 pt-1">
+            <label class="flex items-center gap-2 text-xs text-on-surface">
+              Ngưỡng
+              <input type="number" min="1" max="72" bind:value={gw.threshold_hours}
+                class="w-14 bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-center font-mono font-bold text-primary outline-none focus:border-primary" />
+              giờ bẩn liên tục
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+              <input type="checkbox" bind:checked={gw.auto_commit} class="w-4 h-4 rounded accent-primary cursor-pointer" />
+              Tự commit (AI soạn message) thay vì chỉ nhắc
+            </label>
+          </div>
+        {/if}
+        <button
+          type="button"
+          on:click={saveGitWatch}
+          disabled={gwSaving}
+          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer"
+        >
+          {gwSaving ? 'Đang lưu...' : 'Lưu cài đặt'}
+        </button>
+      </div>
+
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
         <span class="text-xs font-bold uppercase text-on-surface-variant">Lịch đã đặt</span>
         <div class="space-y-2 max-h-[420px] overflow-y-auto">
@@ -311,6 +404,9 @@
                       <span class="text-xs font-bold text-on-surface">{info.label}</span>
                       {#if job.repeat}
                         <span class="text-[10px] font-bold uppercase text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded">↻ hằng ngày</span>
+                      {/if}
+                      {#if job.wait_for_quota}
+                        <span class="text-[10px] font-bold uppercase text-amber-600 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded" title="Đến giờ mà pool cạn quota thì lịch đợi, chạy ngay khi quota hồi">⏳ chờ quota</span>
                       {/if}
                       {#if !job.enabled}
                         <span class="text-[10px] font-bold uppercase text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded">tạm dừng</span>

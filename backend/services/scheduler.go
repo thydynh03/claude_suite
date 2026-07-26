@@ -32,6 +32,13 @@ type ScheduledJob struct {
 	// Enabled lets a repeating job be paused without losing its schedule.
 	Enabled bool `json:"enabled"`
 
+	// WaitForQuota holds a due job until the account pool reports usable
+	// quota, instead of burning the run into a pool that is entirely
+	// rate-limited. The job stays due; every tick re-asks the gate, so it
+	// fires the moment quota is back. Scheduling heavy overnight work for
+	// when a provider's quota resets is the reason this flag exists.
+	WaitForQuota bool `json:"wait_for_quota"`
+
 	// The outcome of the last run, so the UI can show whether a nightly job has
 	// been quietly failing.
 	LastRunAt  time.Time `json:"last_run_at"`
@@ -86,6 +93,14 @@ type SchedulerService struct {
 	stopCh    chan struct{}
 	onTrigger func(JobRequest) error
 
+	// quotaGate answers "is it worth firing a run for this provider right
+	// now?". The scheduler owns no pool knowledge; the app wires this to the
+	// account pool. Nil means never hold.
+	quotaGate func(provider string) (ok bool, reason string)
+	// quotaHeldAt throttles the "still waiting" log per job — one line every
+	// few minutes, not one per one-second tick.
+	quotaHeldAt map[string]time.Time
+
 	// storePath is where jobs are persisted. Without it a scheduled job lived
 	// only in memory: setting up a nightly run and closing the app lost it, with
 	// nothing to say so.
@@ -94,8 +109,30 @@ type SchedulerService struct {
 
 func NewSchedulerService() *SchedulerService {
 	return &SchedulerService{
-		jobs: make(map[string]*ScheduledJob),
+		jobs:        make(map[string]*ScheduledJob),
+		quotaHeldAt: make(map[string]time.Time),
 	}
+}
+
+// SetQuotaGate installs the pool check WaitForQuota jobs consult. Call before
+// Start, like the other wiring.
+func (s *SchedulerService) SetQuotaGate(gate func(provider string) (bool, string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.quotaGate = gate
+}
+
+// SetJobWaitForQuota flips the hold-until-quota flag on an existing job.
+func (s *SchedulerService) SetJobWaitForQuota(id string, wait bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job, ok := s.jobs[id]
+	if !ok {
+		return false
+	}
+	job.WaitForQuota = wait
+	s.saveLocked()
+	return true
 }
 
 // SetContext and SetTriggerCallback are currently called before Start, where the
@@ -261,6 +298,20 @@ func (s *SchedulerService) checkJobs() {
 		// presence. Doing it per-tick re-armed one-shot jobs mid-run.
 		if !job.Enabled || !now.After(job.TargetTime) {
 			continue
+		}
+
+		// A due job that asked to wait for quota stays due until the gate
+		// opens — it neither fires into an exhausted pool nor loses its
+		// turn: the next tick asks again.
+		if job.WaitForQuota && s.quotaGate != nil {
+			if ok, reason := s.quotaGate(job.Provider); !ok {
+				if now.Sub(s.quotaHeldAt[id]) > 5*time.Minute {
+					s.quotaHeldAt[id] = now
+					s.logLocked(fmt.Sprintf("Lịch %s đang chờ quota: %s", id, reason), "INFO")
+				}
+				continue
+			}
+			delete(s.quotaHeldAt, id)
 		}
 		fired = true
 

@@ -1,6 +1,7 @@
 export namespace claims {
 	
 	export class ChatMessage {
+	    seq: number;
 	    author: string;
 	    text: string;
 	    // Go type: time
@@ -12,6 +13,7 @@ export namespace claims {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seq = source["seq"];
 	        this.author = source["author"];
 	        this.text = source["text"];
 	        this.at = this.convertValues(source["at"], null);
@@ -349,6 +351,7 @@ export namespace cli {
 	    duration_sec: number;
 	    account_id: string;
 	    usage_estimated: boolean;
+	    model_used: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -365,6 +368,7 @@ export namespace cli {
 	        this.duration_sec = source["duration_sec"];
 	        this.account_id = source["account_id"];
 	        this.usage_estimated = source["usage_estimated"];
+	        this.model_used = source["model_used"];
 	    }
 	}
 
@@ -1090,6 +1094,22 @@ export namespace services {
 	        this.refs = source["refs"];
 	    }
 	}
+	export class GitWatchConfig {
+	    enabled: boolean;
+	    threshold_hours: number;
+	    auto_commit: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitWatchConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.threshold_hours = source["threshold_hours"];
+	        this.auto_commit = source["auto_commit"];
+	    }
+	}
 	export class MCPServer {
 	    id: string;
 	    name: string;
@@ -1153,6 +1173,7 @@ export namespace services {
 	    model: string;
 	    kind: string;
 	    enabled: boolean;
+	    wait_for_quota: boolean;
 	    // Go type: time
 	    last_run_at: any;
 	    last_status: string;
@@ -1173,6 +1194,7 @@ export namespace services {
 	        this.model = source["model"];
 	        this.kind = source["kind"];
 	        this.enabled = source["enabled"];
+	        this.wait_for_quota = source["wait_for_quota"];
 	        this.last_run_at = this.convertValues(source["last_run_at"], null);
 	        this.last_status = source["last_status"];
 	        this.last_error = source["last_error"];

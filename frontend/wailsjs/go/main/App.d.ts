@@ -94,6 +94,8 @@ export function GetGitLog(arg1:number):Promise<Array<services.GitCommitInfo>>;
 
 export function GetGitStatus():Promise<Record<string, any>>;
 
+export function GetGitWatchConfig():Promise<services.GitWatchConfig>;
+
 export function GetIntegrationsConfig():Promise<models.IntegrationsConfig>;
 
 export function GetJobKinds():Promise<Array<string>>;
@@ -196,6 +198,8 @@ export function SaveFileContent(arg1:string,arg2:string):Promise<void>;
 
 export function SaveGCPOAuthCredentials(arg1:string,arg2:string):Promise<void>;
 
+export function SaveGitWatchConfig(arg1:services.GitWatchConfig):Promise<void>;
+
 export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
 
 export function SaveMemoryConfig(arg1:models.MemoryConfig):Promise<void>;
@@ -208,7 +212,7 @@ export function ScanWorkspaceFiles():Promise<Array<string>>;
 
 export function ScheduleJob(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:string):Promise<string>;
 
-export function ScheduleKind(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:string,arg6:string):Promise<string>;
+export function ScheduleKind(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:string,arg6:string,arg7:boolean):Promise<string>;
 
 export function SchedulePrompt(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
