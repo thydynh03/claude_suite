@@ -26,7 +26,7 @@
   let selected = '';
   let subject = '';
   let joinCommand = '';
-  let joinTargets: { scope: string; label: string; host: string; command: string }[] = [];
+  let joinTargets: { scope: string; label: string; host: string; command: string; bootstrap: string; mcp: string; prompt: string }[] = [];
   let toolInstalled = true;
 
   let chat: { author: string; text: string; at: string }[] = [];
@@ -36,6 +36,11 @@
   function copyCommand(cmd: string) {
     navigator.clipboard?.writeText(cmd);
     addToast('Đã sao chép lệnh.', 'SUCCESS');
+  }
+
+  function copyText(text: string, what: string) {
+    navigator.clipboard?.writeText(text);
+    addToast(`Đã sao chép ${what}.`, 'SUCCESS');
   }
 
   async function sendChat() {
@@ -247,18 +252,25 @@
     }
   }
 
+  let offClaimsEvent: (() => void) | null = null;
+
   onMount(() => {
     refreshStatus();
     poll = setInterval(() => { refreshStatus(); refreshSession(); }, 2000);
 
     if ((window as any)?.runtime?.EventsOn) {
-      (window as any).runtime.EventsOn('claims_event', (d: any) => {
+      // Captured for cleanup — the page is destroyed on every tab switch and
+      // an uncancelled listener keeps appending into a dead component.
+      offClaimsEvent = (window as any).runtime.EventsOn('claims_event', (d: any) => {
         if (d?.message) events = [...events, `[${d.time || ''}] ${d.message}`].slice(-40);
       });
     }
   });
 
-  onDestroy(() => { if (poll) clearInterval(poll); });
+  onDestroy(() => {
+    if (poll) clearInterval(poll);
+    offClaimsEvent?.();
+  });
 
   $: if (selected) refreshSession();
 </script>
@@ -337,8 +349,9 @@
           <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
             <span class="material-symbols-outlined text-sm">warning</span>
             <span>
-              Không tìm thấy <b>claude-suite-claim</b> trên máy này. Lệnh dưới đây chỉ chạy được
-              trên máy đã cài app bằng file installer (công cụ được cài kèm), hoặc đã thêm nó vào PATH.
+              Không tìm thấy <b>claude-suite-claim</b> trên máy này. Lệnh chính bên dưới chỉ chạy được
+              trên máy đã cài app bằng file installer (công cụ được cài kèm), hoặc đã thêm nó vào PATH —
+              máy chưa cài thì dùng nút <b>Chưa cài app</b> hoặc <b>Prompt cho AI</b>.
             </span>
           </div>
         {/if}
@@ -359,10 +372,43 @@
               </button>
             </div>
             <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{target.command}</pre>
+            <!-- The hand-off variants for a machine that never installed the
+                 app. Copy-only (no pre block): the command is long and the
+                 person pasting it does not need to read it, only to deliver it. -->
+            <div class="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                on:click={() => copyText(target.bootstrap, 'lệnh PowerShell tự tải công cụ')}
+                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                title="Một lệnh PowerShell: tự tải claude-suite-claim.exe từ GitHub release rồi vào phiên — không cần cài app"
+              >
+                ⬇ Chưa cài app (tải công cụ)
+              </button>
+              <button
+                type="button"
+                on:click={() => copyText(target.mcp, 'lệnh kết nối MCP')}
+                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                title="Không tải gì cả: đăng ký phiên này làm MCP server cho agent của đồng đội (claude mcp add). Agent nhận được tool join/submit/finish ngay."
+              >
+                🔌 MCP (không cần tải)
+              </button>
+              <button
+                type="button"
+                on:click={() => copyText(target.prompt, 'prompt cho AI agent')}
+                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                title="Dán cho AI agent của đồng đội (Claude Code, Gemini CLI...): nó tự chọn cách vào phiên — có app dùng luôn, không thì hỏi người dùng tải hay kết nối MCP"
+              >
+                🤖 Prompt cho AI
+              </button>
+            </div>
           </div>
         {/each}
 
         <p class="text-[10px] text-on-surface-variant">
+          Đồng đội có 3 cách vào phiên: <b>đã cài app</b> → dùng lệnh chính;
+          <b>chưa cài, chịu tải</b> → lệnh PowerShell tự tải công cụ từ GitHub (Windows);
+          <b>không muốn tải</b> → lệnh MCP nối agent của họ thẳng vào app này, không cần file nào.
+          <b>Prompt cho AI</b> gói cả ba lựa chọn — dán nguyên văn cho agent là nó tự hỏi và tự làm.
           Máy khác trong LAN: lần đầu Windows Firewall sẽ hỏi cho phép — phải chọn Allow thì đồng đội mới kết nối được.
         </p>
       </div>

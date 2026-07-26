@@ -97,6 +97,24 @@ func lanAddresses() []string {
 	return out
 }
 
+// claimToolURL is where the latest published claim tool always lives. GitHub
+// keeps this path stable across releases, which is what lets a machine that
+// never installed the app fetch the tool by itself.
+const claimToolURL = "https://github.com/thydynh03/claude_suite/releases/latest/download/claude-suite-claim.exe"
+
+// projectRepoURL is the fallback for machines the prebuilt exe cannot serve
+// (macOS, Linux): clone and `go run` the tool from source.
+const projectRepoURL = "https://github.com/thydynh03/claude_suite"
+
+// claimArgs is the part of a join line that is identical however the tool got
+// onto the recipient's machine.
+func claimArgs(host, sessionID, token string) string {
+	return fmt.Sprintf("--host %s --session %s --token %s "+
+		`--provider claude --subject "file.go:12" `+
+		`--assert "what is wrong" --falsify "check-name"`,
+		host, sessionID, token)
+}
+
 // JoinCommand builds the line a teammate's agent runs.
 //
 // The tool is named without a path on purpose. The previous version embedded the
@@ -106,9 +124,83 @@ func lanAddresses() []string {
 // installer puts the tool on PATH instead, so a bare name is correct on every
 // machine that has the app.
 func JoinCommand(host, sessionID, token string) string {
-	return fmt.Sprintf(
-		"claude-suite-claim --host %s --session %s --token %s "+
-			`--provider claude --subject "file.go:12" `+
-			`--assert "what is wrong" --falsify "check-name"`,
-		host, sessionID, token)
+	return "claude-suite-claim " + claimArgs(host, sessionID, token)
+}
+
+// BootstrapJoinCommand is JoinCommand for a machine that has never installed
+// the app: one PowerShell line that fetches the prebuilt tool into the
+// recipient's temp dir and joins from there. curl.exe rather than
+// Invoke-RestMethod because it ships with Windows 10 1803+ and does not
+// inherit PowerShell 5.1's .NET TLS defaults, which on older machines refuse
+// GitHub. The $env:TEMP in it is the recipient's, so the line stays valid
+// wherever it is pasted.
+func BootstrapJoinCommand(host, sessionID, token string) string {
+	return `$c = "$env:TEMP\claude-suite-claim.exe"; ` +
+		`if (!(Test-Path $c)) { curl.exe -L -o $c ` + claimToolURL + ` }; ` +
+		`& $c ` + claimArgs(host, sessionID, token)
+}
+
+// MCPJoinURL is the session's MCP endpoint — the door that needs no download
+// at all. The token travels in the URL because that URL is itself the thing
+// being handed over; it is as secret as the join command that carries the
+// same token.
+func MCPJoinURL(host, sessionID, token string) string {
+	return strings.Replace(host, "ws://", "http://", 1) + "/mcp/" + sessionID + "?token=" + token
+}
+
+// MCPJoinCommand registers the session as an MCP server with a teammate's
+// agent. One command, zero downloads: the agent then has join/submit/finish
+// as tools.
+func MCPJoinCommand(host, sessionID, token string) string {
+	return fmt.Sprintf(`claude mcp add --transport http claude-suite-debate "%s"`, MCPJoinURL(host, sessionID, token))
+}
+
+// AgentJoinPrompt is a self-contained instruction block the session owner
+// hands to a teammate, who pastes it into whatever AI agent they use.
+//
+// It encodes the decision tree, in order of least friction: a machine with the
+// app uses the tool it already has; without the tool the agent must ASK its
+// user whether downloading is acceptable; if not, the MCP endpoint joins with
+// no download at all. The asking is deliberate — downloading and running an
+// exe on someone's machine is their call, not their agent's.
+func AgentJoinPrompt(host, sessionID, token, subject string) string {
+	conn := fmt.Sprintf("--host %s --session %s --token %s --provider claude", host, sessionID, token)
+	return fmt.Sprintf(`Bạn được mời tham gia một phiên tranh luận (adjudication session) của Claude Suite với vai trò reviewer.
+
+Chủ đề phiên: %s
+
+BƯỚC 1 — chọn cách kết nối theo đúng thứ tự sau:
+
+A. Máy đã có claude-suite-claim trên PATH (đã cài app Claude Suite bằng installer):
+   dùng luôn, sang bước 2.
+
+B. Chưa có công cụ: HỎI người dùng của bạn muốn tải công cụ về hay không (đừng tự quyết).
+   - Đồng ý tải — Windows (PowerShell):
+     $c = "$env:TEMP\claude-suite-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c %s }
+     rồi thay "claude-suite-claim" trong các lệnh dưới bằng $c.
+     (macOS/Linux hoặc tải thất bại: git clone %s rồi chạy "go run ./cmd/claude-suite-claim" — cần Go.)
+   - KHÔNG muốn tải — kết nối MCP thẳng vào app của người mở phiên:
+     claude mcp add --transport http claude-suite-debate "%s"
+     (Gemini CLI: gemini mcp add --transport http claude-suite-debate "%s")
+     Khởi động lại agent nếu cần để nhận tool mới, rồi làm theo BƯỚC 2-MCP bên dưới; bỏ qua phần CLI.
+
+BƯỚC 2 — với công cụ CLI:
+1. Kiểm tra kết nối trước khi bỏ công review: claude-suite-claim %s --ping
+2. Xem các check mà claim được phép trỏ tới (chạy trong thư mục dự án đang xét): claude-suite-claim --checks
+   Falsifier PASS khi claim SAI, nên check FAIL là xác nhận lỗi có thật. Claim không có --falsify chỉ là ý kiến, không chặn được merge.
+3. Tự xem xét mã nguồn liên quan chủ đề, rồi nộp nhận định:
+   claude-suite-claim %s --subject "duong/dan/file.go:12" --assert "lỗi là gì, trong một câu" --falsify "ten-check"
+   (--subject/--assert/--falsify lặp lại được cho nhiều claim; --say "..." để thảo luận thêm.)
+4. Lệnh nộp claim tự chờ kết quả; verdict đầy đủ nằm ở .claude-suite/session-%s/verdict.json.
+
+BƯỚC 2-MCP — với kết nối MCP (tool trên server claude-suite-debate):
+1. join_session với author dạng "ten-ban@may/agent". Kết quả trả về một participant_key —
+   GIỮ LẠI và gửi kèm (cùng author) trong MỌI tool sau; thiếu nó call sẽ bị từ chối.
+2. list_checks để biết claim được trỏ tới check nào (quy tắc falsifier như trên).
+3. Tự xem xét mã nguồn, rồi submit_claim cho từng nhận định; bỏ trống falsifier nếu chỉ là ý kiến.
+4. finish_reporting khi hết claim, sau đó gọi get_session_state định kỳ để xem verdict và kết quả phiên.
+   Đừng im lặng quá lâu giữa các call: participant vắng mặt quá cửa sổ thu thập bị coi là đã rời phiên.`,
+		subject, claimToolURL, projectRepoURL,
+		MCPJoinURL(host, sessionID, token), MCPJoinURL(host, sessionID, token),
+		conn, conn, sessionID)
 }

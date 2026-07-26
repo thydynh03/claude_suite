@@ -82,7 +82,24 @@ type hosted struct {
 	mu        sync.Mutex
 	conns     map[string]*connection
 	submitted map[string]bool // authors who said they are finished
-	closed    bool
+	// remote holds authors who joined over the MCP endpoint, by last-seen
+	// time. They have no connection to drop and no way to be pushed to — they
+	// poll. Adjudication must wait for their finish_reporting exactly as it
+	// waits for a socket's done message, or a session would close while an
+	// MCP agent is mid-review. The timestamp is the counterpart of a socket
+	// disconnect: an MCP agent silent for a whole CollectWindow is treated as
+	// departed, so a closed laptop cannot hold the session open forever.
+	remote map[string]time.Time
+	// remoteKeys maps each MCP author to a per-participant secret issued at
+	// join. The session token is shared by the whole roster, so on its own it
+	// authenticates the session, not the caller — without this key one
+	// participant could submit claims or finish the collect phase as another.
+	remoteKeys map[string]string
+	// outcome is kept after Finish for the pollers: the websocket agents get
+	// it broadcast, but an MCP agent that asks a second later would otherwise
+	// find nothing.
+	outcome *Outcome
+	closed  bool
 }
 
 // Host accepts agents from other machines into adjudication sessions.
@@ -147,11 +164,13 @@ func (h *Host) Open(subject string, ttl time.Duration) (sessionID, token string,
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sessions[id] = &hosted{
-		session:   NewSession(id, subject),
-		token:     token,
-		expires:   time.Now().Add(ttl),
-		conns:     map[string]*connection{},
-		submitted: map[string]bool{},
+		session:    NewSession(id, subject),
+		token:      token,
+		expires:    time.Now().Add(ttl),
+		conns:      map[string]*connection{},
+		submitted:  map[string]bool{},
+		remote:     map[string]time.Time{},
+		remoteKeys: map[string]string{},
 	}
 	return id, token, nil
 }
@@ -211,6 +230,9 @@ func (h *Host) Handler() http.Handler {
 		}
 		h.serve(hs, ws)
 	})
+	// The zero-download door: any MCP-capable agent joins with `claude mcp add`
+	// and no binary at all. See mcp.go.
+	mux.HandleFunc("/mcp/", h.serveMCP)
 	return mux
 }
 
@@ -374,18 +396,37 @@ func (h *Host) handleDone(hs *hosted, c *connection) error {
 	return nil
 }
 
-// maybeAdjudicate moves the session on once every connected agent has finished.
+// maybeAdjudicate moves the session on once every participant — connected or
+// polling over MCP — has finished.
+//
+// An MCP participant silent for longer than CollectWindow no longer counts:
+// that is its version of a socket disconnect, and without it a laptop closed
+// mid-review would hold every other agent's verdict hostage until someone
+// found the Force button.
 func (h *Host) maybeAdjudicate(hs *hosted) {
 	hs.mu.Lock()
-	if hs.closed || hs.session.Phase() != PhaseCollect || len(hs.conns) == 0 {
-		hs.mu.Unlock()
-		return
+	live := 0
+	for range hs.conns {
+		live++
 	}
+	unfinished := false
 	for author := range hs.conns {
 		if !hs.submitted[author] {
-			hs.mu.Unlock()
-			return
+			unfinished = true
 		}
+	}
+	for author, seen := range hs.remote {
+		if time.Since(seen) > CollectWindow && !hs.submitted[author] {
+			continue // departed without finishing; do not wait for them
+		}
+		live++
+		if !hs.submitted[author] {
+			unfinished = true
+		}
+	}
+	if hs.closed || hs.session.Phase() != PhaseCollect || live == 0 || unfinished {
+		hs.mu.Unlock()
+		return
 	}
 	hs.closed = true
 	hs.mu.Unlock()
@@ -470,6 +511,9 @@ func (h *Host) Finish(sessionID string) (*Outcome, error) {
 	}
 
 	out := hs.session.Close()
+	hs.mu.Lock()
+	hs.outcome = out
+	hs.mu.Unlock()
 	h.broadcast(hs, Message{Type: MsgOutcome, Outcome: out, Phase: PhaseRecord})
 	h.emit(sessionID, "session closed")
 	return out, nil

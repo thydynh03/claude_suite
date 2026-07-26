@@ -62,3 +62,51 @@ func TestJoinCommandCarriesNoMachineSpecificPath(t *testing.T) {
 		}
 	}
 }
+
+// The bootstrap line is for a machine that never installed the app, so it may
+// not assume the tool: it must fetch the published exe itself, from the
+// stable latest-release URL, and then pass the same join parameters.
+func TestBootstrapJoinCommandFetchesTheToolItself(t *testing.T) {
+	cmd := BootstrapJoinCommand("ws://192.168.1.5:9111", "abc123", "tok")
+
+	for _, want := range []string{
+		"releases/latest/download/claude-suite-claim.exe",
+		"Test-Path",
+		"--host ws://192.168.1.5:9111", "--session abc123", "--token tok",
+	} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("bootstrap = %q, missing %q", cmd, want)
+		}
+	}
+	// $env:TEMP is the recipient's; a path from the generating machine
+	// (drive letter, Program Files) must not appear.
+	if strings.Contains(cmd, "C:") || strings.Contains(cmd, "Program Files") {
+		t.Errorf("bootstrap = %q, embeds a path from the generating machine", cmd)
+	}
+	if strings.Contains(cmd, "\n") {
+		t.Errorf("bootstrap must be one pasteable line, got %q", cmd)
+	}
+}
+
+// The prompt is pasted into an arbitrary AI agent, so it has to carry every
+// fact the agent needs: connection parameters, where to get the tool on each
+// OS, how to verify the connection, and how a claim differs from an opinion.
+func TestAgentJoinPromptIsSelfContained(t *testing.T) {
+	p := AgentJoinPrompt("ws://192.168.1.5:9111", "abc123", "tok", "backend/cli/process_windows.go:17")
+
+	for _, want := range []string{
+		"backend/cli/process_windows.go:17",
+		"--host ws://192.168.1.5:9111", "--session abc123", "--token tok",
+		"releases/latest/download/claude-suite-claim.exe",
+		"go run ./cmd/claude-suite-claim",
+		"https://github.com/thydynh03/claude_suite",
+		"--ping",
+		"--checks",
+		"--falsify",
+		"session-abc123/verdict.json",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt missing %q", want)
+		}
+	}
+}

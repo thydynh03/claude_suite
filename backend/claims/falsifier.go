@@ -114,6 +114,15 @@ func (r *Runner) Run(ctx context.Context, c *Claim) (Verdict, string, int) {
 		), 0
 	}
 
+	// A catalogue entry with no command cannot decide anything — and indexing
+	// it panicked the adjudication goroutine, which took the whole host down
+	// with every connected agent. Malformed checks.json entries are user
+	// input; they get a verdict, not a crash.
+	if len(check.Command) == 0 {
+		return VerdictInconclusive, fmt.Sprintf(
+			"check %q in %s has no command to run", check.Name, CatalogueFile), -1
+	}
+
 	timeout := DefaultTimeout
 	if check.TimeoutSec > 0 {
 		timeout = time.Duration(check.TimeoutSec) * time.Second

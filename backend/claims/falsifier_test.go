@@ -35,6 +35,22 @@ func shellCheck(name string, exitCode int) Check {
 	return Check{Name: name, Command: []string{"sh", "-c", "exit " + itoa(exitCode)}, TimeoutSec: 30}
 }
 
+// A catalogue entry without a command is user input, not an invariant: it used
+// to panic Runner.Run inside the adjudication goroutine and take the whole
+// host process down with every connected agent.
+func TestRunSurvivesACheckWithNoCommand(t *testing.T) {
+	r := &Runner{Catalogue: &Catalogue{Checks: []Check{{Name: "empty", Description: "malformed"}}}}
+	c := &Claim{Falsifier: "empty", Kind: KindVerifiable}
+
+	v, evidence, _ := r.Run(context.Background(), c)
+	if v != VerdictInconclusive {
+		t.Fatalf("verdict = %s, want inconclusive — an unrunnable check proves nothing", v)
+	}
+	if evidence == "" {
+		t.Fatal("no evidence text naming the malformed check")
+	}
+}
+
 func runnerFor(t *testing.T, ws string) *Runner {
 	t.Helper()
 	cat, err := LoadCatalogue(ws)
