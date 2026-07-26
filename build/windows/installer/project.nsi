@@ -87,18 +87,59 @@ ShowInstDetails show # This will always show the installation details.
 Function .onInit
    !insertmacro wails.checkArchitecture
 
+   # Everything below reads keys that wails_tools.nsh wrote under
+   # `SetRegView 64` into HKLM (this installer is RequestExecutionLevel admin).
+   # .onInit runs before any Section, so neither the view nor the shell
+   # context has been set yet: the first version of this check read SHCTX
+   # (= HKCU here) in the 32-bit view and could never fire.
+   SetRegView 64
+
    # Builds up to v2.14.1 installed under the author's GitHub handle
    # ("...\thydynh03\Claude Suite"). companyName is the product name now, so
    # without this a machine ends up with two installations and two entries in
    # Apps & features, and the old Start-menu shortcut keeps launching the old
    # build. Declining is allowed: it is the user's machine.
-   ReadRegStr $R0 SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\thydynh03ClaudeSuite" "UninstallString"
+   # The key name keeps the space: UNINST_KEY_NAME is the bare concatenation
+   # of companyName and productName, which were "thydynh03" + "Claude Suite".
+   ReadRegStr $R0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\thydynh03Claude Suite" "UninstallString"
    ${If} $R0 != ""
+       # /SD IDNO: a silent install (/S — CI uses it) must not pop a dialog;
+       # declining is the safe default there.
        MessageBox MB_YESNO|MB_ICONQUESTION \
            "Đã có bản Claude Suite cũ cài ở thư mục khác. Gỡ bản cũ trước khi cài bản mới?" \
-           IDNO skip_old_uninstall
-       ExecWait '$R0 /S'
+           /SD IDNO IDNO skip_old_uninstall
+       # _?= makes the uninstaller run in place instead of copying itself to
+       # %TEMP% and returning immediately — without it ExecWait comes back in
+       # milliseconds and the still-running old uninstall deletes the "Claude
+       # Suite.lnk" shortcuts AFTER this install has just created them (both
+       # builds share the shortcut names). The old dir is derived from the
+       # UninstallString's exact shape `"<dir>\uninstall.exe"`.
+       StrCpy $R2 $R0 "" 1
+       StrCpy $R2 $R2 -15
+       ExecWait '$R0 /S _?=$R2' $0
+       # In-place mode also means it cannot delete itself; finish for it.
+       Delete "$R2\uninstall.exe"
+       RMDir "$R2"
        skip_old_uninstall:
+   ${EndIf}
+
+   # An update must land where the app already is, not in the default dir:
+   # the in-app updater hands over to this installer, and a copy installed
+   # via the directory chooser would otherwise get a second installation in
+   # Program Files while the chosen one is orphaned. InstallLocation is
+   # written by our own install Section below; older installs only have
+   # UninstallString, whose exact shape is `"$INSTDIR\uninstall.exe"` —
+   # 1 leading quote to skip, 15 trailing characters to drop.
+   ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINST_KEY_NAME}" "InstallLocation"
+   ${If} $R1 == ""
+       ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINST_KEY_NAME}" "UninstallString"
+       ${If} $R1 != ""
+           StrCpy $R1 $R1 "" 1
+           StrCpy $R1 $R1 -15
+       ${EndIf}
+   ${EndIf}
+   ${If} $R1 != ""
+       StrCpy $INSTDIR $R1
    ${EndIf}
 FunctionEnd
 
@@ -136,6 +177,11 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+
+    # Where this install landed, so the next update's .onInit can come back
+    # to it. wails.writeUninstaller records everything about this key except
+    # the one value that says where the installation is.
+    WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINST_KEY_NAME}" "InstallLocation" "$INSTDIR"
 SectionEnd
 
 Section "uninstall"
