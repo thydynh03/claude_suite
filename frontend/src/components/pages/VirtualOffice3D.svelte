@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import { logs, agentsStore } from '../../lib/stores/appState';
+  import { logs, agentsStore, tasksStore } from '../../lib/stores/appState';
 
   let container: HTMLDivElement;
   let scene: THREE.Scene;
@@ -28,8 +28,101 @@
     if (scene && !isSimulating) {
       isAllSeatsPopulated = false;
       rebuildOfficeLayout();
+      // Seats moved, so the memory of where everyone sits is stale.
+      homeSeats = new Map();
+      syncAgentsToTasks($tasksStore as any[]);
     }
   });
+
+  // ── Task-driven movement ────────────────────────────────────────────
+  //
+  // The office used to move only when someone pressed "run scenario", and that
+  // scenario sent everyone to the same three spots on a timer regardless of what
+  // the agents were doing — coffee bar, conference room, back to desks, with a
+  // speech bubble each. It looked like a screensaver, not like a company.
+  //
+  // Now each agent goes where its current task says it should be, and stays at
+  // its desk when it has nothing to do.
+
+  // Where a kind of work happens. Task titles carry a [TAG] prefix from the AI
+  // planner ([ARCH], [BA], [CODE], [QA], [DEVOPS], [E2E]).
+  const WORK_ZONES: Record<string, { x: number; z: number; label: string }> = {
+    ARCH: { x: 13, z: 8, label: 'Phòng họp — thiết kế kiến trúc' },
+    BA: { x: 13, z: 8, label: 'Phòng họp — phân tích yêu cầu' },
+    DEVOPS: { x: 3, z: 9, label: 'Khu vận hành — triển khai' },
+    QA: { x: -9, z: 9, label: 'Khu kiểm thử' },
+    E2E: { x: -9, z: 9, label: 'Khu kiểm thử' },
+  };
+
+  function taskTag(title: string): string {
+    const m = /^\[([A-Z0-9]+)\]/.exec((title || '').trim());
+    return m ? m[1] : '';
+  }
+
+  let homeSeats = new Map<string, { x: number; z: number; rotY: number }>();
+
+  function rememberSeats() {
+    homeSeats = new Map(
+      agents3D.map((a) => [a.name, { x: a.targetX, z: a.targetZ, rotY: a.targetRotY ?? Math.PI }])
+    );
+  }
+
+  function syncAgentsToTasks(tasks: any[]) {
+    if (!scene || isSimulating || agents3D.length === 0) return;
+    if (homeSeats.size === 0) rememberSeats();
+
+    // Only running tasks move anyone. A queued task is not being worked on, and
+    // showing it as activity is the same kind of lie as the scripted scenario.
+    const running = (tasks || []).filter((t) => t.status === 'running');
+    const byAgent = new Map<string, any>();
+    for (const t of running) {
+      if (t.assigned_to) byAgent.set(t.assigned_to, t);
+    }
+
+    // Spread agents heading to the same zone, so two people working on
+    // architecture do not stand inside each other.
+    const zoneCounts = new Map<string, number>();
+
+    for (const a of agents3D) {
+      const seat = homeSeats.get(a.name);
+      const task = byAgent.get(a.name);
+
+      if (!task) {
+        if (seat) {
+          a.targetX = seat.x;
+          a.targetZ = seat.z;
+          a.targetRotY = seat.rotY;
+        }
+        a.isTyping = false;
+        a.bubbleText = '';
+        continue;
+      }
+
+      const zone = WORK_ZONES[taskTag(task.title)];
+      if (!zone) {
+        // Coding happens at the desk: the common case should not involve anyone
+        // walking anywhere.
+        if (seat) {
+          a.targetX = seat.x;
+          a.targetZ = seat.z;
+          a.targetRotY = seat.rotY;
+        }
+        a.isTyping = true;
+        a.bubbleText = task.title;
+        continue;
+      }
+
+      const n = zoneCounts.get(zone.label) || 0;
+      zoneCounts.set(zone.label, n + 1);
+      a.targetX = zone.x + (n % 3) * 1.6 - 1.6;
+      a.targetZ = zone.z + Math.floor(n / 3) * 1.6;
+      a.targetRotY = 0;
+      a.isTyping = false;
+      a.bubbleText = task.title;
+    }
+  }
+
+  const unsubscribeTasks = tasksStore.subscribe((list) => syncAgentsToTasks(list as any[]));
 
   function handleVisibilityChange() {
     if (document.hidden) {
@@ -47,6 +140,7 @@
 
   onDestroy(() => {
     unsubscribeAgents();
+    unsubscribeTasks();
     if (animId) cancelAnimationFrame(animId);
     window.removeEventListener('resize', handleResize);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -106,78 +200,95 @@
     $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: `Populated all 35 seats facing keyboards & dual monitors correctly` }];
   }
 
-  // Button 2: Run Full Office Corporate Scenario Simulation
+  // Walk the real plan, in dependency order.
+  //
+  // What was here before sent eight agents to the coffee bar, then to the
+  // conference room, then back to their desks on fixed timers, with speech
+  // bubbles saying "Discussing sprint roadmap over coffee". None of it referred
+  // to any task, so it looked like a screensaver rather than a company at work.
+  //
+  // This replays the actual board: it groups tasks into dependency levels — the
+  // ones nothing blocks first, then the ones those unblock — and moves the agent
+  // assigned to each one to where that kind of work happens. Same order the
+  // orchestrator dispatches in, so watching it tells you something true.
   async function handleRunFullOfficeScenario() {
     if (isSimulating) return;
-    if (agents3D.length < 5) {
-      handlePopulateAllSeats();
+    if (agents3D.length < 5) handlePopulateAllSeats();
+    if (homeSeats.size === 0) rememberSeats();
+
+    const tasks = ($tasksStore as any[]) || [];
+    if (tasks.length === 0) {
+      globalBubble = 'Chưa có task nào trên bảng — hãy tạo kế hoạch trước.';
+      return;
     }
 
     isSimulating = true;
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: `Initiating Full-Office Realistic Corporate Simulation (4 Phases)` }];
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: `Diễn lại quy trình với ${tasks.length} task theo thứ tự phụ thuộc` }];
 
-    // Phase 1: Morning Coffee & Watercooler Standup
-    globalBubble = 'Giai đoạn 1 — Cà phê sáng tại quầy';
-    const coffeeBarAgents = agents3D.slice(0, 8);
-    const originalPositions = coffeeBarAgents.map(a => ({ x: a.targetX, z: a.targetZ, rotY: a.targetRotY }));
+    // Group into dependency levels. A task whose blockers are not on the board —
+    // deleted, or outside this plan — is treated as ready rather than dropped,
+    // otherwise it would never be shown at all.
+    const byId = new Map(tasks.map((t) => [t.task_id, t]));
+    const placed = new Set<string>();
+    const levels: any[][] = [];
 
-    coffeeBarAgents.forEach((a, i) => {
-      a.targetX = -20 + (i % 4) * 1.8;
-      a.targetZ = 11 + Math.floor(i / 4) * 1.5;
-      a.targetRotY = 0;
-      a.bubbleText = 'Discussing sprint roadmap over coffee...';
-      a.isTyping = false;
-    });
-    await new Promise(r => setTimeout(r, 3500));
+    while (placed.size < tasks.length && levels.length < 20) {
+      const level = tasks.filter(
+        (t) =>
+          !placed.has(t.task_id) &&
+          (t.depends_on || []).every((d: string) => !byId.has(d) || placed.has(d))
+      );
+      // A cycle would otherwise spin here forever.
+      if (level.length === 0) break;
+      level.forEach((t) => placed.add(t.task_id));
+      levels.push(level);
+    }
 
-    // Phase 2: All-Hands Emergency Release Meeting in Conference Room
-    globalBubble = 'Giai đoạn 2 — Họp toàn thể tại phòng họp';
-    coffeeBarAgents.forEach((a, i) => {
-      a.bubbleText = 'Heading to Conference Room for release...';
-      a.targetX = 10 + (i % 3) * 2;
-      a.targetZ = 6 + Math.floor(i / 3) * 1.8;
-      a.targetRotY = Math.PI / 2;
-    });
-    await new Promise(r => setTimeout(r, 4000));
+    for (let i = 0; i < levels.length; i++) {
+      const level = levels[i];
+      globalBubble = `Bước ${i + 1}/${levels.length}: ${level.map((t) => t.title).join(' · ')}`;
 
-    // Phase 3: CEO Executive Review & Release Signoff
-    globalBubble = 'Giai đoạn 3 — Duyệt cấp lãnh đạo tại phòng CEO';
-    const leadAgent = agents3D[2] || agents3D[0];
-    const originalLeadPos = { x: leadAgent.targetX, z: leadAgent.targetZ, rotY: leadAgent.targetRotY };
-    leadAgent.targetX = 13;
-    leadAgent.targetZ = -8;
-    leadAgent.targetRotY = 0;
-    leadAgent.bubbleText = 'Pitching production release to CEO...';
-    await new Promise(r => setTimeout(r, 3500));
+      const zoneCounts = new Map<string, number>();
+      for (const a of agents3D) {
+        const task = level.find((t) => t.assigned_to === a.name);
+        const seat = homeSeats.get(a.name);
 
-    // Phase 4: Full Production Deployment - Coding Frenzy at Workstations
-    globalBubble = 'PHASE 4: Production Sprint Deployment! All 35 Agents Coding';
-    coffeeBarAgents.forEach((a, i) => {
-      a.targetX = originalPositions[i].x;
-      a.targetZ = originalPositions[i].z;
-      a.targetRotY = originalPositions[i].rotY || Math.PI;
-      a.bubbleText = 'Deploying production code!';
-      a.isTyping = true;
-    });
+        if (!task) {
+          if (seat) {
+            a.targetX = seat.x;
+            a.targetZ = seat.z;
+            a.targetRotY = seat.rotY;
+          }
+          a.isTyping = false;
+          a.bubbleText = '';
+          continue;
+        }
 
-    leadAgent.targetX = originalLeadPos.x;
-    leadAgent.targetZ = originalLeadPos.z;
-    leadAgent.targetRotY = originalLeadPos.rotY || Math.PI;
-    leadAgent.bubbleText = 'Reviewing PRs & CI/CD logs';
-    leadAgent.isTyping = true;
+        const zone = WORK_ZONES[taskTag(task.title)];
+        if (zone) {
+          const n = zoneCounts.get(zone.label) || 0;
+          zoneCounts.set(zone.label, n + 1);
+          a.targetX = zone.x + (n % 3) * 1.6 - 1.6;
+          a.targetZ = zone.z + Math.floor(n / 3) * 1.6;
+          a.targetRotY = 0;
+          a.isTyping = false;
+        } else if (seat) {
+          a.targetX = seat.x;
+          a.targetZ = seat.z;
+          a.targetRotY = seat.rotY;
+          a.isTyping = true;
+        }
+        a.bubbleText = task.title;
+      }
 
-    agents3D.forEach(a => {
-      a.isTyping = true;
-    });
+      await new Promise((r) => setTimeout(r, 3500));
+    }
 
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SUCCESS', message: `Production release deployed! All 35 workstations active.` }];
-    await new Promise(r => setTimeout(r, 4000));
-
-    agents3D.forEach(a => {
-      a.bubbleText = '';
-    });
-    globalBubble = 'VIRTUAL OFFICE: Production Release Complete! Team Working on Workstations.';
     isSimulating = false;
+    globalBubble = 'Đã diễn xong quy trình. Văn phòng quay lại bám theo task đang chạy thật.';
+    // Hand control back to the live view rather than leaving everyone frozen
+    // wherever the last step put them.
+    syncAgentsToTasks($tasksStore as any[]);
   }
 
   const CAMERA_VIEWS = [
