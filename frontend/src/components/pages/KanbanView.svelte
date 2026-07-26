@@ -202,21 +202,31 @@
     { key: 'failed', title: 'Failed', icon: 'cancel', color: 'text-rose-600' },
   ];
 
-  function getTasksByStatus(status: string): Task[] {
+  // A `$:` derivation, not a function called from the template. The columns
+  // used to render through `{@const colTasks = getTasksByStatus(col.key)}`,
+  // and a call in the markup reads its body untracked — only the argument is
+  // a dependency, and col.key never changes. Measured in KanbanView.test.ts:
+  // with a clean jsdom flush the counts and card lists freeze at their
+  // mounted values while the blocked badges beside them (driven by reactive
+  // `blockedById`) keep following the store. Same class, same fix, as the
+  // Cockpit metrics freeze.
+  $: tasksByStatus = (() => {
+    const out: Record<string, Task[]> = { backlog: [], queued: [], running: [], done: [], failed: [] };
     const list = Array.isArray(tasks) ? tasks : [];
     const q = searchQuery.toLowerCase().trim();
-    return list.filter((t) => {
-      if (!t || t.status !== status) return false;
-      if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    for (const t of list) {
+      if (!t || !(t.status in out)) continue;
+      if (filterPriority !== 'all' && t.priority !== filterPriority) continue;
       if (q) {
         const titleMatch = t.title?.toLowerCase().includes(q);
         const promptMatch = t.prompt?.toLowerCase().includes(q);
         const descMatch = t.description?.toLowerCase().includes(q);
-        return titleMatch || promptMatch || descMatch;
+        if (!titleMatch && !promptMatch && !descMatch) continue;
       }
-      return true;
-    });
-  }
+      out[t.status].push(t);
+    }
+    return out;
+  })();
 
   async function handleAddTask() {
     if (!newTaskTitle.trim()) return;
@@ -478,7 +488,7 @@
   <!-- 5 Columns Kanban Grid -->
   <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
     {#each columns as col}
-      {@const colTasks = getTasksByStatus(col.key)}
+      {@const colTasks = tasksByStatus[col.key] || []}
       <div class="flex flex-col gap-2">
         <!-- Column Header -->
         <div class="flex items-center justify-between px-1">

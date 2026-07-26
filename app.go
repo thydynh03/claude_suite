@@ -20,6 +20,7 @@ import (
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
+	"claude_suite/backend/secrets"
 	"claude_suite/backend/services"
 	"claude_suite/backend/textutil"
 	"claude_suite/backend/version"
@@ -750,10 +751,24 @@ func (a *App) loadAntiKeys() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
 	data, err := os.ReadFile(cfgPath)
-	if err == nil {
-		var keys []cli.AntiAccountKey
-		if json.Unmarshal(data, &keys) == nil {
-			cli.GlobalAntiPool.SetKeys(keys)
+	if err != nil {
+		return
+	}
+	plaintext, wasPlain, err := secrets.Open(data)
+	if err != nil {
+		// A sealed file this user cannot open — copied from another machine
+		// or account. Refusing beats silently starting with an empty pool
+		// and overwriting the file on the next save.
+		a.emitLog("❌ Không giải mã được anti_accounts.json (file thuộc máy/tài khoản khác?): "+err.Error(), "ERROR")
+		return
+	}
+	var keys []cli.AntiAccountKey
+	if json.Unmarshal(plaintext, &keys) == nil {
+		cli.GlobalAntiPool.SetKeys(keys)
+		if wasPlain && len(keys) > 0 {
+			// A legacy plain-text install: reseal it now, so the refresh
+			// tokens stop sitting on disk in the clear.
+			a.saveAntiKeys()
 		}
 	}
 }
@@ -762,10 +777,21 @@ func (a *App) saveAntiKeys() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
 	data, _ := json.MarshalIndent(cli.GlobalAntiPool.GetKeys(), "", "  ")
-	// 0600, not 0644: this file holds OAuth refresh tokens, and a world-readable
-	// copy of them in the user profile is a credential leak waiting for any other
-	// account on the machine.
-	_ = os.WriteFile(cfgPath, data, 0o600)
+	// DPAPI-sealed to this Windows user: the file holds OAuth refresh
+	// tokens, and 0600 alone does nothing against anything running as the
+	// user, a copied disk, or a synced backup.
+	sealed, err := secrets.Seal(data)
+	if err != nil {
+		// Losing the pool is worse than storing it the way every version
+		// until now did — keep the plain write, but say so.
+		a.emitLog("⚠️ Không niêm phong được anti_accounts.json, lưu dạng thường: "+err.Error(), "WARN")
+		sealed = data
+	}
+	// 0600 stays: defence in depth, and the non-Windows builds seal as
+	// identity.
+	if err := services.WriteFileAtomic(cfgPath, sealed, 0o600); err != nil {
+		a.emitLog("❌ Không lưu được anti_accounts.json: "+err.Error(), "ERROR")
+	}
 }
 
 // ── First-run Onboarding State ─────────────────────────────────────────
