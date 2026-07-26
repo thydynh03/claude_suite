@@ -2,7 +2,9 @@ package services
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -212,6 +214,12 @@ func (g *GitService) GetStatus(cwd string) (map[string]interface{}, error) {
 	var outBranch bytes.Buffer
 	cmdBranch.Stdout = &outBranch
 	if err := cmdBranch.Run(); err != nil {
+		// "git is not installed" and "this folder is not a repo" both landed on
+		// is_repo:false, so every git feature went quietly inert on a machine
+		// without git and nothing ever said why.
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, fmt.Errorf("chưa cài git trên máy này — cài Git for Windows rồi thử lại")
+		}
 		return map[string]interface{}{"is_repo": false}, nil
 	}
 	currentBranch := strings.TrimSpace(outBranch.String())

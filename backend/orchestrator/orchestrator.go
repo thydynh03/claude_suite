@@ -115,7 +115,7 @@ func NewOrchestrator(
 	gitSvc *services.GitService,
 	browserSvc *services.BrowserAgentService,
 ) *Orchestrator {
-	return &Orchestrator{
+	o := &Orchestrator{
 		agentRepo:      agentRepo,
 		taskRepo:       taskRepo,
 		memoryRepo:     memoryRepo,
@@ -139,6 +139,13 @@ func NewOrchestrator(
 			return time.Duration(1<<uint(retries)) * time.Second
 		},
 	}
+	// A webhook that is rejected (Slack and Discord answer 400 to a body they
+	// do not recognise) used to fail in complete silence, so the user saw the
+	// URL saved in Settings and simply never received anything.
+	o.notifierSvc.SetErrorHandler(func(msg string) {
+		o.emitLog("⚠️ Webhook: "+msg, "WARN")
+	})
+	return o
 }
 
 func (o *Orchestrator) SetContext(ctx context.Context) {

@@ -34,6 +34,26 @@ func TestJoinTargetsOfferMoreThanLocalhostWhenTheMachineIsOnANetwork(t *testing.
 	}
 }
 
+// A Windows dev machine collects virtual adapters — Hyper-V, WSL, VirtualBox,
+// VPN TAP — whose addresses are up, private and utterly unreachable from
+// another machine. Offering them as plain LAN addresses gave a teammate
+// several commands to try and no way to tell which one could work.
+func TestVirtualAdaptersAreRecognised(t *testing.T) {
+	for _, name := range []string{
+		"vEthernet (Default Switch)", "vEthernet (WSL)", "VirtualBox Host-Only Network",
+		"VMware Network Adapter VMnet1", "TAP-Windows Adapter V9",
+	} {
+		if !isVirtualAdapter(name) {
+			t.Errorf("%q was not recognised as a virtual adapter", name)
+		}
+	}
+	for _, name := range []string{"Wi-Fi", "Ethernet", "Ethernet 2", "eth0", "wlan0"} {
+		if isVirtualAdapter(name) {
+			t.Errorf("%q — a real NIC — was demoted as virtual", name)
+		}
+	}
+}
+
 func TestJoinTargetsRefuseAnAddressWithNoPort(t *testing.T) {
 	if got := JoinTargets(""); got != nil {
 		t.Errorf("JoinTargets(\"\") = %+v, want nil rather than a broken command", got)

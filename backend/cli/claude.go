@@ -20,6 +20,13 @@ import (
 
 var ShowCLIConsole bool = false
 
+// claudeMissingMessage says what is actually wrong. The raw exec error
+// ("executable file not found in %PATH%") sent users hunting for a PATH
+// problem when the CLI simply was not installed.
+const claudeMissingMessage = "chưa tìm thấy Claude Code CLI trên máy này. " +
+	"Cài bằng `npm install -g @anthropic-ai/claude-code` (hoặc bản cài đặt gốc), " +
+	"rồi chạy lại task — không cần khởi động lại app."
+
 type ClaudeCLI struct {
 	executablePath string
 	antigravity    *AntigravityCLI
@@ -88,9 +95,35 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
-	cmd := newCLICommand(ctx, c.executablePath, args)
-	if cwd != "" && dirExists(cwd) {
-		cmd.Dir = cwd
+	// Re-resolve when the cached answer is the bare fallback name. The path is
+	// resolved once at app start, so the natural repair loop — task fails, user
+	// installs the CLI, user retries — kept failing: a running process never
+	// sees the PATH an installer just extended.
+	exePath := c.executablePath
+	if !CLIInstalled(exePath) {
+		if fresh := ResolveClaudeCLI(); CLIInstalled(fresh) {
+			exePath = fresh
+			c.executablePath = fresh
+		} else {
+			return &RunResult{Success: false, Error: claudeMissingMessage}
+		}
+	}
+
+	cmd := newCLICommand(ctx, exePath, args)
+	if cwd != "" {
+		if dirExists(cwd) {
+			cmd.Dir = cwd
+		} else {
+			// Running in the app's own working directory instead is not a
+			// harmless fallback: the sub-agent runs with
+			// --dangerously-skip-permissions, so for a portable exe it would
+			// start writing files into the user's Downloads folder, outside
+			// any git snapshot.
+			return &RunResult{
+				Success: false,
+				Error:   fmt.Sprintf("workspace không tồn tại: %s — hãy chọn lại thư mục dự án trước khi chạy agent", cwd),
+			}
+		}
 	}
 	cmd.Env = append(os.Environ(),
 		"CI=true",

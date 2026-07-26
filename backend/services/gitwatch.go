@@ -37,8 +37,12 @@ type GitWatchService struct {
 	storePath  string
 	dirtySince time.Time
 	lastNudge  time.Time
-	running    bool
-	stopCh     chan struct{}
+	// lastInspectErr throttles the "cannot inspect the workspace" report to the
+	// same cadence as a nudge: the check runs every two minutes, and a machine
+	// without git fails every single one of them.
+	lastInspectErr time.Time
+	running        bool
+	stopCh         chan struct{}
 
 	// Wired by the app; the service knows nothing about git or the UI.
 	isDirty    func() (bool, error)
@@ -181,7 +185,18 @@ func (g *GitWatchService) tick(now time.Time) {
 
 	dirty, err := isDirty()
 	if err != nil {
-		// A workspace that cannot be inspected is not one to nag about.
+		// A workspace that cannot be inspected is not one to nag about — but a
+		// permanently failing check (git missing, workspace gone) must not look
+		// like a healthy quiet one, so it is reported at the nudge cadence.
+		g.mu.Lock()
+		report := now.Sub(g.lastInspectErr) >= gitWatchNudgeEvery
+		if report {
+			g.lastInspectErr = now
+		}
+		g.mu.Unlock()
+		if report && onNudge != nil {
+			onNudge(0)
+		}
 		return
 	}
 

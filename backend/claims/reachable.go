@@ -38,18 +38,43 @@ func JoinTargets(addr string) []JoinTarget {
 	}}
 
 	// VPN addresses go before plain LAN ones: they are the only listed
-	// addresses a teammate in another city can actually reach.
-	var lan []JoinTarget
-	for _, ip := range lanAddresses() {
-		scope, label := classifyAddr(ip)
-		t := JoinTarget{Host: "ws://" + net.JoinHostPort(ip, port), Label: label, Scope: scope}
-		if scope == "vpn" {
+	// addresses a teammate in another city can actually reach. Addresses that
+	// belong to a virtual adapter go last — they look exactly like LAN
+	// addresses and reach nobody.
+	var lan, virtual []JoinTarget
+	for _, a := range lanAddresses() {
+		scope, label := classifyAddr(a.ip)
+		t := JoinTarget{Host: "ws://" + net.JoinHostPort(a.ip, port), Label: label, Scope: scope}
+		switch {
+		case scope == "vpn":
 			targets = append(targets, t)
-		} else {
+		case isVirtualAdapter(a.iface):
+			t.Label = "Có thể là adapter ảo (" + a.iface + ") — thử sau cùng"
+			virtual = append(virtual, t)
+		default:
 			lan = append(lan, t)
 		}
 	}
-	return append(targets, lan...)
+	return append(append(targets, lan...), virtual...)
+}
+
+// isVirtualAdapter spots the interfaces a Windows dev machine collects —
+// Hyper-V switches, WSL's NAT, VirtualBox/VMware host-only networks, VPN TAP
+// devices. Their addresses are up, private and non-loopback, so they were
+// offered to a teammate as ordinary LAN addresses; picking one gives a
+// connect timeout with no hint that the address itself was the problem. They
+// are demoted rather than dropped: a bridged vEthernet can be the real NIC.
+func isVirtualAdapter(name string) bool {
+	lower := strings.ToLower(name)
+	for _, marker := range []string{
+		"vethernet", "wsl", "hyper-v", "default switch",
+		"virtualbox", "vmware", "tap-", "npcap", "loopback",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // classifyAddr separates addresses a remote teammate can use from ones only
@@ -129,13 +154,20 @@ func portOf(addr string) string {
 // interfaces that are down, and the link-local range Windows invents when DHCP
 // fails — handing a teammate a 169.254.x.x address is worse than handing them
 // nothing, because it looks like it should work.
-func lanAddresses() []string {
+// The interface name travels with the address so JoinTargets can tell a real
+// NIC from a virtual one.
+type ifaceAddr struct {
+	ip    string
+	iface string
+}
+
+func lanAddresses() []ifaceAddr {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
 
-	var out []string
+	var out []ifaceAddr
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
@@ -153,7 +185,7 @@ func lanAddresses() []string {
 			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
 				continue
 			}
-			out = append(out, ip.String())
+			out = append(out, ifaceAddr{ip: ip.String(), iface: iface.Name})
 		}
 	}
 	return out

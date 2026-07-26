@@ -46,6 +46,34 @@ func NewUpdaterService() *UpdaterService {
 	return &UpdaterService{}
 }
 
+// http.DefaultClient has no timeout. A connection that stalls after the
+// handshake — captive portal, a firewall that drops instead of refusing —
+// parked the update check forever, and the UI spun with no error. The
+// download gets its own, far longer budget: it moves tens of megabytes.
+var (
+	updateCheckClient    = &http.Client{Timeout: 20 * time.Second}
+	updateDownloadClient = &http.Client{Timeout: 15 * time.Minute}
+)
+
+// updateGaveUpMarker is written by the swap script when it could not replace
+// the exe. Reported once, on the next check, so a silently-lost update stops
+// looking like an update that never happened.
+func updateGaveUpMarker() string {
+	return filepath.Join(os.TempDir(), "claude_suite_update_gaveup.txt")
+}
+
+// TakeFailedSwapNotice reports (and clears) a previous update whose file swap
+// never succeeded — the exe stayed locked past the retry window, usually
+// Defender scanning the fresh download or a syncing folder.
+func (u *UpdaterService) TakeFailedSwapNotice() bool {
+	marker := updateGaveUpMarker()
+	if _, err := os.Stat(marker); err != nil {
+		return false
+	}
+	os.Remove(marker)
+	return true
+}
+
 // A release carries four .exe assets: the NSIS installer, the portable app,
 // and the two companion CLI tools. "First asset ending in .exe" is therefore
 // never a safe pick — depending on upload order it can hand the updater
@@ -186,6 +214,12 @@ func dirWritable(dir string) bool {
 }
 
 func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
+	// Why the check can fail is reported rather than swallowed: every failure
+	// used to return "no update available", so an offline first launch was
+	// told "Already up to date." — a false assurance that a proxy-blocked
+	// machine would repeat forever.
+	var lastErr error
+
 	apiUrl := "https://api.github.com/repos/thydynh03/claude_suite/releases/latest"
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
@@ -193,27 +227,40 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	}
 	req.Header.Set("User-Agent", "ClaudeSuite-App")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := updateCheckClient.Do(req)
+	if err != nil {
+		lastErr = err
+	}
 	if err == nil && resp.StatusCode != http.StatusOK {
+		lastErr = fmt.Errorf("GitHub trả về HTTP %d", resp.StatusCode)
 		// Closed here too: a 403 rate-limit or 404 used to leave the body —
 		// and its connection — pinned for the life of the process.
 		resp.Body.Close()
 	}
 	if err == nil && resp.StatusCode == http.StatusOK {
 		var rel GitHubRelease
-		if err := json.NewDecoder(resp.Body).Decode(&rel); err == nil && rel.TagName != "" {
+		decErr := json.NewDecoder(resp.Body).Decode(&rel)
+		if decErr != nil {
+			lastErr = decErr
+		}
+		if decErr == nil && rel.TagName != "" {
 			resp.Body.Close()
 			curVer := version.GetVersion()
 			if isNewerVersion(rel.TagName, curVer) {
 				downloadUrl := chooseAssetURL(rel.Assets, isInstalledCopy())
+				body := rel.Body
 				if downloadUrl == "" {
+					// No .exe in the release: the install button can only ever
+					// fail on this, so say so up front instead of letting the
+					// user discover it by pressing it.
 					downloadUrl = "https://github.com/thydynh03/claude_suite/archive/refs/tags/" + rel.TagName + ".zip"
+					body = manualOnlyNotice(rel.TagName) + body
 				}
 				return &UpdateInfo{
 					HasUpdate:   true,
 					Version:     rel.TagName,
 					DownloadURL: downloadUrl,
-					Body:        rel.Body,
+					Body:        body,
 				}, nil
 			}
 			return &UpdateInfo{HasUpdate: false, Version: curVer}, nil
@@ -226,13 +273,21 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	tReq, err := http.NewRequest("GET", tagsUrl, nil)
 	if err == nil {
 		tReq.Header.Set("User-Agent", "ClaudeSuite-App")
-		tResp, err := http.DefaultClient.Do(tReq)
+		tResp, err := updateCheckClient.Do(tReq)
+		if err != nil {
+			lastErr = err
+		}
 		if err == nil && tResp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("GitHub trả về HTTP %d", tResp.StatusCode)
 			tResp.Body.Close()
 		}
 		if err == nil && tResp.StatusCode == http.StatusOK {
 			var tags []GitHubTag
-			if err := json.NewDecoder(tResp.Body).Decode(&tags); err == nil && len(tags) > 0 {
+			decErr := json.NewDecoder(tResp.Body).Decode(&tags)
+			if decErr != nil {
+				lastErr = decErr
+			}
+			if decErr == nil && len(tags) > 0 {
 				tResp.Body.Close()
 				// The semver-max of the list, not tags[0]: the API's ordering
 				// is not a contract this decision should rest on.
@@ -248,7 +303,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 						HasUpdate:   true,
 						Version:     latestTag,
 						DownloadURL: "https://github.com/thydynh03/claude_suite/archive/refs/tags/" + latestTag + ".zip",
-						Body:        "Bản phát hành mới " + latestTag + " trên GitHub Repository.",
+						Body:        manualOnlyNotice(latestTag) + "Bản phát hành mới " + latestTag + " trên GitHub Repository.",
 					}, nil
 				}
 			}
@@ -256,7 +311,18 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 		}
 	}
 
+	if lastErr != nil {
+		return nil, fmt.Errorf("không kiểm tra được bản cập nhật (kiểm tra kết nối mạng): %w", lastErr)
+	}
 	return &UpdateInfo{HasUpdate: false, Version: version.GetVersion()}, nil
+}
+
+// manualOnlyNotice heads the release notes when the only thing to download is
+// a source archive: DownloadAndInstall refuses .zip, so the update exists but
+// cannot be installed from inside the app.
+func manualOnlyNotice(tag string) string {
+	return "⚠️ Bản " + tag + " chưa có file .exe để tự cập nhật — hãy tải và cài thủ công tại " +
+		"https://github.com/thydynh03/claude_suite/releases/latest\n\n"
 }
 
 // buildUpdaterBat swaps the downloaded exe over the running one after it
@@ -276,10 +342,24 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 // keeps the destination's ACL.
 //
 // ping is the sleep — timeout.exe aborts when it has no usable stdin.
+//
+// `chcp 65001` comes first because cmd.exe decodes a .bat in the console's
+// OEM codepage, not UTF-8: a Vietnamese user profile (%TEMP% carries the
+// account name) or a folder like D:\Phần mềm\ arrived at the copy as
+// mojibake, so the swap failed 30 times and the app — already exited —
+// never came back. The preamble is pure ASCII, so it decodes identically in
+// any codepage and switches the interpreter before it reads a path.
+//
+// A literal % in either path is doubled: batch eats single percents while
+// expanding variables, which silently truncated the path.
 func buildUpdaterBat(newExe, oldExe string) string {
+	esc := func(p string) string { return strings.ReplaceAll(p, "%", "%%") }
+	marker := esc(updateGaveUpMarker())
 	return fmt.Sprintf(`@echo off
+chcp 65001 > NUL
 set "NEW_EXE=%s"
 set "OLD_EXE=%s"
+set "GAVEUP=%s"
 set COUNT=0
 
 ping -n 4 127.0.0.1 > NUL
@@ -288,15 +368,18 @@ ping -n 4 127.0.0.1 > NUL
 copy /b /y "%%NEW_EXE%%" "%%OLD_EXE%%" > NUL 2>&1
 if not errorlevel 1 goto DONE
 set /a COUNT+=1
-if %%COUNT%% GEQ 30 goto DONE
+if %%COUNT%% GEQ 60 goto GAVEUP
 ping -n 2 127.0.0.1 > NUL
 goto RETRY
+
+:GAVEUP
+echo swap failed> "%%GAVEUP%%"
 
 :DONE
 del "%%NEW_EXE%%" > NUL 2>&1
 start "" "%%OLD_EXE%%"
 del "%%~f0"
-`, newExe, oldExe)
+`, esc(newExe), esc(oldExe), marker)
 }
 
 func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(downloaded, total int64)) error {
@@ -331,7 +414,14 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 	}
 	newExePath := out.Name()
 
-	resp, err := http.Get(downloadUrl)
+	dlReq, err := http.NewRequest("GET", downloadUrl, nil)
+	if err != nil {
+		out.Close()
+		os.Remove(newExePath)
+		return err
+	}
+	dlReq.Header.Set("User-Agent", "ClaudeSuite-App")
+	resp, err := updateDownloadClient.Do(dlReq)
 	if err != nil {
 		out.Close()
 		os.Remove(newExePath)

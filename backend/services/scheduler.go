@@ -435,6 +435,9 @@ func (s *SchedulerService) CancelJob(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.jobs, id)
+	// The quota-hold clock only cleared when the gate opened, so a job
+	// cancelled while held left its entry behind for the process lifetime.
+	delete(s.quotaHeldAt, id)
 	s.saveLocked()
 
 	if s.ctx != nil {
@@ -467,6 +470,11 @@ func (s *SchedulerService) SetJobEnabled(id string, enabled bool) bool {
 		return false
 	}
 	job.Enabled = enabled
+	if !enabled {
+		// A disabled job is skipped before the gate is consulted, so its hold
+		// clock would never be cleared otherwise.
+		delete(s.quotaHeldAt, id)
+	}
 	s.saveLocked()
 
 	state := "tạm dừng"

@@ -267,6 +267,66 @@ func TestAnExpiredAccessTokenIsRefreshedAgain(t *testing.T) {
 	}
 }
 
+// Ids were minted as "key-<count+1>", so anything deleted freed a number that
+// the next account then reused. DeleteKey removes EVERY row with the id, so
+// deleting the newcomer silently deleted the older account with the same id.
+func TestAddingAfterADeleteDoesNotReuseAnId(t *testing.T) {
+	pool := &AccountKeyPool{}
+	first := pool.AddRefreshAccount("one@example.com", "1//a")
+	second := pool.AddRefreshAccount("two@example.com", "1//b")
+	pool.DeleteKey(first)
+
+	third := pool.AddRefreshAccount("three@example.com", "1//c")
+	if third == second {
+		t.Fatalf("new account reused the id %q of a live account", third)
+	}
+
+	// The real damage: deleting the newcomer took the survivor with it.
+	pool.DeleteKey(third)
+	keys := pool.GetKeys()
+	if len(keys) != 1 || keys[0].Email != "two@example.com" {
+		t.Fatalf("deleting one account left %+v, want only two@example.com", keys)
+	}
+}
+
+// Naming a key "Work Key" used to display "work.key@gmail.com" as its account
+// email — invented identity in the table that is meant to be measured, and it
+// broke the email dedupe when the real account was imported later.
+func TestAddKeyDoesNotInventAnEmail(t *testing.T) {
+	pool := &AccountKeyPool{}
+	pool.AddKey("Work Key", "AIza-secret")
+
+	keys := pool.GetKeys()
+	if len(keys) != 1 {
+		t.Fatalf("expected one account, got %d", len(keys))
+	}
+	if keys[0].Email != "" {
+		t.Errorf("email = %q, want empty rather than an invented address", keys[0].Email)
+	}
+}
+
+// Drawing the pool on screen must not count requests against an account: the
+// TUI redraws on every keypress, and GetCurrentAccount's contract is "a
+// request is about to be sent".
+func TestPeekCurrentAccountDoesNotCountARequest(t *testing.T) {
+	pool := poolWith(AntiAccountKey{ID: "key-1", Email: "one@example.com", Status: "active"})
+
+	before := pool.GetKeys()[0].Usage.Requests
+	for i := 0; i < 5; i++ {
+		if acc := pool.PeekCurrentAccount(); acc == nil {
+			t.Fatal("peek returned no account")
+		}
+	}
+	if after := pool.GetKeys()[0].Usage.Requests; after != before {
+		t.Errorf("request count went %d → %d just from looking at the pool", before, after)
+	}
+
+	pool.GetCurrentAccount()
+	if after := pool.GetKeys()[0].Usage.Requests; after != before+1 {
+		t.Errorf("an actual run did not count: %d → %d", before, after)
+	}
+}
+
 // A revoked refresh token is switched off rather than retried every minute.
 func TestDisableKeyStopsAnAccountBeingRetried(t *testing.T) {
 	pool := &AccountKeyPool{}

@@ -1,45 +1,54 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { activeTab, orchestratorRunning, sidebarCollapsed } from '../../lib/stores/appState';
   import { t } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
-  // Reports what the orchestrator actually did rather than assuming it started.
-  // Setting this true unconditionally left the sidebar claiming a run that never
-  // began, which then disagreed with the board.
+  // The real version, from the backend. A hardcoded label here drifted to
+  // "v4.8" while the app shipped v2.x — worse than showing nothing.
+  let appVersion = '';
+  onMount(async () => {
+    try {
+      appVersion = await AppBindings.GetAppVersion();
+    } catch {
+      appVersion = '';
+    }
+  });
+
   // Ctrl+1..9 across the whole list, in the order shown. Announced in each
   // button's tooltip so the shortcut is discoverable rather than documented.
   const navGroups = [
     {
       title: 'Làm việc',
       items: [
-        { id: 'cockpit', label: $t('cockpit'), title: 'AI Cockpit', icon: 'rocket_launch', color: 'text-primary', shortcut: 'Ctrl+1' },
-        { id: 'kanban', label: $t('kanban'), title: 'Task Board & Planning', icon: 'assignment', color: 'text-secondary', shortcut: 'Ctrl+2' },
-        { id: 'editor', label: $t('code_studio'), title: 'Agent IDE & Code Studio', icon: 'code', color: 'text-primary', shortcut: 'Ctrl+3' },
-        { id: 'git', label: 'Source Control', title: 'Source Control', icon: 'account_tree', color: 'text-primary', shortcut: 'Ctrl+4' },
+        { id: 'cockpit', label: $t('cockpit'), title: 'AI Cockpit', icon: 'rocket_launch', shortcut: 'Ctrl+1' },
+        { id: 'kanban', label: $t('kanban'), title: 'Task Board & Planning', icon: 'assignment', shortcut: 'Ctrl+2' },
+        { id: 'editor', label: $t('code_studio'), title: 'Agent IDE & Code Studio', icon: 'code', shortcut: 'Ctrl+3' },
+        { id: 'git', label: 'Source Control', title: 'Source Control', icon: 'account_tree', shortcut: 'Ctrl+4' },
       ],
     },
     {
       title: 'Tự động hoá',
       items: [
-        { id: 'scheduler', label: 'Scheduler', title: 'Scheduler & Jobs', icon: 'schedule', color: 'text-tertiary', shortcut: 'Ctrl+5' },
-        { id: 'browser', label: 'Browser Agent', title: 'Browser Agent', icon: 'travel_explore', color: 'text-secondary', shortcut: 'Ctrl+6' },
-        { id: 'claims', label: 'Phân xử', title: 'Claims & Adjudication', icon: 'gavel', color: 'text-tertiary', shortcut: 'Ctrl+7' },
+        { id: 'scheduler', label: 'Scheduler', title: 'Scheduler & Jobs', icon: 'schedule', shortcut: 'Ctrl+5' },
+        { id: 'browser', label: 'Browser Agent', title: 'Browser Agent', icon: 'travel_explore', shortcut: 'Ctrl+6' },
+        { id: 'claims', label: 'Phân xử', title: 'Claims & Adjudication', icon: 'gavel', shortcut: 'Ctrl+7' },
       ],
     },
     {
       title: 'Giám sát',
       items: [
-        { id: 'office', label: 'Virtual Office', title: 'Virtual Office 3D', icon: 'meeting_room', color: 'text-secondary', shortcut: 'Ctrl+8' },
+        { id: 'office', label: 'Virtual Office', title: 'Virtual Office 3D', icon: 'meeting_room', shortcut: 'Ctrl+8' },
         // No shortcut: all ten Ctrl+digit slots are taken, and renumbering
         // them would break everyone's muscle memory (see App.svelte).
-        { id: 'memory', label: 'Memory', title: 'Memory & Project Map', icon: 'psychology', color: 'text-tertiary', shortcut: '' },
+        { id: 'memory', label: 'Memory', title: 'Memory & Project Map', icon: 'psychology', shortcut: '' },
       ],
     },
     {
       title: 'Cấu hình',
       items: [
-        { id: 'roles', label: 'Agent Roles', title: 'Agent Roles', icon: 'group', color: 'text-tertiary', shortcut: 'Ctrl+9' },
-        { id: 'settings', label: $t('settings'), title: 'Studio & Settings', icon: 'settings', color: 'text-secondary', shortcut: 'Ctrl+0' },
+        { id: 'roles', label: 'Agent Roles', title: 'Agent Roles', icon: 'group', shortcut: 'Ctrl+9' },
+        { id: 'settings', label: $t('settings'), title: 'Studio & Settings', icon: 'settings', shortcut: 'Ctrl+0' },
       ],
     },
   ];
@@ -57,12 +66,14 @@
 
 <aside class="fixed left-0 top-[60px] h-[calc(100vh-60px)] {$sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'} flex flex-col py-4 bg-surface-container-low border-r border-outline-variant z-40 transition-all duration-300">
   <!-- Brand Header & Collapse Toggle -->
-  <div class="px-4 mb-6 flex items-center justify-between">
+  <div class="px-4 mb-4 flex items-center justify-between">
     <div class="flex items-center gap-2 overflow-hidden">
       {#if !$sidebarCollapsed}
         <div class="truncate">
-          <h2 class="font-bold text-primary leading-tight text-sm truncate">Agent Center</h2>
-          <p class="text-[9px] text-on-surface-variant uppercase font-bold tracking-wider">v4.8 Orchestrator</p>
+          <h2 class="font-semibold text-on-surface leading-tight text-sm truncate">Agent Center</h2>
+          {#if appVersion}
+            <p class="text-[10px] text-on-surface-variant">{appVersion}</p>
+          {/if}
         </div>
       {/if}
     </div>
@@ -70,9 +81,9 @@
       type="button"
       on:click|preventDefault={() => sidebarCollapsed.update(c => !c)}
       class="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant transition-colors flex items-center justify-center cursor-pointer"
-      title={$sidebarCollapsed ? "Mở rộng Sidebar (>>)" : "Thu gọn Sidebar (<<)"}
+      title={$sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
     >
-      <span class="material-symbols-outlined text-lg">{$sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
+      <span class="material-symbols-outlined text-base">{$sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
     </button>
   </div>
 
@@ -84,7 +95,7 @@
   <nav class="flex-1 overflow-y-auto">
     {#each navGroups as group}
       {#if !$sidebarCollapsed}
-        <p class="px-5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-outline">
+        <p class="px-5 pt-3 pb-1 text-[10px] font-medium text-outline">
           {group.title}
         </p>
       {:else}
@@ -96,18 +107,18 @@
           type="button"
           on:click|preventDefault={() => activeTab.set(item.id)}
           title={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
-          class="w-[calc(100%-16px)] mx-2 my-0.5 flex items-center p-2.5 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+          class="w-[calc(100%-16px)] mx-2 my-0.5 flex items-center px-2.5 py-2 transition-colors rounded-lg text-left text-xs cursor-pointer
           {$activeTab === item.id
-            ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold'
+            ? 'bg-secondary-container text-on-secondary-container font-medium'
             : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
         >
-          <span class="material-symbols-outlined {item.color} flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">
+          <span class="material-symbols-outlined flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-lg' : 'mr-3 text-base'}">
             {item.icon}
           </span>
           {#if !$sidebarCollapsed}
             <span class="truncate flex-1">{item.label}</span>
             {#if item.shortcut}
-              <span class="text-[9px] font-mono text-outline">{item.shortcut}</span>
+              <span class="text-[10px] font-mono text-outline">{item.shortcut}</span>
             {/if}
           {/if}
         </button>
@@ -121,27 +132,27 @@
       type="button"
       on:click|preventDefault={handleExecutePlan}
       title="Execute Plan"
-      class="w-full bg-primary py-3 rounded-xl text-on-primary font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-4 shadow-sm active:scale-95 cursor-pointer"
+      class="w-full bg-primary py-2 rounded-lg text-on-primary font-medium text-xs hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mb-3 cursor-pointer"
     >
-      <span class="material-symbols-outlined">play_arrow</span>
+      <span class="material-symbols-outlined text-base">play_arrow</span>
       {#if !$sidebarCollapsed}<span>Execute Plan</span>{/if}
     </button>
 
     {#if !$sidebarCollapsed}
-      <div class="space-y-1">
-        <button 
+      <div class="space-y-0.5">
+        <button
           type="button"
           on:click|preventDefault={() => activeTab.set('docs')}
-          class="w-full text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all cursor-pointer text-left {$activeTab === 'docs' ? 'bg-secondary-container text-on-secondary-container font-bold' : ''}">
-          <span class="material-symbols-outlined text-base mr-3 text-primary">description</span>
-          <span class="uppercase tracking-wider font-semibold">DOCS</span>
+          class="w-full flex items-center px-2.5 py-2 text-xs rounded-lg transition-colors cursor-pointer text-left {$activeTab === 'docs' ? 'bg-secondary-container text-on-secondary-container font-medium' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}">
+          <span class="material-symbols-outlined text-base mr-3">description</span>
+          <span>Docs</span>
         </button>
-        <button 
+        <button
           type="button"
           on:click|preventDefault={() => activeTab.set('support')}
-          class="w-full text-on-surface-variant hover:text-on-surface flex items-center p-2 text-xs rounded-xl hover:bg-surface-container-low transition-all cursor-pointer text-left {$activeTab === 'support' ? 'bg-secondary-container text-on-secondary-container font-bold' : ''}">
-          <span class="material-symbols-outlined text-base mr-3 text-secondary">help</span>
-          <span class="uppercase tracking-wider font-semibold">SUPPORT</span>
+          class="w-full flex items-center px-2.5 py-2 text-xs rounded-lg transition-colors cursor-pointer text-left {$activeTab === 'support' ? 'bg-secondary-container text-on-secondary-container font-medium' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}">
+          <span class="material-symbols-outlined text-base mr-3">help</span>
+          <span>Support</span>
         </button>
       </div>
     {/if}

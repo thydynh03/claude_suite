@@ -136,14 +136,16 @@
   }
 
   async function updateConcurrency(n: number) {
+    const prev = maxConcurrency;
     maxConcurrency = n;
     try {
       await (AppBindings as any).SetMaxConcurrency(n);
       addLog(`Số agent song song tối đa: ${n}`, 'INFO');
       addToast(`Chạy tối đa ${n} agent song song.`, 'SUCCESS');
     } catch (e) {
-      // The local variable already moved, so a failure here leaves the control
-      // showing a limit the orchestrator is not using.
+      // Put the control back: leaving it moved would show a limit the
+      // orchestrator is not actually using (same rollback as toggleVerify).
+      maxConcurrency = prev;
       addToast(`Không đặt được số agent song song: ${e}`, 'ERROR');
     }
   }

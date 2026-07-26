@@ -569,7 +569,10 @@ func (m Model) settingsDetailView(section int) string {
 
 func (m Model) antigravityView() string {
 	keys := cli.GlobalAntiPool.GetKeys()
-	current := cli.GlobalAntiPool.GetCurrentAccount()
+	// Peek, not Get: GetCurrentAccount counts a request against the account,
+	// and this view redraws on every keypress — browsing the screen inflated
+	// the usage numbers the table below presents as measured.
+	current := cli.GlobalAntiPool.PeekCurrentAccount()
 	currentName := "none"
 	if current != nil {
 		currentName = current.Name

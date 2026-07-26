@@ -215,20 +215,20 @@
           <div class="absolute left-0 top-full mt-1 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
             <div class="py-1">
               <button type="button" on:click={handleNewConversation} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-primary">chat</span> New Conversation</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">chat</span> New Conversation</span>
                 <span class="text-[10px] text-outline font-mono">Ctrl+Shift+O</span>
               </button>
               <button type="button" on:click={handleCreateProject} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">create_new_folder</span> Create Project</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">create_new_folder</span> Create Project</span>
               </button>
               <button type="button" on:click={handleCommandPalette} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-emerald-600">terminal</span> Command Palette</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">terminal</span> Command Palette</span>
                 <span class="text-[10px] text-outline font-mono">Ctrl+Shift+P</span>
               </button>
             </div>
             <div class="py-1">
               <button type="button" on:click={handleSelectFolder} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-amber-500">folder_open</span> Open Workspace</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">folder_open</span> Open Workspace</span>
               </button>
             </div>
           </div>
@@ -282,7 +282,7 @@
               </button>
             </div>
             <div class="py-1">
-              <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-rose-500/10 text-rose-600 transition-colors flex justify-between items-center font-bold">
+              <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-error/10 text-error transition-colors flex justify-between items-center">
                 <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Close</span>
               </button>
             </div>
@@ -292,8 +292,8 @@
     </nav>
 
     <!-- Workspace Pill Badge -->
-    <button on:click={handleSelectFolder} class="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-3 py-1 text-xs hover:bg-surface-container-high transition-all">
-      <span class="material-symbols-outlined text-sm text-primary">folder</span>
+    <button on:click={handleSelectFolder} class="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-3 py-1 text-xs hover:bg-surface-container-high transition-colors">
+      <span class="material-symbols-outlined text-sm text-on-surface-variant">folder</span>
       <span class="font-medium text-on-surface truncate max-w-[180px]">
         {$workspaceFolder ? $workspaceFolder.split('\\').pop() : 'Chọn Workspace'}
       </span>
@@ -302,18 +302,18 @@
 
   <div class="flex items-center gap-4">
     <!-- Orchestrator Pill -->
-    <button on:click={handleToggleOrchestrator} class="flex items-center gap-2 bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant hover:bg-surface-container transition-all">
-      <div class="w-2 h-2 rounded-full {$orchestratorRunning ? 'bg-primary animate-pulse' : 'bg-outline'}"></div>
-      <span class="text-[11px] font-bold uppercase tracking-wider {$orchestratorRunning ? 'text-primary' : 'text-on-surface-variant'}">
-        Orchestrator: {$orchestratorRunning ? 'Active' : 'Inactive'}
+    <button on:click={handleToggleOrchestrator} class="flex items-center gap-2 bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant hover:bg-surface-container transition-colors">
+      <div class="w-2 h-2 rounded-full {$orchestratorRunning ? 'bg-success' : 'bg-outline'}"></div>
+      <span class="text-[11px] font-medium {$orchestratorRunning ? 'text-on-surface' : 'text-on-surface-variant'}">
+        Orchestrator {$orchestratorRunning ? 'đang chạy' : 'tạm dừng'}
       </span>
     </button>
 
     <!-- Thinking Pill -->
     {#if $isThinking}
-      <div class="flex items-center gap-2 bg-tertiary-container/30 text-tertiary px-3 py-1 rounded-full border border-tertiary/30 text-xs animate-pulse">
-        <span class="material-symbols-outlined text-sm">psychology</span>
-        <span class="font-semibold text-[11px]">AI Thinking...</span>
+      <div class="flex items-center gap-2 bg-surface-container px-3 py-1 rounded-full border border-outline-variant text-xs text-on-surface-variant">
+        <span class="material-symbols-outlined text-sm animate-pulse">psychology</span>
+        <span class="text-[11px]">Đang suy nghĩ…</span>
       </div>
     {/if}
 
@@ -325,7 +325,7 @@
         class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-lg hover:bg-surface-container-high cursor-pointer"
         title="Git Branch Manager, Log & Revert"
       >
-        <span class="material-symbols-outlined text-xl">account_tree</span>
+        <span class="material-symbols-outlined text-lg">account_tree</span>
       </button>
       <button
         type="button"
@@ -333,26 +333,26 @@
         class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-lg hover:bg-surface-container-high cursor-pointer"
         title="Git Commit, Review & Staging"
       >
-        <span class="material-symbols-outlined text-xl">schema</span>
+        <span class="material-symbols-outlined text-lg">schema</span>
       </button>
 
       <!-- Language Switcher -->
-      <button 
+      <button
         type="button"
-        on:click={() => currentLang.update(l => l === 'vi' ? 'en' : 'vi')} 
-        class="px-2 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-outline-variant" 
-        title="Switch Language (Chuyển ngôn ngữ)">
-        <span>{$currentLang === 'vi' ? '🇻🇳 VI' : '🇺🇸 EN'}</span>
+        on:click={() => currentLang.update(l => l === 'vi' ? 'en' : 'vi')}
+        class="px-2 py-1 hover:bg-surface-container-high text-on-surface-variant rounded-lg text-xs font-medium transition-colors cursor-pointer border border-outline-variant"
+        title="Chuyển ngôn ngữ">
+        {$currentLang === 'vi' ? 'VI' : 'EN'}
       </button>
 
       <!-- Theme Switcher -->
-      <button on:click={toggleTheme} class="text-on-surface-variant hover:text-primary transition-colors p-1" title="Toggle Theme">
-        <span class="material-symbols-outlined text-xl">{$theme === 'dark' ? 'dark_mode' : 'light_mode'}</span>
+      <button on:click={toggleTheme} class="text-on-surface-variant hover:text-on-surface transition-colors p-1" title="Đổi giao diện sáng/tối">
+        <span class="material-symbols-outlined text-lg">{$theme === 'dark' ? 'dark_mode' : 'light_mode'}</span>
       </button>
     </div>
 
     <!-- Prompt Architect Button -->
-    <button on:click={() => activeTab.set('cockpit')} class="bg-primary-container text-on-primary-container font-semibold text-xs uppercase px-4 py-2 rounded-xl hover:opacity-90 transition-all flex items-center gap-1 shadow-sm">
+    <button on:click={() => activeTab.set('cockpit')} class="bg-primary text-on-primary font-medium text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5">
       <span class="material-symbols-outlined text-sm">psychology</span>
       Prompt Architect
     </button>
@@ -362,10 +362,10 @@
 <!-- Modal 1: Git Branch Manager & Revert History -->
 {#if showGitBranchModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[560px] space-y-4 max-h-[85vh] flex flex-col">
+  <div class="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 w-[560px] space-y-4 max-h-[85vh] flex flex-col">
     <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
-      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary">account_tree</span>
+      <h3 class="text-sm font-semibold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-base text-on-surface-variant">account_tree</span>
         Git Branch Manager & Commit Log
       </h3>
       <button type="button" on:click={() => showGitBranchModal = false} class="text-on-surface-variant hover:text-on-surface">
@@ -376,12 +376,12 @@
     <!-- Active Branch & Switcher -->
     <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 space-y-2 text-xs">
       <div class="flex items-center justify-between">
-        <span class="font-bold text-on-surface flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm text-secondary">call_split</span>
-          Current Branch: <strong class="text-primary font-mono text-sm ml-1">{gitBranchInfo?.current || 'master'}</strong>
+        <span class="font-medium text-on-surface flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">call_split</span>
+          Branch hiện tại: <strong class="text-on-surface font-mono text-sm ml-1">{gitBranchInfo?.current || 'master'}</strong>
         </span>
-        <span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">
-          {gitStatus?.changed_files || 0} modified file(s)
+        <span class="text-[10px] bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded font-mono">
+          {gitStatus?.changed_files || 0} file đã sửa
         </span>
       </div>
 
@@ -397,23 +397,23 @@
           type="button" 
           on:click={handleCreateBranch} 
           disabled={isGitActionRunning}
-          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1"
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-1"
         >
-          <span class="material-symbols-outlined text-sm">add_link</span> Tạo Branch
+          <span class="material-symbols-outlined text-sm">add</span> Tạo branch
         </button>
       </div>
 
       <!-- Available Branches -->
       {#if gitBranchInfo?.branches?.length > 0}
         <div class="pt-2">
-          <span class="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">Danh sách Branch:</span>
+          <span class="text-[10px] font-medium text-on-surface-variant block mb-1">Danh sách branch</span>
           <div class="flex flex-wrap gap-1.5">
             {#each gitBranchInfo.branches as b}
               <button 
                 type="button"
                 on:click={() => handleCheckoutBranch(b)}
-                class="px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer flex items-center gap-1
-                {b === gitBranchInfo.current ? 'bg-primary text-on-primary border-primary font-bold shadow-sm' : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container'}"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-colors cursor-pointer flex items-center gap-1
+                {b === gitBranchInfo.current ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container'}"
               >
                 <span class="material-symbols-outlined text-xs">commit</span> {b}
               </button>
@@ -425,21 +425,21 @@
 
     <!-- Commit History & Revert -->
     <div class="flex-1 overflow-y-auto space-y-2 pr-1">
-      <span class="text-xs font-bold text-on-surface uppercase block">Lịch sử Commit (Nhấn Revert để khôi phục):</span>
+      <span class="text-xs font-medium text-on-surface block">Lịch sử commit (nhấn Revert để khôi phục)</span>
       {#each gitCommits as c}
-        <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-3 flex items-center justify-between text-xs hover:border-primary transition-all">
+        <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-lg p-3 flex items-center justify-between text-xs hover:bg-surface-container-low transition-colors">
           <div class="space-y-0.5 max-w-[380px]">
             <div class="flex items-center gap-2">
-              <span class="font-mono text-primary font-bold text-[11px] bg-primary/10 px-1.5 py-0.5 rounded">{c.hash}</span>
-              <span class="font-semibold text-on-surface truncate">{c.message}</span>
+              <span class="font-mono text-on-surface-variant text-[11px] bg-surface-container-high px-1.5 py-0.5 rounded">{c.hash}</span>
+              <span class="text-on-surface truncate">{c.message}</span>
             </div>
             <p class="text-[10px] text-on-surface-variant">{c.author} · {c.date}</p>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             on:click={() => handleRevertCommit(c.hash)}
             disabled={isGitActionRunning}
-            class="px-2.5 py-1 bg-rose-500/10 text-rose-600 border border-rose-500/30 rounded-lg text-[10px] font-bold hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1"
+            class="px-2.5 py-1 text-error border border-outline-variant rounded-lg text-[10px] font-medium hover:bg-error/10 transition-colors cursor-pointer flex items-center gap-1"
           >
             <span class="material-symbols-outlined text-xs">undo</span> Revert
           </button>
@@ -455,10 +455,10 @@
 <!-- Modal 2: Git Commit & Code Review -->
 {#if showGitCommitModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[480px] space-y-4">
+  <div class="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 w-[480px] space-y-4">
     <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
-      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
-        <span class="material-symbols-outlined text-secondary">schema</span>
+      <h3 class="text-sm font-semibold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-base text-on-surface-variant">schema</span>
         Git Commit & Code Review
       </h3>
       <button type="button" on:click={() => showGitCommitModal = false} class="text-on-surface-variant hover:text-on-surface">
@@ -467,18 +467,18 @@
     </div>
 
     <div class="space-y-3 text-xs">
-      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 flex justify-between items-center">
+      <div class="bg-surface-container-low border border-outline-variant rounded-lg p-3 flex justify-between items-center">
         <div>
-          <span class="font-bold text-on-surface">Trạng thái Workspace:</span>
-          <p class="text-on-surface-variant">{gitStatus?.changed_files || 0} file(s) đã sửa đổi</p>
+          <span class="font-medium text-on-surface">Trạng thái workspace</span>
+          <p class="text-on-surface-variant">{gitStatus?.changed_files || 0} file đã sửa đổi</p>
         </div>
-        <span class="px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase {gitStatus?.clean ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}">
+        <span class="px-2.5 py-1 rounded-full font-mono text-[10px] font-medium {gitStatus?.clean ? 'text-success' : 'text-warning'}">
           {gitStatus?.clean ? 'Clean' : 'Modified'}
         </span>
       </div>
 
       <div>
-        <label for="git-commit-msg" class="font-bold text-on-surface block mb-1">Nội dung Commit (Message):</label>
+        <label for="git-commit-msg" class="font-medium text-on-surface block mb-1">Nội dung commit</label>
         <textarea 
           id="git-commit-msg"
           bind:value={commitMessage}
@@ -492,15 +492,15 @@
       <button 
         type="button" 
         on:click={() => showGitCommitModal = false} 
-        class="px-4 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs rounded-xl hover:bg-surface-container-highest transition-all cursor-pointer">
+        class="px-4 py-2 bg-surface-container-high text-on-surface-variant font-medium text-xs rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer">
         Hủy bỏ
       </button>
-      <button 
-        type="button" 
-        on:click={handleCreateCommit} 
+      <button
+        type="button"
+        on:click={handleCreateCommit}
         disabled={isGitActionRunning || !commitMessage.trim()}
-        class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1">
-        <span class="material-symbols-outlined text-sm">check_circle</span> Commit Changes
+        class="px-4 py-2 bg-primary text-on-primary font-medium text-xs rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">check</span> Commit
       </button>
     </div>
   </div>

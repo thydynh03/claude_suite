@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -19,6 +20,13 @@ type GoogleToken struct {
 	AccessToken string
 	ExpiresAt   time.Time
 }
+
+// ErrGoogleRefused marks an answer FROM Google — a revoked token, the wrong
+// client — as opposed to never having reached it. Only a refusal justifies
+// disabling an account for good: treating "no network" the same way disabled
+// every account of a user who imported their file while offline, and nothing
+// re-enables a disabled account.
+var ErrGoogleRefused = errors.New("Google từ chối refresh token")
 
 // RefreshGoogleAccessToken trades a long-lived refresh token for a short-lived
 // access token.
@@ -73,10 +81,10 @@ func RefreshGoogleAccessToken(ctx context.Context, clientID, clientSecret, refre
 		if body.ErrorDesc != "" {
 			detail += ": " + body.ErrorDesc
 		}
-		return GoogleToken{}, fmt.Errorf("Google từ chối refresh token (%s)", detail)
+		return GoogleToken{}, fmt.Errorf("%w (%s)", ErrGoogleRefused, detail)
 	}
 	if response.StatusCode != http.StatusOK || body.AccessToken == "" {
-		return GoogleToken{}, fmt.Errorf("Google trả về %s mà không có access token", response.Status)
+		return GoogleToken{}, fmt.Errorf("%w: trả về %s mà không có access token", ErrGoogleRefused, response.Status)
 	}
 
 	lifetime := time.Duration(body.ExpiresIn) * time.Second

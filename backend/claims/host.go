@@ -229,6 +229,19 @@ func (h *Host) lookup(id, token string) (*hosted, error) {
 	if subtle.ConstantTimeCompare([]byte(s.token), []byte(token)) != 1 {
 		return nil, fmt.Errorf("invalid join token")
 	}
+	// Sliding expiry for a session somebody is actually using. Websocket
+	// agents pass through lookup once, at connect, and then keep working past
+	// the TTL; an MCP participant re-runs it on every poll, so the fixed
+	// 60-minute window kicked exactly the remote teammate who was following
+	// the instructions to keep polling — mid-adjudication, with a 401, and
+	// even the recorded verdict became unreachable. The TTL still ends
+	// abandoned sessions: nothing renews a session nobody is calling.
+	//
+	// s.expires is only ever touched under h.mu (here and in Open), never
+	// under the per-session lock, so this stays race-free.
+	if min := time.Now().Add(15 * time.Minute); s.expires.Before(min) {
+		s.expires = min
+	}
 	return s, nil
 }
 
@@ -648,6 +661,14 @@ func (h *Host) Finish(sessionID string) (*Outcome, error) {
 	h.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("no session %s", sessionID)
+	}
+
+	// Close() sets PhaseRecord itself, so it walks straight past Advance's
+	// "cannot record before adjudicating" guard. Finishing during collect
+	// turned every verifiable claim into Inconclusive→Escalated without a
+	// single falsifier having run — one click, no undo, no way to reopen.
+	if hs.session.Phase() == PhaseCollect {
+		return nil, fmt.Errorf("phiên đang thu thập claim — bấm \"Chạy kiểm chứng ngay\" trước khi chốt, nếu không mọi claim sẽ bị bỏ ngỏ")
 	}
 
 	out := hs.session.Close()

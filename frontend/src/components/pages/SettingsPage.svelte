@@ -83,7 +83,7 @@
       await (AppBindings as any).SaveMemoryConfig(memoryCfg);
       addToast(
         memoryCfg.context_pack_max_chars === 0
-          ? 'Đã lưu — context pack đang TẮT (budget = 0).'
+          ? 'Đã lưu — context pack đang tắt (budget = 0).'
           : `Đã lưu cài đặt memory (pack ≤ ${memoryCfg.context_pack_max_chars} ký tự).`,
         'SUCCESS'
       );
@@ -120,8 +120,8 @@
         // meant k+1 duplicate toasts per OAuth login.
         offOAuthSuccess = (window as any).runtime.EventsOn("oauth_success", async (data: any) => {
           await loadAntiKeys();
-          addLog(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
-          addToast(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
+          addLog(`Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công.`, 'SUCCESS');
+          addToast(`Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công.`, 'SUCCESS');
         });
       }
     } catch (e) {}
@@ -218,7 +218,7 @@
     const loaded = await AppBindings.GetAgents();
     agentsStore.set(loaded || []);
     addLog(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
-    addToast(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
+    addToast(`Đã khôi phục ${(loaded || []).length} agent mặc định.`, 'SUCCESS');
   }
 
   // In-progress persona edits live here, keyed by agent id, NOT on the store
@@ -283,11 +283,9 @@
       await loadAgents();
       addLog(`Đã lưu Agent: ${agent.name}.`, 'SUCCESS');
       addToast(`Đã lưu Agent: ${agent.name}.`, 'SUCCESS');
-      addToast(`Đã lưu agent "${agent.name}".`, 'SUCCESS');
     } catch (err) {
       addLog(`Lỗi lưu agent: ${err}`, 'ERROR');
       addToast(`Lỗi lưu agent: ${err}`, 'ERROR');
-      addToast(`Lưu agent thất bại: ${err}`, 'ERROR');
     }
   }
 
@@ -348,7 +346,7 @@
   async function handleRunQuickCLI() {
     if (!quickPrompt.trim()) return;
     isQuickRunning = true;
-    quickOutput = '⏳ Running CLI...';
+    quickOutput = 'Đang chạy CLI…';
     try {
       const res = await AppBindings.RunQuickCLI(quickPrompt, selectedModel, '', []);
       if (res && res.success) {
@@ -396,33 +394,33 @@
     }
 
     isUpdating = true;
-    updateStatusMessage = '⬇️ Đang tải bản cập nhật từ GitHub...';
+    updateStatusMessage = 'Đang tải bản cập nhật từ GitHub...';
     updateStatusType = 'info';
     addLog('Downloading update from ' + updateInfo.download_url, 'INFO');
 
     try {
       // Show installing message before calling backend
       // App will call os.Exit(0) during this → IPC cut → catch fires. That is NORMAL.
-      updateStatusMessage = '⚙️ Đang cài đặt... Bản cài đặt sẽ mở trình cài đặt (bấm Yes ở hộp thoại UAC); bản portable sẽ tự khởi động lại.';
+      updateStatusMessage = 'Đang cài đặt... Bản cài đặt sẽ mở trình cài đặt (bấm Yes ở hộp thoại UAC); bản portable sẽ tự khởi động lại.';
       updateStatusType = 'success';
 
       const res = await (AppBindings as any).DownloadAndUpdate(updateInfo.download_url);
       // If we somehow get a response (unlikely), check for error
       if (res && !res.success) {
-        updateStatusMessage = '❌ Cập nhật thất bại: ' + (res?.error || 'Không xác định');
+        updateStatusMessage = 'Cập nhật thất bại: ' + (res?.error || 'Không xác định');
         updateStatusType = 'error';
         addLog('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
-        addToast('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
+        addToast('Cập nhật thất bại: ' + (res?.error || 'Không xác định'), 'ERROR');
         isUpdating = false;
       }
     } catch (e: any) {
       // App called os.Exit(0) → IPC dropped → catch fires. This is expected.
       // Installed copy: the NSIS installer is opening (UAC prompt first).
       // Portable copy: the updater .bat swaps the exe and relaunches.
-      updateStatusMessage = '✅ Đã tải xong! App sẽ đóng để cập nhật — nếu trình cài đặt hiện ra, làm theo các bước.';
+      updateStatusMessage = 'Đã tải xong! App sẽ đóng để cập nhật — nếu trình cài đặt hiện ra, làm theo các bước.';
       updateStatusType = 'success';
       addLog('Update downloaded; app is closing to apply it.', 'SUCCESS');
-      addToast('Update downloaded; app is closing to apply it.', 'SUCCESS');
+      addToast('Đã tải xong bản cập nhật — app sẽ đóng để cài đặt.', 'SUCCESS');
       // Do NOT set isUpdating = false — app is mid-restart
     }
   }

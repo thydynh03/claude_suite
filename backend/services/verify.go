@@ -3,6 +3,7 @@ package services
 import (
 	"claude_suite/backend/textutil"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,8 +72,23 @@ func runCmd(dir string, timeout time.Duration, name string, args ...string) (boo
 	cmd := sysproc.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
+	report := string(out)
+	// A command that never started produces no output at all, and the whole
+	// explanation lives in err: on a machine with no Node or Go toolchain the
+	// report was empty, so every otherwise-successful task failed with
+	// "Build verification FAILED:" and nothing after it. An ExitError already
+	// spoke through the output, so only its bare status is redundant.
+	if err != nil {
+		if _, isExit := err.(*exec.ExitError); !isExit {
+			if strings.TrimSpace(report) == "" {
+				report = err.Error()
+			} else {
+				report += "\n" + err.Error()
+			}
+		}
+	}
 	// Keep the tail: a compiler or bundler puts its error summary at the bottom.
-	return err == nil, textutil.TruncateTail(string(out), 6000)
+	return err == nil, textutil.TruncateTail(report, 6000)
 }
 
 func fileExists(p string) bool {
@@ -80,12 +96,22 @@ func fileExists(p string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// hasNpmBuildScript parses the manifest rather than searching it for the word
+// "build": a dependency literally named build ("build": "^0.1.4") matched the
+// substring test, and `npm run build` then failed with "Missing script:
+// build", failing every completed task in that workspace.
 func hasNpmBuildScript(pkgPath string) bool {
 	data, err := os.ReadFile(pkgPath)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(data), "\"build\"")
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if json.Unmarshal(data, &pkg) != nil {
+		return false
+	}
+	return strings.TrimSpace(pkg.Scripts["build"]) != ""
 }
 
 func npmExe() string {

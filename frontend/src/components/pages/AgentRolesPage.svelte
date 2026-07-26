@@ -87,8 +87,15 @@
     }
   }
 
+  let confirmingDelete = '';
+
   async function deleteRole(role: string) {
-    if (!confirm(`Bạn có chắc muốn xóa file role ${role} không?`)) return;
+    // In-app two-step confirm instead of the native confirm() popup.
+    if (confirmingDelete !== role) {
+      confirmingDelete = role;
+      return;
+    }
+    confirmingDelete = '';
     try {
       if ((AppBindings as any).DeleteRole) {
         await (AppBindings as any).DeleteRole(role);

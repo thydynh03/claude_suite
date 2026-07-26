@@ -17,13 +17,14 @@ import (
 // a listener in a goroutine and returning nil reports success for a port that
 // was never taken, and the UI then shows a host nobody can connect to.
 type ClaimsHostService struct {
-	mu       sync.Mutex
-	server   *http.Server
-	host     *claims.Host
-	addr     string
-	running  bool
-	onEvent  func(sessionID, message string)
-	sessions []string
+	mu        sync.Mutex
+	server    *http.Server
+	host      *claims.Host
+	addr      string
+	workspace string
+	running   bool
+	onEvent   func(sessionID, message string)
+	sessions  []string
 }
 
 func NewClaimsHostService() *ClaimsHostService {
@@ -48,6 +49,12 @@ func (s *ClaimsHostService) Start(port int, workspace string) error {
 	defer s.mu.Unlock()
 
 	if s.running {
+		// Silently keeping the old host was fine while the arguments matched;
+		// with a different workspace it meant the Claims page listed one
+		// folder's checks while falsifiers ran in another.
+		if workspace != s.workspace {
+			return fmt.Errorf("claims host đang chạy với workspace khác (%s) — hãy dừng host trước khi đổi", s.workspace)
+		}
 		return nil
 	}
 	if port == 0 {
@@ -75,15 +82,34 @@ func (s *ClaimsHostService) Start(port int, workspace string) error {
 	s.server = server
 	s.host = host
 	s.addr = listener.Addr().String()
+	s.workspace = workspace
 	s.running = true
 
 	go func() {
 		_ = server.Serve(listener)
 		s.mu.Lock()
-		s.running = false
+		// Only OUR shutdown clears the flag — the same guard the webhook
+		// service carries. Clearing unconditionally let a quick Stop-then-Start
+		// leave the NEW server listening while IsRunning reported false and
+		// Stop refused to touch it: port 9111 stayed held, unreachable from the
+		// UI, until the app was restarted.
+		if s.server == server {
+			s.running = false
+		}
 		s.mu.Unlock()
 	}()
 	return nil
+}
+
+// Workspace is the folder the running host reads its checks from and runs
+// falsifiers in. It is captured at Start and does not follow a later workspace
+// switch, so the UI must list THIS folder's checks rather than the currently
+// selected one — otherwise agents claim against checks that the adjudicator
+// will look for somewhere else.
+func (s *ClaimsHostService) Workspace() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.workspace
 }
 
 // Stop shuts the host down.

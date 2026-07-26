@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,9 +18,11 @@ import (
 	"claude_suite/backend/core"
 	"claude_suite/backend/database"
 	"claude_suite/backend/defaults"
+	"claude_suite/backend/logger"
 	"claude_suite/backend/modelcatalog"
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
+	"claude_suite/backend/paths"
 	"claude_suite/backend/pipeline"
 	"claude_suite/backend/secrets"
 	"claude_suite/backend/services"
@@ -64,6 +67,11 @@ type App struct {
 	integrationsConfig models.IntegrationsConfig
 	uiConfig           models.UIConfig
 	memoryConfig       models.MemoryConfig
+
+	// dbInitErr is why the database could not be opened, if it could not.
+	// Every repository is holding a nil handle in that case, so startup must
+	// say so and stop rather than panic on the first query.
+	dbInitErr error
 }
 
 // The desktop app must offer every shared capability. Adding a method to
@@ -83,7 +91,11 @@ const memoryCheapModel = "claude-haiku-4-5"
 func NewApp() *App {
 	db, err := database.InitDB()
 	if err != nil {
-		fmt.Printf("Error initializing DB: %v\n", err)
+		// Printing to stdout is invisible in a -H windowsgui build. Every
+		// repository below is then built on a nil handle and the first query in
+		// startup panics — the whole app died with no window and no message
+		// anywhere. The error is kept and startup turns it into a dialog.
+		logger.Error(fmt.Sprintf("InitDB failed: %v", err))
 	}
 
 	agentRepo := database.NewAgentRepository(db)
@@ -151,9 +163,13 @@ func NewApp() *App {
 		pipelineEngine:  pipelineEng,
 		oauthListener:   services.NewOAuthListenerService(),
 		claimsHost:      claimsHostSvc,
+		dbInitErr:       err,
 	}
 
 	app.schedulerSvc.SetTriggerCallback(app.runScheduledJob)
+
+	// The runner asks for a live access token right before it spends one.
+	cli.EnsureFreshToken = app.refreshOneAccountToken
 
 	// WaitForQuota jobs hold until the anti pool has a usable account; the
 	// pool is the only party that measured anything, so it answers. Claude
@@ -172,6 +188,27 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Without a database there is nothing to start: every repository holds a
+	// nil handle, and the first query below would panic the process behind a
+	// window that never appeared. Say what happened, in a dialog the user can
+	// actually read, and stop.
+	if a.dbInitErr != nil {
+		msg := fmt.Sprintf(
+			"Không mở được cơ sở dữ liệu:\n\n%v\n\nThư mục dữ liệu: %s\n\n"+
+				"Thường do thư mục không tạo được, ổ đĩa đầy, hoặc file .db bị phần mềm diệt virus khoá.",
+			a.dbInitErr, paths.DataDir(),
+		)
+		logger.Error("startup aborted: " + msg)
+		_, _ = wailsRuntime.MessageDialog(ctx, wailsRuntime.MessageDialogOptions{
+			Type:    wailsRuntime.ErrorDialog,
+			Title:   "Claude Suite không khởi động được",
+			Message: msg,
+		})
+		wailsRuntime.Quit(ctx)
+		return
+	}
+
 	a.orchestrator.SetContext(ctx)
 	a.pipelineEngine.SetContext(ctx)
 	a.schedulerSvc.SetContext(ctx)
@@ -208,6 +245,13 @@ func (a *App) startup(ctx context.Context) {
 			return isRepo && !clean, nil
 		},
 		func(dirtyFor time.Duration) {
+			// dirtyFor == 0 is the watcher saying it cannot inspect the
+			// workspace at all (no git, folder gone). Saying so beats going
+			// quietly inert, which is indistinguishable from "nothing to do".
+			if dirtyFor <= 0 {
+				a.emitLog("⚠️ Canh chừng Git không đọc được workspace (chưa cài git, hoặc thư mục đã đổi) — tính năng này đang tạm ngưng.", "WARN")
+				return
+			}
 			a.emitLog(fmt.Sprintf("⏰ Workspace đã bẩn %.1f giờ chưa commit — vào Git panel hoặc bật tự commit trong Lịch tự động.", dirtyFor.Hours()), "WARN")
 		},
 		func() error {
@@ -1209,9 +1253,15 @@ func (a *App) WarmupAntiAccountKeys() WarmupResult {
 		token, err := services.RefreshGoogleAccessToken(context.Background(), clientID, clientSecret, refreshToken)
 		if err != nil {
 			result.Failed++
-			cli.GlobalAntiPool.DisableKey(id, err.Error())
+			// Same rule as RefreshAccountTokens: a network failure must not
+			// disable an account Google never even judged.
+			if errors.Is(err, services.ErrGoogleRefused) {
+				cli.GlobalAntiPool.DisableKey(id, err.Error())
+				a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s bị Google từ chối, đã tắt: %v", accountLabel(id), err), "WARN")
+			} else {
+				a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s chưa làm mới được token (lỗi mạng?), sẽ thử lại: %v", accountLabel(id), err), "WARN")
+			}
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", accountLabel(id), err))
-			a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s không làm mới được token: %v", accountLabel(id), err), "WARN")
 			continue
 		}
 		cli.GlobalAntiPool.SetAccessToken(id, token.AccessToken, token.ExpiresAt)
@@ -1942,8 +1992,16 @@ func (a *App) RefreshAccountTokens() (refreshed int, failed int) {
 		token, err := services.RefreshGoogleAccessToken(context.Background(), clientID, clientSecret, refreshToken)
 		if err != nil {
 			failed++
-			cli.GlobalAntiPool.DisableKey(id, err.Error())
-			a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s không làm mới được token: %v", id, err), "WARN")
+			// Only Google's own refusal disables an account. A transport error
+			// is the user's network — importing an accounts file while offline
+			// used to disable every account in it, permanently, since nothing
+			// re-enables them.
+			if errors.Is(err, services.ErrGoogleRefused) {
+				cli.GlobalAntiPool.DisableKey(id, err.Error())
+				a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s bị Google từ chối, đã tắt: %v", id, err), "WARN")
+			} else {
+				a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s chưa làm mới được token (lỗi mạng?), sẽ thử lại: %v", id, err), "WARN")
+			}
 			continue
 		}
 		cli.GlobalAntiPool.SetAccessToken(id, token.AccessToken, token.ExpiresAt)
@@ -1954,6 +2012,34 @@ func (a *App) RefreshAccountTokens() (refreshed int, failed int) {
 		a.saveAntiKeys()
 	}
 	return refreshed, failed
+}
+
+// refreshOneAccountToken mints a fresh access token for a single account, on
+// the run path, so an expired token never reaches the CLI. Disabling follows
+// the same rule as everywhere else: only Google's refusal counts.
+func (a *App) refreshOneAccountToken(accountID string) error {
+	acc := cli.GlobalAntiPool.AccountByID(accountID)
+	if acc == nil {
+		return fmt.Errorf("không tìm thấy tài khoản %s", accountID)
+	}
+	if acc.RefreshToken == "" {
+		return fmt.Errorf("tài khoản %s không có refresh token", accountLabel(accountID))
+	}
+	clientID, clientSecret := oauthCreds()
+	if clientID == "" || clientSecret == "" {
+		return fmt.Errorf("chưa cấu hình GCP OAuth credentials")
+	}
+	token, err := services.RefreshGoogleAccessToken(context.Background(), clientID, clientSecret, acc.RefreshToken)
+	if err != nil {
+		if errors.Is(err, services.ErrGoogleRefused) {
+			cli.GlobalAntiPool.DisableKey(accountID, err.Error())
+			a.saveAntiKeys()
+		}
+		return err
+	}
+	cli.GlobalAntiPool.SetAccessToken(accountID, token.AccessToken, token.ExpiresAt)
+	a.saveAntiKeys()
+	return nil
 }
 
 func (a *App) emitLog(message, level string) {
@@ -1976,10 +2062,22 @@ func (a *App) emitLog(message, level string) {
 
 // ClaimsHostStatus reports whether agents can currently connect.
 func (a *App) ClaimsHostStatus() map[string]interface{} {
-	checks, err := a.claimsHost.CatalogueNames(a.workspaceConfig.LastWorkspaceFolder)
+	// A running host keeps the workspace it was started with, so the checks
+	// listed here must come from THAT folder: reading the currently selected
+	// one let the page advertise checks the adjudicator would look for
+	// somewhere else after a workspace switch.
+	workspace := a.workspaceConfig.LastWorkspaceFolder
+	if a.claimsHost.IsRunning() {
+		workspace = a.claimsHost.Workspace()
+	}
+	checks, err := a.claimsHost.CatalogueNames(workspace)
 	warning := ""
 	if err != nil {
 		warning = err.Error()
+	} else if workspace == "" {
+		// Discovery against an empty path stats relative names in whatever
+		// directory the exe was launched from, so say what is actually wrong.
+		warning = "Chưa chọn workspace — hãy chọn thư mục dự án trước, catalogue check và falsifier đều đọc từ đó."
 	} else if len(checks) == 0 {
 		// Worth saying plainly: with no checks every claim becomes an opinion and
 		// nothing can ever block, which looks like the feature is broken. Checks

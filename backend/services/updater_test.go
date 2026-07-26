@@ -81,8 +81,14 @@ func TestBuildUpdaterBatCarriesBothPathsAndBoundsTheRetry(t *testing.T) {
 		// on the app exe, locking other accounts out of it.
 		`copy /b /y "%NEW_EXE%" "%OLD_EXE%"`,
 		// Giving up must still fall through to the relaunch, or a transient
-		// lock leaves the user with an app that closed and never came back.
-		`if %COUNT% GEQ 30 goto DONE`,
+		// lock leaves the user with an app that closed and never came back —
+		// but it goes via :GAVEUP first, which drops the marker that lets the
+		// next check say the swap failed instead of silently re-offering it.
+		`if %COUNT% GEQ 60 goto GAVEUP`,
+		`:GAVEUP`,
+		// cmd.exe reads a .bat in the console's OEM codepage; without this a
+		// Vietnamese path arrived as mojibake and the copy could never match.
+		`chcp 65001`,
 		`del "%NEW_EXE%"`,
 		`start "" "%OLD_EXE%"`,
 		`del "%~f0"`,
@@ -103,6 +109,36 @@ func TestBuildUpdaterBatCarriesBothPathsAndBoundsTheRetry(t *testing.T) {
 	// A stray unescaped %s or %d in the template would leave fmt noise behind.
 	if strings.Contains(bat, "%!") {
 		t.Fatalf("bat contains a fmt formatting error:\n%s", bat)
+	}
+}
+
+// The audience for this app is Vietnamese, so %TEMP% routinely carries an
+// accented profile name and portable copies sit in folders like "Phần mềm".
+// cmd.exe decodes a .bat in the console codepage, so the switch to UTF-8 has
+// to come before any line that carries a path — otherwise the copy target is
+// mojibake, all 60 attempts fail, and the app never relaunches.
+func TestBuildUpdaterBatSwitchesToUTF8BeforeAnyPath(t *testing.T) {
+	bat := buildUpdaterBat(`C:\Users\Trần\AppData\Local\Temp\up.exe`, `D:\Phần mềm\ClaudeSuite.exe`)
+
+	chcp := strings.Index(bat, "chcp 65001")
+	newExe := strings.Index(bat, "set \"NEW_EXE=")
+	if chcp < 0 {
+		t.Fatalf("no codepage switch at all:\n%s", bat)
+	}
+	if chcp > newExe {
+		t.Fatalf("codepage switch comes after the paths, too late to help:\n%s", bat)
+	}
+	if !strings.Contains(bat, `set "OLD_EXE=D:\Phần mềm\ClaudeSuite.exe"`) {
+		t.Fatalf("accented path did not survive into the script:\n%s", bat)
+	}
+}
+
+// Batch expands %VAR% while reading a line, so a single % inside a path eats
+// the text after it and the copy silently targets a truncated name.
+func TestBuildUpdaterBatEscapesPercentInPaths(t *testing.T) {
+	bat := buildUpdaterBat(`C:\Temp\up.exe`, `D:\100%% Work\ClaudeSuite.exe`)
+	if !strings.Contains(bat, `set "OLD_EXE=D:\100%%%% Work\ClaudeSuite.exe"`) {
+		t.Fatalf("literal percent was not doubled for batch:\n%s", bat)
 	}
 }
 

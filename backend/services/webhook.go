@@ -87,7 +87,14 @@ func (w *WebhookService) Start(port int) error {
 	// Bind before returning. ListenAndServe inside the goroutine reported success
 	// even when the port was already taken, so the UI showed the webhook as
 	// listening while nothing was bound.
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	//
+	// Loopback only. This endpoint takes an unauthenticated POST and turns it
+	// into a backlog task, which the orchestrator later hands to a sub-agent
+	// running with --dangerously-skip-permissions inside the user's workspace:
+	// bound to every interface, anyone on the same Wi-Fi could make this app
+	// write files. Exposing it beyond this machine has to be a deliberate act
+	// (an SSH/cloudflared tunnel), not the default.
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return fmt.Errorf("webhook cannot listen on port %d: %w", port, err)
 	}

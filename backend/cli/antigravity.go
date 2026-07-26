@@ -139,6 +139,23 @@ func ensureKeyIDs(keys []AntiAccountKey) {
 	}
 }
 
+// freshIDLocked mints an id no live account is using. The old "key-<len+1>"
+// scheme collided the moment anything was deleted: with [key-1 key-2], delete
+// key-1 and the next account is minted as key-2 again — and DeleteKey removes
+// EVERY match, so deleting one of them silently deleted both. Caller holds p.mu.
+func (p *AccountKeyPool) freshIDLocked() string {
+	taken := make(map[string]bool, len(p.keys))
+	for i := range p.keys {
+		taken[p.keys[i].ID] = true
+	}
+	for n := len(p.keys) + 1; ; n++ {
+		candidate := fmt.Sprintf("key-%d", n)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
+}
+
 func (p *AccountKeyPool) GetKeys() []AntiAccountKey {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -164,10 +181,13 @@ func (p *AccountKeyPool) AddKey(name, apiKey string) {
 	defer p.mu.Unlock()
 	email := name
 	if !strings.Contains(email, "@") {
-		email = strings.ToLower(strings.ReplaceAll(name, " ", ".")) + "@gmail.com"
+		// No invented @gmail.com address: it was displayed as the account's
+		// real identity, and it poisoned the email-based dedupe so a later
+		// genuine import created a duplicate instead of updating this row.
+		email = ""
 	}
 	p.keys = append(p.keys, AntiAccountKey{
-		ID:          fmt.Sprintf("key-%d", len(p.keys)+1),
+		ID:          p.freshIDLocked(),
 		Name:        name,
 		Email:       email,
 		Type:        "api_key",
@@ -188,10 +208,10 @@ func (p *AccountKeyPool) AddOAuthKey(name, oauthToken string) {
 		email = email[8 : len(email)-1]
 	}
 	if !strings.Contains(email, "@") {
-		email = strings.ToLower(strings.ReplaceAll(name, " ", ".")) + "@gmail.com"
+		email = ""
 	}
 	p.keys = append(p.keys, AntiAccountKey{
-		ID:          fmt.Sprintf("key-%d", len(p.keys)+1),
+		ID:          p.freshIDLocked(),
 		Name:        name,
 		Email:       email,
 		Type:        "oauth_token",
@@ -287,6 +307,38 @@ func (p *AccountKeyPool) nextUsableIndex(start int) int {
 		}
 	}
 	return -1
+}
+
+// PeekCurrentAccount reports which account is current WITHOUT counting a
+// request against it. GetCurrentAccount's contract is "the caller is about to
+// send a request", which is wrong for anything that merely draws the account
+// on screen — the TUI redrew on every keypress and inflated the usage numbers
+// the quota table presents as measured facts.
+func (p *AccountKeyPool) PeekCurrentAccount() *AntiAccountKey {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.keys) == 0 {
+		return nil
+	}
+	i := p.nextUsableIndex(p.current % len(p.keys))
+	if i < 0 {
+		return nil
+	}
+	acc := p.keys[i]
+	return &acc
+}
+
+// AccountByID returns a copy of one account, or nil.
+func (p *AccountKeyPool) AccountByID(id string) *AntiAccountKey {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i := range p.keys {
+		if p.keys[i].ID == id {
+			acc := p.keys[i]
+			return &acc
+		}
+	}
+	return nil
 }
 
 func (p *AccountKeyPool) GetCurrentAccount() *AntiAccountKey {
@@ -399,6 +451,31 @@ func (p *AccountKeyPool) RotateNextKey(fromAccountID string) string {
 	return p.keys[next].Name
 }
 
+// EnsureFreshToken is wired by the app to mint a new access token for an
+// account whose OAuth token has expired. It lives here as a hook because the
+// token exchange belongs to the services layer, which this package must not
+// import.
+var EnsureFreshToken func(accountID string) error
+
+// accountDisplay names an account the way a person would recognise it.
+func accountDisplay(acc *AntiAccountKey) string {
+	if acc == nil {
+		return ""
+	}
+	if acc.Email != "" {
+		return acc.Email
+	}
+	if acc.Name != "" {
+		return acc.Name
+	}
+	return acc.ID
+}
+
+// antigravityMissingMessage names the missing tool instead of surfacing a raw
+// exec error about %PATH%.
+const antigravityMissingMessage = "chưa tìm thấy Antigravity/Gemini CLI (agy) trên máy này. " +
+	"Cài rồi chạy lại task — không cần khởi động lại app."
+
 type AntigravityCLI struct {
 	executablePath string
 }
@@ -476,9 +553,29 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
-	cmd := newCLICommand(ctx, a.executablePath, args)
-	if cwd != "" && dirExists(cwd) {
-		cmd.Dir = cwd
+	// Same two guards as the Claude runner: a stale cached path (the CLI was
+	// installed after the app started) and a workspace that no longer exists,
+	// which silently ran the agent in the app's own directory.
+	exePath := a.executablePath
+	if !CLIInstalled(exePath) {
+		if fresh := ResolveAntigravityCLI(); CLIInstalled(fresh) {
+			exePath = fresh
+			a.executablePath = fresh
+		} else {
+			return &RunResult{Success: false, Error: antigravityMissingMessage}
+		}
+	}
+
+	cmd := newCLICommand(ctx, exePath, args)
+	if cwd != "" {
+		if dirExists(cwd) {
+			cmd.Dir = cwd
+		} else {
+			return &RunResult{
+				Success: false,
+				Error:   fmt.Sprintf("workspace không tồn tại: %s — hãy chọn lại thư mục dự án trước khi chạy agent", cwd),
+			}
+		}
 	}
 
 	env := append(os.Environ(),
@@ -495,6 +592,20 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 	usedAccountID := ""
 	if acc != nil {
 		usedAccountID = acc.ID
+	}
+	// A Google access token lasts about an hour, and nothing on this path ever
+	// renewed one: a task dispatched 90 minutes after import handed the CLI a
+	// dead token, the 401 read as a rotatable auth error, and the pool stamped
+	// a perfectly healthy account rate_limited for 24 hours — then did the same
+	// to the next account, and the next.
+	if acc != nil && acc.NeedsRefresh() && EnsureFreshToken != nil {
+		if err := EnsureFreshToken(acc.ID); err != nil {
+			if onLog != nil {
+				onLog(fmt.Sprintf("không làm mới được access token của %s: %v", accountDisplay(acc), err), "WARN")
+			}
+		} else if fresh := GlobalAntiPool.AccountByID(acc.ID); fresh != nil {
+			acc = fresh
+		}
 	}
 	if acc != nil {
 		if acc.Type == "oauth_token" && acc.OAuthToken != "" {
@@ -678,7 +789,7 @@ func (p *AccountKeyPool) AddRefreshAccount(email, refreshToken string) string {
 		}
 	}
 
-	id := fmt.Sprintf("key-%d", len(p.keys)+1)
+	id := p.freshIDLocked()
 	p.keys = append(p.keys, AntiAccountKey{
 		ID:           id,
 		Name:         email,
