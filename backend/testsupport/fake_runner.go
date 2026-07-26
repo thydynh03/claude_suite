@@ -25,6 +25,10 @@ type FakeRunner struct {
 	// Behaviour, if set, decides the result of each agent run. It is called
 	// concurrently. Block inside it to hold a task "running".
 	Behaviour func(ctx context.Context, agent *models.Agent, prompt string) *cli.RunResult
+
+	// OnceBehaviour, if set, decides RunOnce results — the summarizer and the
+	// learner's distillation call go through RunOnce.
+	OnceBehaviour func(prompt, model, system string) *cli.RunResult
 }
 
 // FakeCall is one recorded invocation.
@@ -118,6 +122,9 @@ func (f *FakeRunner) RunOnce(prompt, model, system string, onLog cli.LogCallback
 	f.record(FakeCall{Method: "RunOnce", Prompt: prompt, Model: model, Cwd: cwd})
 	f.enter()
 	defer f.leave()
+	if f.OnceBehaviour != nil {
+		return f.OnceBehaviour(prompt, model, system)
+	}
 	return okResult("fake once output")
 }
 

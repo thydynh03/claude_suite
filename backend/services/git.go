@@ -119,6 +119,46 @@ func (g *GitService) RunCommand(cwd string, args []string) (string, error) {
 	return string(out), nil
 }
 
+// Workspace identity resolution lives in projectmap.WorkspaceRemoteIdentity —
+// one resolver, shared by the mapper and the orchestrator's capture path.
+
+// ChangedFiles lists the paths touched since HEAD — tracked changes plus
+// untracked files. Because AutoSnapshot commits before each task, right after
+// a task this is exactly that task's changes; the incremental map update runs
+// on it after every run, so this must stay on sysproc (a bare exec.Command
+// here would strobe a console window per task on Windows).
+func (g *GitService) ChangedFiles(cwd string) []string {
+	if cwd == "" {
+		return nil
+	}
+	check := sysproc.Command("git", "rev-parse", "--is-inside-work-tree")
+	check.Dir = cwd
+	if err := check.Run(); err != nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var files []string
+	collect := func(args ...string) {
+		cmd := sysproc.Command("git", args...)
+		cmd.Dir = cwd
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		_ = cmd.Run()
+		for _, line := range strings.Split(out.String(), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || seen[line] {
+				continue
+			}
+			seen[line] = true
+			files = append(files, line)
+		}
+	}
+	collect("diff", "--name-only", "HEAD")
+	collect("ls-files", "--others", "--exclude-standard")
+	return files
+}
+
 // GetWorkspaceDiff returns the current uncommitted diff (tracked changes plus a
 // listing of new untracked files) so the UI can show what an agent just changed.
 func (g *GitService) GetWorkspaceDiff(cwd string) (string, error) {

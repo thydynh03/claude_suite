@@ -14,6 +14,10 @@ export function AddMCPServer(arg1) {
   return window['go']['main']['App']['AddMCPServer'](arg1);
 }
 
+export function ApproveRegressionGuard(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ApproveRegressionGuard'](arg1, arg2, arg3);
+}
+
 export function AssignTask(arg1, arg2) {
   return window['go']['main']['App']['AssignTask'](arg1, arg2);
 }
@@ -146,6 +150,10 @@ export function GetClaimSession(arg1) {
   return window['go']['main']['App']['GetClaimSession'](arg1);
 }
 
+export function GetContextPackPreview(arg1) {
+  return window['go']['main']['App']['GetContextPackPreview'](arg1);
+}
+
 export function GetDispatchReadiness() {
   return window['go']['main']['App']['GetDispatchReadiness']();
 }
@@ -186,8 +194,32 @@ export function GetMaxConcurrency() {
   return window['go']['main']['App']['GetMaxConcurrency']();
 }
 
+export function GetMemoryConfig() {
+  return window['go']['main']['App']['GetMemoryConfig']();
+}
+
+export function GetMemoryLessons(arg1) {
+  return window['go']['main']['App']['GetMemoryLessons'](arg1);
+}
+
 export function GetPipelineSteps() {
   return window['go']['main']['App']['GetPipelineSteps']();
+}
+
+export function GetProjectGraph() {
+  return window['go']['main']['App']['GetProjectGraph']();
+}
+
+export function GetProjectMap() {
+  return window['go']['main']['App']['GetProjectMap']();
+}
+
+export function GetProjectMapStaleness() {
+  return window['go']['main']['App']['GetProjectMapStaleness']();
+}
+
+export function GetRegressions() {
+  return window['go']['main']['App']['GetRegressions']();
 }
 
 export function GetRoleContent(arg1) {
@@ -278,8 +310,16 @@ export function ReadFileContent(arg1) {
   return window['go']['main']['App']['ReadFileContent'](arg1);
 }
 
+export function RebuildProjectMap() {
+  return window['go']['main']['App']['RebuildProjectMap']();
+}
+
 export function RefreshAccountTokens() {
   return window['go']['main']['App']['RefreshAccountTokens']();
+}
+
+export function RefreshProjectSummaries() {
+  return window['go']['main']['App']['RefreshProjectSummaries']();
 }
 
 export function RemoveMCPServer(arg1) {
@@ -304,6 +344,10 @@ export function RetryTask(arg1) {
 
 export function RevertGitCommit(arg1) {
   return window['go']['main']['App']['RevertGitCommit'](arg1);
+}
+
+export function ReviewMemoryLesson(arg1, arg2) {
+  return window['go']['main']['App']['ReviewMemoryLesson'](arg1, arg2);
 }
 
 export function RunBrowserTask(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
@@ -336,6 +380,10 @@ export function SaveGCPOAuthCredentials(arg1, arg2) {
 
 export function SaveIntegrationsConfig(arg1) {
   return window['go']['main']['App']['SaveIntegrationsConfig'](arg1);
+}
+
+export function SaveMemoryConfig(arg1) {
+  return window['go']['main']['App']['SaveMemoryConfig'](arg1);
 }
 
 export function SaveRoleContent(arg1, arg2) {

@@ -14,6 +14,7 @@
   import BrowserAgentPage from './components/pages/BrowserAgentPage.svelte';
   import GitPanel from './components/pages/GitPanel.svelte';
   import AgentRolesPage from './components/pages/AgentRolesPage.svelte';
+  import MemoryPage from './components/pages/MemoryPage.svelte';
 
   import ToastHost from './components/ui/ToastHost.svelte';
   import CommandPalette from './components/ui/CommandPalette.svelte';
@@ -45,8 +46,10 @@
 
   // The sidebar and the docs page both advertise Ctrl+1..0, and nothing
   // implemented them — the tooltip promised a shortcut that did nothing.
-  // Order matches the sidebar exactly, so the number in the tooltip is the
-  // number that works.
+  // Order matches the sidebar exactly for every tab that HAS a shortcut, so
+  // the number in the tooltip is the number that works. All ten slots are
+  // taken; tabs added later (memory) ship without a shortcut rather than
+  // renumbering everyone's muscle memory.
   const TAB_SHORTCUTS = [
     'cockpit', 'kanban', 'editor', 'git',
     'scheduler', 'browser', 'claims',
@@ -221,6 +224,8 @@
         <ClaimsPage />
       {:else if $activeTab === 'git'}
         <GitPanel />
+      {:else if $activeTab === 'memory'}
+        <MemoryPage />
       {:else if $activeTab === 'roles'}
         <AgentRolesPage />
       {:else if $activeTab === 'docs'}

@@ -157,6 +157,38 @@ func (r *TaskRepository) ResetForRetry(taskID string) error {
 	return err
 }
 
+// GetByID returns one task, or (nil, nil) when it does not exist — a missing
+// dependency row is normal (deleted tasks), not an error.
+func (r *TaskRepository) GetByID(taskID string) (*models.Task, error) {
+	var t models.Task
+	var dependsJson string
+	var rawCreated, rawStarted, rawFinished interface{}
+
+	err := r.db.QueryRow(
+		`SELECT task_id, title, description, prompt, priority, status, assigned_to, depends_on, retry_count, max_retries, result, session_id, parent_id, created_at, started_at, finished_at FROM tasks WHERE task_id = ?`,
+		taskID,
+	).Scan(
+		&t.TaskID, &t.Title, &t.Description, &t.Prompt, &t.Priority, &t.Status,
+		&t.AssignedTo, &dependsJson, &t.RetryCount, &t.MaxRetries, &t.Result,
+		&t.SessionID, &t.ParentID, &rawCreated, &rawStarted, &rawFinished,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	_ = json.Unmarshal([]byte(dependsJson), &t.DependsOn)
+	if t.DependsOn == nil {
+		t.DependsOn = []string{}
+	}
+	t.CreatedAt = parseTimeValue(rawCreated)
+	t.StartedAt = parseTimeValue(rawStarted)
+	t.FinishedAt = parseTimeValue(rawFinished)
+	return &t, nil
+}
+
 func (r *TaskRepository) AssignTask(taskID string, assignedTo string) error {
 	_, err := r.db.Exec(`UPDATE tasks SET assigned_to=? WHERE task_id=?`, assignedTo, taskID)
 	return err

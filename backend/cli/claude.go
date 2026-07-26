@@ -67,10 +67,7 @@ func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCa
 func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
-	fullPrompt := prompt
-	if system != "" {
-		fullPrompt = fmt.Sprintf("[SYSTEM PROMPT: %s]\n\n%s", system, prompt)
-	}
+	fullPrompt := inlineSystemPrompt(system, prompt)
 
 	// stream-json emits newline-delimited JSON events so we can surface tool calls
 	// and read REAL token usage / cost from the final result event.
@@ -200,18 +197,21 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	}
 
 	tokens := parsed.totalTokens()
+	estimated := false
 	if tokens == 0 {
 		tokens = int64(len(outStr)+len(prompt)) / 4 // fallback estimate
+		estimated = true
 	}
 
 	return &RunResult{
-		Success:     true,
-		Output:      outStr,
-		Error:       errStr,
-		SessionID:   extractedSession,
-		TokensUsed:  tokens,
-		CostUSD:     parsed.costUSD,
-		DurationSec: duration,
+		Success:        true,
+		Output:         outStr,
+		Error:          errStr,
+		SessionID:      extractedSession,
+		TokensUsed:     tokens,
+		CostUSD:        parsed.costUSD,
+		DurationSec:    duration,
+		UsageEstimated: estimated,
 	}
 }
 

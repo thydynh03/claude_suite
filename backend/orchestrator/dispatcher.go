@@ -1,21 +1,21 @@
 package orchestrator
 
 import (
-	"regexp"
 	"strings"
 
 	"claude_suite/backend/models"
+	"claude_suite/backend/textutil"
 )
 
 // keywordMatch reports whether kw occurs in text as a whole word (single tokens)
 // or as a substring (multi-word phrases like "WEB TEST"). This prevents false
 // positives such as "DATABASE" matching "BA" or "GOOGLE" matching "GO".
+// The implementation lives in textutil.KeywordMatch so packages the
+// orchestrator itself imports (services, database) can share it without an
+// import cycle; this wrapper keeps the documented orchestrator.keywordMatch
+// name and its call sites unchanged.
 func keywordMatch(text, kw string) bool {
-	if strings.Contains(kw, " ") {
-		return strings.Contains(text, kw)
-	}
-	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(kw) + `\b`)
-	return re.MatchString(text)
+	return textutil.KeywordMatch(text, kw)
 }
 
 // AgentDispatcher matches tasks to the most suitable Agent

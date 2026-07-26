@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"claude_suite/backend/database"
+	"claude_suite/backend/services/projectmap"
 )
 
 var TextExtensions = map[string]bool{
@@ -34,7 +37,16 @@ var IgnoredDirs = map[string]bool{
 	".next": true, "coverage": true,
 }
 
-type ContextManager struct{}
+type ContextManager struct {
+	// Set via AttachRepos / AttachProjectMapper / AttachMemoryRepos
+	// (taskpack.go). Nil is valid: BuildTaskPack degrades section by section
+	// and the Quick CLI file-context path is unaffected.
+	taskRepo       *database.TaskRepository
+	attemptRepo    *database.AttemptRepository
+	lessonRepo     *database.LessonRepository
+	regressionRepo *database.RegressionRepository
+	mapper         *projectmap.Mapper
+}
 
 func NewContextManager() *ContextManager {
 	return &ContextManager{}

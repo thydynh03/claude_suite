@@ -22,6 +22,7 @@ import (
 	"claude_suite/backend/pipeline"
 	"claude_suite/backend/secrets"
 	"claude_suite/backend/services"
+	"claude_suite/backend/services/projectmap"
 	"claude_suite/backend/textutil"
 	"claude_suite/backend/version"
 
@@ -36,6 +37,10 @@ type App struct {
 	agentRepo       *database.AgentRepository
 	taskRepo        *database.TaskRepository
 	memoryRepo      *database.MemoryRepository
+	attemptRepo     *database.AttemptRepository
+	lessonRepo      *database.LessonRepository
+	regressionRepo  *database.RegressionRepository
+	learner         *services.Learner
 	cliRunner       cli.CLIRunner
 	contextMgr      *services.ContextManager
 	gitService      *services.GitService
@@ -45,6 +50,7 @@ type App struct {
 	schedulerSvc    *services.SchedulerService
 	browserService  *services.BrowserAgentService
 	orchestrator    *orchestrator.Orchestrator
+	projectMapper   *projectmap.Mapper
 	planBuilder     *pipeline.PlanBuilder
 	pipelineEngine  *pipeline.PipelineEngine
 	oauthListener   *services.OAuthListenerService
@@ -54,6 +60,7 @@ type App struct {
 	workspaceConfig    models.WorkspaceConfig
 	integrationsConfig models.IntegrationsConfig
 	uiConfig           models.UIConfig
+	memoryConfig       models.MemoryConfig
 }
 
 // The desktop app must offer every shared capability. Adding a method to
@@ -65,6 +72,10 @@ var _ core.Facade = (*App)(nil)
 // updated build can show the refreshed tour once again.
 const currentOnboardingVersion = "1"
 
+// memoryCheapModel runs the background memory work (summaries, distillation) —
+// the same cheap model the commit-message generator uses.
+const memoryCheapModel = "claude-haiku-4-5"
+
 // NewApp creates a new App application struct
 func NewApp() *App {
 	db, err := database.InitDB()
@@ -75,6 +86,7 @@ func NewApp() *App {
 	agentRepo := database.NewAgentRepository(db)
 	taskRepo := database.NewTaskRepository(db)
 	memoryRepo := database.NewMemoryRepository(db)
+	attemptRepo := database.NewAttemptRepository(db)
 	cliRunner := cli.NewClaudeCLI()
 	contextMgr := services.NewContextManager()
 	gitSvc := services.NewGitService()
@@ -85,14 +97,39 @@ func NewApp() *App {
 	browserSvc := services.NewBrowserAgentService()
 	claimsHostSvc := services.NewClaimsHostService()
 
+	wsRepo := database.NewWorkspaceRepository(db)
+	obsRepo := database.NewObservationRepository(db)
+	graphRepo := database.NewCodeGraphRepository(db)
+	lessonRepo := database.NewLessonRepository(db)
+	regressionRepo := database.NewRegressionRepository(db)
+	mapper := projectmap.NewMapper(graphRepo, wsRepo)
+	mapper.SetSummarizer(cliRunner, memoryCheapModel)
+	mapper.SetAutoSummarize(true)
+
+	contextMgr.AttachRepos(taskRepo, attemptRepo)
+	contextMgr.AttachProjectMapper(mapper)
+	contextMgr.AttachMemoryRepos(lessonRepo, regressionRepo)
+
+	learner := services.NewLearner(lessonRepo, obsRepo, wsRepo, attemptRepo, regressionRepo, gitSvc, cliRunner, memoryCheapModel)
+
 	orch := orchestrator.NewOrchestrator(agentRepo, taskRepo, memoryRepo, cliRunner, contextMgr, gitSvc, browserSvc)
+	orch.SetAttemptRepo(attemptRepo)
+	orch.SetMemoryStores(wsRepo, obsRepo)
+	orch.SetProjectMapper(mapper)
+	orch.SetLearner(learner)
 	planBuilder := pipeline.NewPlanBuilder(cliRunner)
+	planBuilder.AttachBoard(taskRepo)
+	planBuilder.AttachRegressions(regressionRepo)
 	pipelineEng := pipeline.NewPipelineEngine(agentRepo, cliRunner)
 
 	app := &App{
 		agentRepo:       agentRepo,
 		taskRepo:        taskRepo,
 		memoryRepo:      memoryRepo,
+		attemptRepo:     attemptRepo,
+		lessonRepo:      lessonRepo,
+		regressionRepo:  regressionRepo,
+		learner:         learner,
 		cliRunner:       cliRunner,
 		contextMgr:      contextMgr,
 		gitService:      gitSvc,
@@ -102,6 +139,7 @@ func NewApp() *App {
 		schedulerSvc:    schedulerSvc,
 		browserService:  browserSvc,
 		orchestrator:    orch,
+		projectMapper:   mapper,
 		planBuilder:     planBuilder,
 		pipelineEngine:  pipelineEng,
 		oauthListener:   services.NewOAuthListenerService(),
@@ -135,6 +173,28 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.orchestrator.UseBudgetStore(filepath.Join(filepath.Dir(database.GetDBPath()), "budget.json")); err != nil {
 		fmt.Printf("Budget store warning: %v\n", err)
 	}
+
+	// Seed role definitions now, not when the Roles page is first opened: the
+	// orchestrator reads this directory on every task run and silently skips
+	// missing files, so a fresh install that never visited the Roles page ran
+	// every agent with only the dispatcher's one-line system string.
+	_ = a.getRolesDir()
+
+	// The learner runs for the app's lifetime, deliberately not tied to the
+	// orchestrator's Start/Stop: Stop lets running tasks finish, and their
+	// final observations still deserve a distillation pass.
+	a.learner.SetLogger(func(msg, level string) {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+				"message": msg, "level": level, "time": time.Now().Format("15:04:05"),
+			})
+		}
+	})
+	a.learner.Start()
+
+	// Memory subsystem knobs are user-configurable (Settings → Memory).
+	a.memoryConfig = services.LoadMemoryConfig(filepath.Dir(database.GetDBPath()))
+	a.applyMemoryConfig()
 
 	a.loadWorkspaceConfig()
 	a.loadIntegrationsConfig()
@@ -1180,6 +1240,183 @@ func (a *App) OpenURLInBrowser(targetURL string) {
 	if a.ctx != nil {
 		wailsRuntime.BrowserOpenURL(a.ctx, targetURL)
 	}
+}
+
+// ── Project Map ─────────────────────────────────────────────────────────
+
+// RebuildProjectMap scans the current workspace and rebuilds its code graph.
+// Deterministic only — zero LLM tokens.
+func (a *App) RebuildProjectMap() (*projectmap.BuildReport, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return nil, fmt.Errorf("chưa chọn workspace")
+	}
+	return a.projectMapper.FullBuild(ws)
+}
+
+// GetProjectMap reports the stored map's size and freshness for the UI.
+func (a *App) GetProjectMap() (*models.ProjectMapStats, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return nil, fmt.Errorf("chưa chọn workspace")
+	}
+	return a.projectMapper.Stats(ws)
+}
+
+// GetProjectMapStaleness says how far the map lags the working tree.
+func (a *App) GetProjectMapStaleness() (models.StalenessReport, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return models.StalenessReport{Status: "unknown"}, nil
+	}
+	return a.projectMapper.Staleness(ws), nil
+}
+
+// RefreshProjectSummaries enriches stale file summaries with the cheap model,
+// up to 3 batches per click. Returns how many files were refreshed.
+func (a *App) RefreshProjectSummaries() (int, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return 0, fmt.Errorf("chưa chọn workspace")
+	}
+	return a.projectMapper.RefreshSummaries(ws, 3)
+}
+
+// ── Memory (lessons, regressions, pack preview) ─────────────────────────
+
+// currentWorkspaceID resolves the identity of the selected workspace through
+// the same resolver the mapper and the capture path use.
+func (a *App) currentWorkspaceID() (string, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return "", fmt.Errorf("chưa chọn workspace")
+	}
+	return database.WorkspaceIDFor(ws, projectmap.WorkspaceRemoteIdentity(ws)), nil
+}
+
+// GetMemoryLessons lists the workspace's lessons by status (pending|active|archived).
+func (a *App) GetMemoryLessons(status string) ([]models.MemoryLesson, error) {
+	wsID, err := a.currentWorkspaceID()
+	if err != nil {
+		return nil, err
+	}
+	lessons, err := a.lessonRepo.ListByStatus(wsID, status, 200)
+	if err != nil {
+		return nil, err
+	}
+	if lessons == nil {
+		lessons = []models.MemoryLesson{}
+	}
+	return lessons, nil
+}
+
+// ReviewMemoryLesson applies a human decision to a lesson: approve|reject|archive.
+func (a *App) ReviewMemoryLesson(lessonID, decision string) error {
+	status, err := database.ReviewDecisionStatus(decision)
+	if err != nil {
+		return err
+	}
+	return a.lessonRepo.SetStatus(lessonID, status)
+}
+
+// GetRegressions lists the workspace's recorded fixed bugs.
+func (a *App) GetRegressions() ([]models.Regression, error) {
+	wsID, err := a.currentWorkspaceID()
+	if err != nil {
+		return nil, err
+	}
+	regs, err := a.regressionRepo.List(wsID, 200)
+	if err != nil {
+		return nil, err
+	}
+	if regs == nil {
+		regs = []models.Regression{}
+	}
+	return regs, nil
+}
+
+// ApproveRegressionGuard writes a human-approved falsifier into the
+// workspace's .claude-suite/checks.json and links it to the regression. The
+// UI shows the exact argv before this is called — never a summary.
+func (a *App) ApproveRegressionGuard(regressionID, checkName string, command []string) error {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return fmt.Errorf("chưa chọn workspace")
+	}
+	reg, err := a.regressionRepo.Get(regressionID)
+	if err != nil {
+		return err
+	}
+	if reg == nil {
+		return fmt.Errorf("không tìm thấy regression %s", regressionID)
+	}
+	if err := claims.AppendCheck(ws, claims.Check{
+		Name:        checkName,
+		Description: "Guard cho regression: " + reg.Title,
+		Command:     command,
+		TimeoutSec:  120,
+	}); err != nil {
+		return err
+	}
+	return a.regressionRepo.SetGuard(regressionID, checkName, "approved")
+}
+
+// applyMemoryConfig pushes the stored knobs into the running services — the
+// single place config becomes behavior, called at startup and on save.
+func (a *App) applyMemoryConfig() {
+	a.orchestrator.SetPackBudget(a.memoryConfig.ContextPackMaxChars)
+	a.orchestrator.SetSessionResume(a.memoryConfig.SessionResume)
+	a.projectMapper.SetAutoSummarize(a.memoryConfig.AutoSummarize)
+	a.learner.SetPromotionEnabled(a.memoryConfig.LessonPromotion)
+}
+
+// GetMemoryConfig returns the memory subsystem's settings.
+func (a *App) GetMemoryConfig() models.MemoryConfig {
+	return a.memoryConfig
+}
+
+// SaveMemoryConfig persists and applies the memory settings.
+func (a *App) SaveMemoryConfig(cfg models.MemoryConfig) error {
+	if cfg.ContextPackMaxChars < 0 {
+		cfg.ContextPackMaxChars = 0
+	}
+	if err := services.SaveMemoryConfig(filepath.Dir(database.GetDBPath()), cfg); err != nil {
+		return err
+	}
+	a.memoryConfig = cfg
+	a.applyMemoryConfig()
+	return nil
+}
+
+// GetProjectGraph returns the directory-level view of the map for the UI.
+func (a *App) GetProjectGraph() (*models.ModuleGraph, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	if ws == "" {
+		return nil, fmt.Errorf("chưa chọn workspace")
+	}
+	return a.projectMapper.ModuleGraph(ws)
+}
+
+// GetContextPackPreview renders exactly what a task would receive as its
+// context pack right now — the demonstrability tool.
+func (a *App) GetContextPackPreview(taskID string) (string, error) {
+	ws := a.workspaceConfig.LastWorkspaceFolder
+	task, err := a.taskRepo.GetByID(taskID)
+	if err != nil {
+		return "", err
+	}
+	if task == nil {
+		return "", fmt.Errorf("không tìm thấy task %s", taskID)
+	}
+	wsID := ""
+	if ws != "" {
+		wsID = database.WorkspaceIDFor(ws, projectmap.WorkspaceRemoteIdentity(ws))
+	}
+	pack := a.contextMgr.BuildTaskPack(ws, wsID, task, a.orchestrator.GetPackBudget())
+	if pack.Text == "" {
+		return "(pack rỗng — task này chưa có context nào để tiêm)", nil
+	}
+	return pack.Text, nil
 }
 
 // ── Agent Roles (Markdown Repository) ───────────────────────────────────

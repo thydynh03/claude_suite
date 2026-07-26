@@ -67,6 +67,46 @@ func LoadCatalogue(workspace string) (*Catalogue, error) {
 	return &c, nil
 }
 
+// AppendCheck adds one entry to the workspace's catalogue file.
+//
+// This deliberately relaxes the "changes through review like any other code"
+// stance above, under strict conditions: it is reachable ONLY from the Memory
+// page's guard-approval flow, where a human has just been shown the exact
+// argv (never a summary) and clicked approve. The command stays an argv
+// slice — nothing here accepts a shell string — and AutoSnapshot will commit
+// the file, so the change still lands in history. Recorded in
+// docs/ARCHITECTURE_DECISIONS.md.
+func AppendCheck(workspace string, check Check) error {
+	if strings.TrimSpace(check.Name) == "" {
+		return fmt.Errorf("check cần có tên")
+	}
+	if len(check.Command) == 0 {
+		return fmt.Errorf("check %q cần một lệnh dạng argv", check.Name)
+	}
+	if check.TimeoutSec <= 0 {
+		check.TimeoutSec = 60
+	}
+
+	catalogue, err := LoadCatalogue(workspace)
+	if err != nil {
+		return err
+	}
+	if _, exists := catalogue.Lookup(check.Name); exists {
+		return fmt.Errorf("check %q đã tồn tại trong catalogue", check.Name)
+	}
+	catalogue.Checks = append(catalogue.Checks, check)
+
+	data, err := json.MarshalIndent(catalogue, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(workspace, filepath.FromSlash(CatalogueFile))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
 // Lookup finds a check by name.
 func (c *Catalogue) Lookup(name string) (Check, bool) {
 	for _, check := range c.Checks {

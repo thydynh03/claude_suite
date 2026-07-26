@@ -438,7 +438,13 @@ func (a *AntigravityCLI) executeWithRotation(ctx context.Context, model, prompt,
 func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
-	args := []string{"--print", prompt, "--dangerously-skip-permissions"}
+	// The Antigravity CLI has no system-prompt flag, so the system prompt is
+	// inlined into the prompt text — the same convention as the Claude runner.
+	// It used to be accepted and silently dropped, which meant every role
+	// definition the orchestrator injects never reached a Gemini agent.
+	fullPrompt := inlineSystemPrompt(system, prompt)
+
+	args := []string{"--print", fullPrompt, "--dangerously-skip-permissions"}
 	if model != "" {
 		args = append(args, "--model", model)
 	}
@@ -560,18 +566,21 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 
 	// Prefer REAL usage/cost if the CLI reported it; fall back to a length estimate.
 	tokens, cost := parseAntiUsage(outStr)
+	estimated := false
 	if tokens == 0 {
 		tokens = int64(len(outStr)+len(prompt)) / 4
+		estimated = true
 	}
 
 	return &RunResult{
-		Success:     true,
-		Output:      outStr,
-		Error:       errStr,
-		TokensUsed:  tokens,
-		CostUSD:     cost,
-		DurationSec: duration,
-		AccountID:   usedAccountID,
+		Success:        true,
+		Output:         outStr,
+		Error:          errStr,
+		TokensUsed:     tokens,
+		CostUSD:        cost,
+		DurationSec:    duration,
+		AccountID:      usedAccountID,
+		UsageEstimated: estimated,
 	}
 }
 

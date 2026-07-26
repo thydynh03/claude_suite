@@ -348,6 +348,7 @@ export namespace cli {
 	    cost_usd: number;
 	    duration_sec: number;
 	    account_id: string;
+	    usage_estimated: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -363,6 +364,7 @@ export namespace cli {
 	        this.cost_usd = source["cost_usd"];
 	        this.duration_sec = source["duration_sec"];
 	        this.account_id = source["account_id"];
+	        this.usage_estimated = source["usage_estimated"];
 	    }
 	}
 
@@ -617,6 +619,147 @@ export namespace models {
 	        this.mcp_connection_string = source["mcp_connection_string"];
 	    }
 	}
+	export class MemoryConfig {
+	    context_pack_max_chars: number;
+	    auto_summarize: boolean;
+	    session_resume: boolean;
+	    lesson_promotion: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MemoryConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.context_pack_max_chars = source["context_pack_max_chars"];
+	        this.auto_summarize = source["auto_summarize"];
+	        this.session_resume = source["session_resume"];
+	        this.lesson_promotion = source["lesson_promotion"];
+	    }
+	}
+	export class MemoryLesson {
+	    lesson_id: string;
+	    workspace_id: string;
+	    kind: string;
+	    trigger: string;
+	    action: string;
+	    evidence: string;
+	    confidence: number;
+	    status: string;
+	    source_task_id: string;
+	    use_count: number;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	    // Go type: time
+	    last_used_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new MemoryLesson(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.lesson_id = source["lesson_id"];
+	        this.workspace_id = source["workspace_id"];
+	        this.kind = source["kind"];
+	        this.trigger = source["trigger"];
+	        this.action = source["action"];
+	        this.evidence = source["evidence"];
+	        this.confidence = source["confidence"];
+	        this.status = source["status"];
+	        this.source_task_id = source["source_task_id"];
+	        this.use_count = source["use_count"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.last_used_at = this.convertValues(source["last_used_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ModuleGraphEdge {
+	    source: string;
+	    target: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModuleGraphEdge(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.source = source["source"];
+	        this.target = source["target"];
+	        this.count = source["count"];
+	    }
+	}
+	export class ModuleGraphNode {
+	    id: string;
+	    name: string;
+	    files: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModuleGraphNode(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.files = source["files"];
+	    }
+	}
+	export class ModuleGraph {
+	    nodes: ModuleGraphNode[];
+	    edges: ModuleGraphEdge[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ModuleGraph(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.nodes = this.convertValues(source["nodes"], ModuleGraphNode);
+	        this.edges = this.convertValues(source["edges"], ModuleGraphEdge);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	export class PipelineStep {
 	    step_id: number;
 	    stage_name: string;
@@ -643,6 +786,125 @@ export namespace models {
 	        this.duration_sec = source["duration_sec"];
 	    }
 	}
+	export class StalenessReport {
+	    status: string;
+	    graph_commit: string;
+	    head_commit: string;
+	    commits_behind: number;
+	    dirty: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StalenessReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.status = source["status"];
+	        this.graph_commit = source["graph_commit"];
+	        this.head_commit = source["head_commit"];
+	        this.commits_behind = source["commits_behind"];
+	        this.dirty = source["dirty"];
+	    }
+	}
+	export class ProjectMapStats {
+	    workspace_id: string;
+	    nodes: number;
+	    edges: number;
+	    files: number;
+	    // Go type: time
+	    analyzed_at: any;
+	    git_commit_hash: string;
+	    staleness: StalenessReport;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProjectMapStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace_id = source["workspace_id"];
+	        this.nodes = source["nodes"];
+	        this.edges = source["edges"];
+	        this.files = source["files"];
+	        this.analyzed_at = this.convertValues(source["analyzed_at"], null);
+	        this.git_commit_hash = source["git_commit_hash"];
+	        this.staleness = this.convertValues(source["staleness"], StalenessReport);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Regression {
+	    regression_id: string;
+	    workspace_id: string;
+	    title: string;
+	    symptom: string;
+	    root_cause: string;
+	    fix_summary: string;
+	    files: string[];
+	    guard_check_id: string;
+	    guard_status: string;
+	    failed_task_id: string;
+	    fixed_task_id: string;
+	    status: string;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Regression(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.regression_id = source["regression_id"];
+	        this.workspace_id = source["workspace_id"];
+	        this.title = source["title"];
+	        this.symptom = source["symptom"];
+	        this.root_cause = source["root_cause"];
+	        this.fix_summary = source["fix_summary"];
+	        this.files = source["files"];
+	        this.guard_check_id = source["guard_check_id"];
+	        this.guard_status = source["guard_status"];
+	        this.failed_task_id = source["failed_task_id"];
+	        this.fixed_task_id = source["fixed_task_id"];
+	        this.status = source["status"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Task {
 	    task_id: string;
 	    title: string;
@@ -718,6 +980,31 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.last_workspace_folder = source["last_workspace_folder"];
 	        this.recent_workspaces = source["recent_workspaces"];
+	    }
+	}
+
+}
+
+export namespace projectmap {
+	
+	export class BuildReport {
+	    workspace_id: string;
+	    files: number;
+	    nodes: number;
+	    edges: number;
+	    duration_sec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BuildReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace_id = source["workspace_id"];
+	        this.files = source["files"];
+	        this.nodes = source["nodes"];
+	        this.edges = source["edges"];
+	        this.duration_sec = source["duration_sec"];
 	    }
 	}
 

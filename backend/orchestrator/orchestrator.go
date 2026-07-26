@@ -14,6 +14,8 @@ import (
 	"claude_suite/backend/database"
 	"claude_suite/backend/models"
 	"claude_suite/backend/services"
+	"claude_suite/backend/services/projectmap"
+	"claude_suite/backend/textutil"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -31,6 +33,12 @@ type Orchestrator struct {
 	agentRepo      *database.AgentRepository
 	taskRepo       *database.TaskRepository
 	memoryRepo     *database.MemoryRepository
+	attemptRepo    *database.AttemptRepository
+	wsRepo         *database.WorkspaceRepository
+	obsRepo        *database.ObservationRepository
+	obsW           *obsWriter
+	learner        *services.Learner
+	mapper         *projectmap.Mapper
 	cliRunner      cli.CLIRunner
 	contextMgr     *services.ContextManager
 	gitService     *services.GitService
@@ -43,6 +51,8 @@ type Orchestrator struct {
 	workspaceDir   string
 	verifyBuild    bool
 	budgetNoticeAt float64
+	packBudget     int
+	sessionResume  bool
 
 	running        bool
 	autoApproveAll bool
@@ -74,6 +84,11 @@ type Orchestrator struct {
 	// tests can zero it; production keeps the exponential default.
 	retryBackoff func(retries int) time.Duration
 	wg           sync.WaitGroup
+
+	// wsIDCache memoizes workspace identity per directory: one git exec per
+	// directory per app lifetime instead of one per captured event.
+	wsIDMu    sync.Mutex
+	wsIDCache map[string]string
 }
 
 // SetEventHandlers connects a frontend-neutral event sink. Wails runtime
@@ -114,8 +129,10 @@ func NewOrchestrator(
 		fallback:       NewFallbackHandler(),
 		approvalChans:  make(map[string]chan bool),
 		maxConcurrency: defaultMaxConcurrency,
+		packBudget:     services.DefaultPackBudget,
 		activeRuns:     make(map[string]context.CancelFunc),
 		retryAt:        make(map[string]time.Time),
+		wsIDCache:      make(map[string]string),
 		retryBackoff: func(retries int) time.Duration {
 			return time.Duration(1<<uint(retries)) * time.Second
 		},
@@ -124,6 +141,64 @@ func NewOrchestrator(
 
 func (o *Orchestrator) SetContext(ctx context.Context) {
 	o.ctx = ctx
+}
+
+// SetAttemptRepo enables per-attempt failure recording. A setter rather than a
+// NewOrchestrator parameter so existing construction sites and tests keep
+// compiling; when unset, attempts simply are not recorded.
+func (o *Orchestrator) SetAttemptRepo(r *database.AttemptRepository) {
+	o.attemptRepo = r
+}
+
+// SetMemoryStores enables workspace identity and observation capture. Both are
+// optional the same way SetAttemptRepo is: unset means nothing is recorded.
+func (o *Orchestrator) SetMemoryStores(ws *database.WorkspaceRepository, obs *database.ObservationRepository) {
+	o.wsRepo = ws
+	o.obsRepo = obs
+	o.obsW = newObsWriter(obs)
+}
+
+// SetLearner connects the memory learner: per-task feedback, mechanical
+// lessons, regression recording, and distillation nudges.
+func (o *Orchestrator) SetLearner(l *services.Learner) {
+	o.learner = l
+}
+
+// SetProjectMapper enables the post-task freshness hook: after each run, the
+// task's own changed files are re-fingerprinted so the map stays at most one
+// task behind the workspace, at zero token cost.
+func (o *Orchestrator) SetProjectMapper(m *projectmap.Mapper) {
+	o.mapper = m
+}
+
+// SetPackBudget bounds the injected context pack in characters. Zero disables
+// injection entirely — the kill switch for the whole memory feature.
+func (o *Orchestrator) SetPackBudget(chars int) {
+	o.mu.Lock()
+	o.packBudget = chars
+	o.mu.Unlock()
+}
+
+func (o *Orchestrator) GetPackBudget() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.packBudget
+}
+
+// SetSessionResume controls whether a successful run's SessionID is written
+// back to the agent row, activating --resume/--conversation on its next task.
+// Off by default: long-lived sessions grow context the CLI compacts
+// unpredictably, so this is an explicit opt-in in Settings.
+func (o *Orchestrator) SetSessionResume(enabled bool) {
+	o.mu.Lock()
+	o.sessionResume = enabled
+	o.mu.Unlock()
+}
+
+func (o *Orchestrator) GetSessionResume() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.sessionResume
 }
 
 func (o *Orchestrator) SetWorkspaceDir(dir string) {
@@ -447,9 +522,17 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		}
 	}()
 
-	// Per-task log helper: streams to both the task inspector and the global log.
+	// Per-task log helper: streams to both the task inspector and the global
+	// log, and captures tool events as observations. taskWsID is assigned once
+	// the workspace is snapshotted below; before that (E2E pre-checks) capture
+	// is silently off. The runner's streaming goroutines start after the
+	// assignment, so they observe it.
+	taskWsID := ""
 	onLog := func(msg, level string) {
 		o.emitTaskLog(task.TaskID, fmt.Sprintf("[%s] %s", agent.Name, msg), level)
+		if level == "TOOL" && taskWsID != "" {
+			o.observe(taskWsID, task.TaskID, agent.AgentID, "tool_call", "", msg)
+		}
 	}
 
 	// Automated E2E Web Test Skill Auto-Binding — only for explicitly tagged tasks.
@@ -492,16 +575,25 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 					maxFix = 3
 				}
 				if task.RetryCount < maxFix {
+					// The E2E failure is this task's attempt history — recorded
+					// so the eventual fixed-cycle regression has its symptom.
+					if o.attemptRepo != nil {
+						_ = o.attemptRepo.Add(task.TaskID, textutil.Truncate("E2E FAILED\n"+summary, 4000, "…"))
+					}
 					// Strip every spelling the detection above accepts, not just
 					// the uppercase prefix: a surviving "[webtest]" tag makes the
 					// fix task run as another browser test, which fails the same
 					// way and spawns its own fix task — an unbounded chain of
 					// Chrome runs with no coding agent ever invoked.
+					// ParentID links the fix back to the failing E2E task — it is
+					// what lets the learner recognize the fixed cycle and record
+					// the regression.
 					fix := &models.Task{
 						Title:    "[CODE] Auto-fix lỗi E2E: " + strings.TrimSpace(e2eTagRe.ReplaceAllString(task.Title, "")),
 						Priority: "high",
 						Status:   "backlog",
 						Prompt:   buildE2EFixPrompt(bRes),
+						ParentID: task.TaskID,
 					}
 					if err := o.taskRepo.Create(fix); err == nil {
 						o.persistTask(task.TaskID, "đưa task về hàng đợi", o.taskRepo.RequeueWithDependency(task.TaskID, fix.TaskID))
@@ -598,6 +690,26 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		fullPrompt = fmt.Sprintf("[DIRECTIVE: CREATE OR MODIFY FILES DIRECTLY IN WORKSPACE %s]\n\n%s", workspaceDir, fullPrompt)
 	}
 
+	// Workspace identity + task lifecycle capture.
+	taskWsID = o.resolveWorkspaceID(workspaceDir)
+	o.observe(taskWsID, task.TaskID, agent.AgentID, "task_start", "", task.Title)
+
+	// Context pack: project map + lessons + known fixed bugs + what this
+	// task's prerequisites produced + what its own earlier attempts failed
+	// with. Prepended to the USER prompt because that is the only channel that
+	// reaches both providers identically — Antigravity has no separate system
+	// channel. The exact injected text is emitted on task_log and stored as a
+	// pack_injected observation, so any task's inspector shows precisely what
+	// memory it received.
+	packLen := 0
+	pack := o.contextMgr.BuildTaskPack(workspaceDir, taskWsID, task, o.GetPackBudget())
+	if pack.Text != "" {
+		fullPrompt = pack.Text + "\n\n" + fullPrompt
+		packLen = len(pack.Text)
+		o.emitTaskLog(task.TaskID, fmt.Sprintf("📦 Context pack (%d ký tự):\n%s", packLen, pack.Text), "INFO")
+		o.observe(taskWsID, task.TaskID, agent.AgentID, "pack_injected", "", pack.Text)
+	}
+
 	// ── Inject Markdown Roles ──────────────────────────────────────────────
 	rolesDir := filepath.Join(filepath.Dir(database.GetDBPath()), "roles")
 	var roleContexts []string
@@ -625,6 +737,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	// ───────────────────────────────────────────────────────────────────────
 
 	result := o.cliRunner.RunAgentCtx(ctx, &runAgent, fullPrompt, onLog, workspaceDir)
+	adjustEstimatedUsage(result, packLen)
 
 	// If the task was stopped by the user mid-flight, mark it and bail out.
 	if ctx.Err() != nil {
@@ -657,6 +770,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		_ = o.agentRepo.SetProviderModel(agent.AgentID, newProvider, newModel)
 		onLog(fmt.Sprintf("⚠️ Smart Fallback: Switched to %s (%s)", newProvider, newModel), "WARN")
 		result = o.cliRunner.RunAgentCtx(ctx, agent, fullPrompt, onLog, workspaceDir)
+		adjustEstimatedUsage(result, packLen)
 		if ctx.Err() != nil {
 			o.markStopped(task, agent)
 			return
@@ -672,6 +786,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		if vr.Ran && !vr.Passed {
 			result.Success = false
 			result.Error = "Build verification FAILED:\n" + vr.Report
+			o.observe(taskWsID, task.TaskID, agent.AgentID, "build_verify_failed", "", vr.Report)
 			onLog("❌ Build verify FAILED — trả task về để agent sửa.", "ERROR")
 		} else if vr.Ran {
 			onLog("✅ Build verify passed.", "SUCCESS")
@@ -682,13 +797,25 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "done", result.Output, result.SessionID))
 		agent.Status = "idle"
 		_ = o.agentRepo.CompleteTask(agent.AgentID)
+		// Session resume (opt-in): the run's session becomes the agent's,
+		// so its next dispatch continues the same CLI conversation.
+		if o.GetSessionResume() && result.SessionID != "" && result.SessionID != agent.SessionID {
+			_ = o.agentRepo.SetSessionID(agent.AgentID, result.SessionID)
+		}
 		costStr := ""
 		if result.CostUSD > 0 {
 			costStr = fmt.Sprintf(" · $%.4f", result.CostUSD)
 		}
+		o.observe(taskWsID, task.TaskID, agent.AgentID, "task_complete", "", result.Output)
 		onLog(fmt.Sprintf("DONE '%s' (%.1fs · %d tokens%s)", task.Title, result.DurationSec, result.TokensUsed, costStr), "SUCCESS")
 		go o.notifierSvc.NotifyTaskEvent("task_done", task.Title, "done", fmt.Sprintf("Agent %s hoàn thành trong %.1fs", agent.Name, result.DurationSec))
 	} else {
+		// Keep this attempt's error text. Until it was recorded, every retry
+		// re-ran a byte-identical prompt with no idea what went wrong before.
+		if o.attemptRepo != nil {
+			_ = o.attemptRepo.Add(task.TaskID, textutil.Truncate(result.Error, 4000, "…"))
+		}
+		o.observe(taskWsID, task.TaskID, agent.AgentID, "task_failed", "", result.Error)
 		// Count the attempt in the database. This task is a copy owned by this
 		// goroutine, so incrementing the struct would be forgotten the moment the
 		// run ends — and the limit below would never be reached.
@@ -718,8 +845,41 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		_ = o.agentRepo.SetStatus(agent.AgentID, "idle", "", result.Error)
 	}
 
+	// Learner hook: feedback for the lessons this task carried, mechanical
+	// lesson + regression extraction on fixed-after-failing tasks, and a
+	// distillation nudge. Synchronous — a few local DB writes.
+	if o.learner != nil {
+		o.learner.OnTaskFinished(taskWsID, workspaceDir, task, result, pack.LessonIDs)
+	}
+
+	// Freshness hook: whatever this run changed (AutoSnapshot committed before
+	// it, so the uncommitted diff IS this task's edits — including a failed
+	// run's half-done edits) gets re-fingerprinted in the background. Tracked
+	// on the WaitGroup so tests and shutdown can wait for it.
+	if workspaceDir != "" && o.mapper != nil {
+		o.wg.Add(1)
+		go func() {
+			defer o.wg.Done()
+			_ = o.mapper.IncrementalUpdate(workspaceDir, o.gitService.ChangedFiles(workspaceDir))
+		}()
+	}
+
 	o.emitBoard()
 	o.emitAgents()
+}
+
+// adjustEstimatedUsage subtracts the injected pack from a len/4-estimated
+// token count. The pack is the orchestrator's own text; counting it against
+// the agent made estimated providers (Antigravity reports no usage) reach
+// their quota ceiling on fiction and trip fallback early.
+func adjustEstimatedUsage(r *cli.RunResult, packLen int) {
+	if r == nil || !r.UsageEstimated || packLen <= 0 {
+		return
+	}
+	cut := int64(packLen / 4)
+	if r.TokensUsed > cut {
+		r.TokensUsed -= cut
+	}
 }
 
 func (o *Orchestrator) markStopped(task *models.Task, agent *models.Agent) {

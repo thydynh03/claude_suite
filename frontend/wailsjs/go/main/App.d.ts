@@ -6,12 +6,15 @@ import {main} from '../models';
 import {claims} from '../models';
 import {cli} from '../models';
 import {database} from '../models';
+import {projectmap} from '../models';
 
 export function AddAntiAccountKey(arg1:string,arg2:string):Promise<void>;
 
 export function AddAntiOAuthAccountKey(arg1:string,arg2:string):Promise<void>;
 
 export function AddMCPServer(arg1:services.MCPServer):Promise<services.MCPServer>;
+
+export function ApproveRegressionGuard(arg1:string,arg2:string,arg3:Array<string>):Promise<void>;
 
 export function AssignTask(arg1:string,arg2:string):Promise<void>;
 
@@ -79,6 +82,8 @@ export function GetClaimChat(arg1:string):Promise<Array<claims.ChatMessage>>;
 
 export function GetClaimSession(arg1:string):Promise<Record<string, any>>;
 
+export function GetContextPackPreview(arg1:string):Promise<string>;
+
 export function GetDispatchReadiness():Promise<database.DispatchReadiness>;
 
 export function GetGCPOAuthCredentials():Promise<Record<string, string>>;
@@ -99,7 +104,19 @@ export function GetMCPServers():Promise<Array<services.MCPServer>>;
 
 export function GetMaxConcurrency():Promise<number>;
 
+export function GetMemoryConfig():Promise<models.MemoryConfig>;
+
+export function GetMemoryLessons(arg1:string):Promise<Array<models.MemoryLesson>>;
+
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
+
+export function GetProjectGraph():Promise<models.ModuleGraph>;
+
+export function GetProjectMap():Promise<models.ProjectMapStats>;
+
+export function GetProjectMapStaleness():Promise<models.StalenessReport>;
+
+export function GetRegressions():Promise<Array<models.Regression>>;
 
 export function GetRoleContent(arg1:string):Promise<string>;
 
@@ -145,7 +162,11 @@ export function Ping():Promise<boolean>;
 
 export function ReadFileContent(arg1:string):Promise<string>;
 
+export function RebuildProjectMap():Promise<projectmap.BuildReport>;
+
 export function RefreshAccountTokens():Promise<number|number>;
+
+export function RefreshProjectSummaries():Promise<number>;
 
 export function RemoveMCPServer(arg1:string):Promise<void>;
 
@@ -158,6 +179,8 @@ export function ResolveBrowserAsk(arg1:string,arg2:string):Promise<boolean>;
 export function RetryTask(arg1:string):Promise<void>;
 
 export function RevertGitCommit(arg1:string):Promise<void>;
+
+export function ReviewMemoryLesson(arg1:string,arg2:string):Promise<void>;
 
 export function RunBrowserTask(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean,arg7:boolean,arg8:number):Promise<services.BrowserActionResult>;
 
@@ -174,6 +197,8 @@ export function SaveFileContent(arg1:string,arg2:string):Promise<void>;
 export function SaveGCPOAuthCredentials(arg1:string,arg2:string):Promise<void>;
 
 export function SaveIntegrationsConfig(arg1:models.IntegrationsConfig):Promise<models.IntegrationsConfig>;
+
+export function SaveMemoryConfig(arg1:models.MemoryConfig):Promise<void>;
 
 export function SaveRoleContent(arg1:string,arg2:string):Promise<void>;
 

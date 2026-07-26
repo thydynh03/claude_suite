@@ -3,19 +3,41 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"claude_suite/backend/cli"
+	"claude_suite/backend/database"
 	"claude_suite/backend/models"
+	"claude_suite/backend/services/projectmap"
+	"claude_suite/backend/textutil"
 )
 
 type PlanBuilder struct {
 	cliRunner cli.CLIRunner
+	// taskRepo, when attached, lets decomposition see the current board so a
+	// re-plan does not re-create work that already exists (or already failed).
+	taskRepo *database.TaskRepository
+	// regressionRepo, when attached, tells the planner which bugs were already
+	// fixed here — re-planning is precisely where old bugs get re-invented.
+	regressionRepo *database.RegressionRepository
 }
 
 func NewPlanBuilder(cliRunner cli.CLIRunner) *PlanBuilder {
 	return &PlanBuilder{cliRunner: cliRunner}
+}
+
+// AttachBoard lets the planner read the existing Kanban board. Optional, same
+// setter convention as the orchestrator's stores.
+func (p *PlanBuilder) AttachBoard(taskRepo *database.TaskRepository) {
+	p.taskRepo = taskRepo
+}
+
+// AttachRegressions lets the planner see the workspace's fixed bugs.
+func (p *PlanBuilder) AttachRegressions(repo *database.RegressionRepository) {
+	p.regressionRepo = repo
 }
 
 type DecomposedTask struct {
@@ -80,6 +102,13 @@ func (p *PlanBuilder) DecomposeWithProvider(projectRequirement string, cwd strin
 
 	prompt := fmt.Sprintf("Project Requirement for Brainstorming & Task Decomposition:\n\"%s\"\n\nDecompose into 4 to 6 highly detailed, comprehensive production tasks with all required tags ([ACTION], [REQUIREMENTS], [TARGET FILES], [EXPECTED OUTPUT]).", reqText)
 
+	// The planner used to decompose blind — requirement text only. Feed it the
+	// project map digest and the current board so a re-plan builds on what
+	// exists instead of re-inventing (and re-breaking) it.
+	if wctx := p.buildWorkspaceContext(cwd); wctx != "" {
+		prompt = wctx + "\n\n" + prompt
+	}
+
 	var result *cli.RunResult
 	if provider == "anti_cli" {
 		anti := cli.NewAntigravityCLI()
@@ -98,6 +127,54 @@ func (p *PlanBuilder) DecomposeWithProvider(projectRequirement string, cwd strin
 	}
 
 	return tasks, nil
+}
+
+// buildWorkspaceContext renders what the planner should know about the
+// workspace: the generated project-map digest and the existing board. Both
+// parts are bounded and optional — an empty workspace yields "".
+func (p *PlanBuilder) buildWorkspaceContext(cwd string) string {
+	var parts []string
+
+	if cwd != "" {
+		if data, err := os.ReadFile(filepath.Join(cwd, ".claude-suite", "project-map.md")); err == nil && len(data) > 0 {
+			parts = append(parts, "## Project map of the workspace (auto-generated)\n"+
+				textutil.Truncate(string(data), 4000, "\n… (map truncated)"))
+		}
+	}
+
+	if p.taskRepo != nil {
+		if tasks, err := p.taskRepo.GetAll(); err == nil && len(tasks) > 0 {
+			var b strings.Builder
+			b.WriteString("## Current Kanban board (do not duplicate these tasks)\n")
+			shown := 0
+			for _, t := range tasks {
+				if shown >= 30 {
+					b.WriteString(fmt.Sprintf("- … and %d more tasks\n", len(tasks)-shown))
+					break
+				}
+				b.WriteString(fmt.Sprintf("- [%s] %s\n", t.Status, textutil.Truncate(t.Title, 120, "…")))
+				shown++
+			}
+			parts = append(parts, textutil.Truncate(b.String(), 1500, "\n… (board truncated)"))
+		}
+	}
+
+	if p.regressionRepo != nil && cwd != "" {
+		wsID := database.WorkspaceIDFor(cwd, projectmap.WorkspaceRemoteIdentity(cwd))
+		if regs, err := p.regressionRepo.List(wsID, 10); err == nil && len(regs) > 0 {
+			var b strings.Builder
+			b.WriteString("## Known fixed bugs in this workspace (plans must not re-introduce these)\n")
+			for _, r := range regs {
+				b.WriteString(fmt.Sprintf("- %s: %s\n", r.Title, textutil.Truncate(r.Symptom, 150, "…")))
+			}
+			parts = append(parts, textutil.Truncate(b.String(), 1500, "\n… (regressions truncated)"))
+		}
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func (p *PlanBuilder) SimpleSplit(requirement string) []models.Task {

@@ -9,14 +9,17 @@ import (
 	"strings"
 	"time"
 
+	"claude_suite/backend/claims"
 	"claude_suite/backend/cli"
 	"claude_suite/backend/core"
 	"claude_suite/backend/database"
+	"claude_suite/backend/defaults"
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
 	"claude_suite/backend/provider"
 	"claude_suite/backend/services"
+	"claude_suite/backend/services/projectmap"
 )
 
 // The terminal UI must offer the same shared capabilities as the desktop app.
@@ -24,6 +27,10 @@ import (
 // convention: the two drifted to different method names for eight git and export
 // capabilities, and nothing failed until someone compared them by hand.
 var _ core.Facade = (*RepositoryTaskActions)(nil)
+
+// tuiCheapModel runs the TUI's background memory work — same model choice as
+// the desktop app's memoryCheapModel.
+const tuiCheapModel = "claude-haiku-4-5"
 
 // RepositoryTaskActions adapts the shared task repository to the TUI. Opening
 // write mode is explicit; it never creates a missing database or runs schema
@@ -37,12 +44,17 @@ type RepositoryTaskActions struct {
 	exporter  *services.ExporterService
 	runner    cli.CLIRunner
 	context   *services.ContextManager
+	mapper    *projectmap.Mapper
+	lessons   *database.LessonRepository
+	regress   *database.RegressionRepository
+	learner   *services.Learner
 	orch      *orchestrator.Orchestrator
 	git       *services.GitService
 	webhook   *services.WebhookService
 	browser   *services.BrowserAgentService
 	events    chan RuntimeEvent
 	workspace string
+	dataDir   string
 }
 
 func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, error) {
@@ -74,11 +86,41 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 	contextManager := services.NewContextManager()
 	taskRepo := database.NewTaskRepository(db)
 	agentRepo := database.NewAgentRepository(db)
+	attemptRepo := database.NewAttemptRepository(db)
+	wsRepo := database.NewWorkspaceRepository(db)
+	obsRepo := database.NewObservationRepository(db)
+	lessonRepo := database.NewLessonRepository(db)
+	regressionRepo := database.NewRegressionRepository(db)
+	gitSvc := services.NewGitService()
+	mapper := projectmap.NewMapper(database.NewCodeGraphRepository(db), wsRepo)
+	mapper.SetSummarizer(runner, tuiCheapModel)
+	contextManager.AttachRepos(taskRepo, attemptRepo)
+	contextManager.AttachProjectMapper(mapper)
+	contextManager.AttachMemoryRepos(lessonRepo, regressionRepo)
+	learner := services.NewLearner(lessonRepo, obsRepo, wsRepo, attemptRepo, regressionRepo, gitSvc, runner, tuiCheapModel)
 	orch := orchestrator.NewOrchestrator(
 		agentRepo, taskRepo, database.NewMemoryRepository(db),
-		runner, contextManager, services.NewGitService(), services.NewBrowserAgentService(),
+		runner, contextManager, gitSvc, services.NewBrowserAgentService(),
 	)
+	orch.SetAttemptRepo(attemptRepo)
+	orch.SetMemoryStores(wsRepo, obsRepo)
+	orch.SetProjectMapper(mapper)
+	orch.SetLearner(learner)
+	learner.Start()
 	orch.SetWorkspaceDir(workspace)
+	// Same stored knobs as the desktop app — one config file, two frontends.
+	memCfg := services.LoadMemoryConfig(filepath.Dir(absolute))
+	orch.SetPackBudget(memCfg.ContextPackMaxChars)
+	orch.SetSessionResume(memCfg.SessionResume)
+	mapper.SetAutoSummarize(memCfg.AutoSummarize)
+	learner.SetPromotionEnabled(memCfg.LessonPromotion)
+	// Seed role definitions beside the database the same way the desktop app
+	// does at startup: the orchestrator reads <dataDir>/roles on every task run
+	// and silently skips missing files, so a TUI-only install would otherwise
+	// run agents without any role context.
+	if _, err := defaults.SeedRoles(filepath.Join(filepath.Dir(absolute), "roles")); err != nil {
+		fmt.Printf("Could not seed agent roles: %v\n", err)
+	}
 	// A crash or forced exit leaves tasks marked "running", and the dispatcher
 	// skips those forever. The Wails frontend recovers them on startup; write-mode
 	// TUI sessions have to do the same or those tasks are stuck permanently.
@@ -87,14 +129,19 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 		_ = db.Close()
 		return nil, fmt.Errorf("recover tasks left running: %w", err)
 	}
+	planBuilder := pipeline.NewPlanBuilder(runner)
+	planBuilder.AttachBoard(taskRepo)
+	planBuilder.AttachRegressions(regressionRepo)
 	actions := &RepositoryTaskActions{
 		db: db, repo: taskRepo, agents: agentRepo,
-		plan: pipeline.NewPlanBuilder(runner), pipe: pipeline.NewPipelineEngine(agentRepo, runner),
+		plan: planBuilder, pipe: pipeline.NewPipelineEngine(agentRepo, runner),
 		exporter: services.NewExporterService(),
-		runner:   runner, context: contextManager,
-		orch: orch, git: services.NewGitService(), webhook: services.NewWebhookService(taskRepo),
+		runner:   runner, context: contextManager, mapper: mapper,
+		lessons: lessonRepo, regress: regressionRepo, learner: learner,
+		orch: orch, git: gitSvc, webhook: services.NewWebhookService(taskRepo),
 		browser: services.NewBrowserAgentService(),
 		events:  make(chan RuntimeEvent, 128), workspace: workspace,
+		dataDir: filepath.Dir(absolute),
 	}
 	// Named rather than three positional callbacks: swapping two of them compiles
 	// and produces a UI that quietly stops updating.
@@ -236,6 +283,149 @@ func (a *RepositoryTaskActions) ScanWorkspaceFiles() ([]string, error) {
 		return []string{}, nil
 	}
 	return a.context.ScanWorkspace(a.workspace)
+}
+
+// ── Project Map (name parity with the desktop app) ──────────────────────
+
+func (a *RepositoryTaskActions) RebuildProjectMap() (*projectmap.BuildReport, error) {
+	if a.workspace == "" {
+		return nil, fmt.Errorf("no workspace selected")
+	}
+	return a.mapper.FullBuild(a.workspace)
+}
+
+func (a *RepositoryTaskActions) GetProjectMap() (*models.ProjectMapStats, error) {
+	if a.workspace == "" {
+		return nil, fmt.Errorf("no workspace selected")
+	}
+	return a.mapper.Stats(a.workspace)
+}
+
+func (a *RepositoryTaskActions) GetProjectMapStaleness() (models.StalenessReport, error) {
+	if a.workspace == "" {
+		return models.StalenessReport{Status: "unknown"}, nil
+	}
+	return a.mapper.Staleness(a.workspace), nil
+}
+
+func (a *RepositoryTaskActions) RefreshProjectSummaries() (int, error) {
+	if a.workspace == "" {
+		return 0, fmt.Errorf("no workspace selected")
+	}
+	return a.mapper.RefreshSummaries(a.workspace, 3)
+}
+
+// ── Memory (name parity with the desktop app) ───────────────────────────
+
+func (a *RepositoryTaskActions) workspaceID() (string, error) {
+	if a.workspace == "" {
+		return "", fmt.Errorf("no workspace selected")
+	}
+	return database.WorkspaceIDFor(a.workspace, projectmap.WorkspaceRemoteIdentity(a.workspace)), nil
+}
+
+func (a *RepositoryTaskActions) GetMemoryLessons(status string) ([]models.MemoryLesson, error) {
+	wsID, err := a.workspaceID()
+	if err != nil {
+		return nil, err
+	}
+	lessons, err := a.lessons.ListByStatus(wsID, status, 200)
+	if err != nil {
+		return nil, err
+	}
+	if lessons == nil {
+		lessons = []models.MemoryLesson{}
+	}
+	return lessons, nil
+}
+
+func (a *RepositoryTaskActions) ReviewMemoryLesson(lessonID, decision string) error {
+	status, err := database.ReviewDecisionStatus(decision)
+	if err != nil {
+		return err
+	}
+	return a.lessons.SetStatus(lessonID, status)
+}
+
+func (a *RepositoryTaskActions) GetRegressions() ([]models.Regression, error) {
+	wsID, err := a.workspaceID()
+	if err != nil {
+		return nil, err
+	}
+	regs, err := a.regress.List(wsID, 200)
+	if err != nil {
+		return nil, err
+	}
+	if regs == nil {
+		regs = []models.Regression{}
+	}
+	return regs, nil
+}
+
+func (a *RepositoryTaskActions) ApproveRegressionGuard(regressionID, checkName string, command []string) error {
+	if a.workspace == "" {
+		return fmt.Errorf("no workspace selected")
+	}
+	reg, err := a.regress.Get(regressionID)
+	if err != nil {
+		return err
+	}
+	if reg == nil {
+		return fmt.Errorf("regression %s not found", regressionID)
+	}
+	if err := claims.AppendCheck(a.workspace, claims.Check{
+		Name:        checkName,
+		Description: "Guard cho regression: " + reg.Title,
+		Command:     command,
+		TimeoutSec:  120,
+	}); err != nil {
+		return err
+	}
+	return a.regress.SetGuard(regressionID, checkName, "approved")
+}
+
+func (a *RepositoryTaskActions) GetMemoryConfig() models.MemoryConfig {
+	return services.LoadMemoryConfig(a.dataDir)
+}
+
+func (a *RepositoryTaskActions) SaveMemoryConfig(cfg models.MemoryConfig) error {
+	if cfg.ContextPackMaxChars < 0 {
+		cfg.ContextPackMaxChars = 0
+	}
+	if err := services.SaveMemoryConfig(a.dataDir, cfg); err != nil {
+		return err
+	}
+	a.orch.SetPackBudget(cfg.ContextPackMaxChars)
+	a.orch.SetSessionResume(cfg.SessionResume)
+	a.mapper.SetAutoSummarize(cfg.AutoSummarize)
+	a.learner.SetPromotionEnabled(cfg.LessonPromotion)
+	return nil
+}
+
+func (a *RepositoryTaskActions) GetProjectGraph() (*models.ModuleGraph, error) {
+	if a.workspace == "" {
+		return nil, fmt.Errorf("no workspace selected")
+	}
+	return a.mapper.ModuleGraph(a.workspace)
+}
+
+func (a *RepositoryTaskActions) GetContextPackPreview(taskID string) (string, error) {
+	task, err := a.repo.GetByID(taskID)
+	if err != nil {
+		return "", err
+	}
+	if task == nil {
+		return "", fmt.Errorf("task %s not found", taskID)
+	}
+	wsID := ""
+	if a.workspace != "" {
+		wsID = database.WorkspaceIDFor(a.workspace, projectmap.WorkspaceRemoteIdentity(a.workspace))
+	}
+	pack := a.context.BuildTaskPack(a.workspace, wsID, task, a.orch.GetPackBudget())
+	if pack.Text == "" {
+		return "(pack rỗng — task này chưa có context nào để tiêm)", nil
+	}
+	return pack.Text, nil
 }
 
 func (a *RepositoryTaskActions) ReadFileContent(relPath string) (string, error) {
@@ -417,5 +607,8 @@ func (a *RepositoryTaskActions) Close() error {
 		return nil
 	}
 	a.orch.Stop()
+	if a.learner != nil {
+		a.learner.Stop()
+	}
 	return a.db.Close()
 }

@@ -592,6 +592,37 @@ App method phải `wails generate module`.
 
 ## 7. Milestones — mỗi mốc tự đứng được
 
+**Trạng thái (2026-07-26): M0 ✅ · M1 ✅ · M2 ✅ · M3 ✅ · M4 ✅ · M5 ✅ · M6 ✅ (trừ tree-sitter).**
+
+M6 đã làm: session resume (toggle trong Settings → Memory, mặc định TẮT — ghi
+SessionID về agent row, kích hoạt `--resume`/`--conversation`); promotion lesson
+lên global (toggle, mặc định TẮT, luật ≥2 workspace avg ≥0.8, idempotent); FTS5
+cho `SearchNodes` (đã xác minh modernc.org/sqlite có FTS5; tạo best-effort +
+trigger đồng bộ + backfill, thiếu FTS5 thì tự rơi về LIKE); module-graph
+visualizer (SVG, top 30 thư mục, cạnh = import gộp) trong MemoryPage; và form
+Settings → Memory cho cả 4 knob (`memory_config.json` cạnh database, hai
+frontend dùng chung).
+
+**Tree-sitter: từ chối có chủ đích.** `smacker/go-tree-sitter` cần cgo — phá
+build thuần Go hiện tại (modernc SQLite chọn vì lý do đó, CI Windows không có
+toolchain C, NSIS đóng gói một binary tĩnh). Extractor regex + chính sách
+STRUCTURAL-khi-không-chắc đã chặn đúng hướng sai số (tệ nhất là re-extract
+thừa, không bao giờ là graph sai). Chỉ xét lại nếu số liệu cho thấy summary
+churn của `.svelte` gây tốn token đáng kể.
+
+Khác biệt so với thiết kế gốc, đã ghi nhận:
+- Identity workspace đi qua **một** resolver duy nhất `projectmap.WorkspaceRemoteIdentity`
+  (phát hiện live: `git config --get` ngoài repo rơi về GLOBAL config, và một repo git
+  lạc ở thư mục home nuốt mọi thư mục con → thêm guard `--show-toplevel` + `#subpath`).
+  Xem ARCHITECTURE_DECISIONS §11.
+- Lessons/regressions đứng NGOÀI stale-replay guard (chúng là guidance, không phải
+  transcript — theo đúng cách ECC tách instincts khỏi session summaries).
+- Guard falsifier do NGƯỜI nhập argv trên MemoryPage (mỗi tham số một dòng), không
+  phải LLM draft — an toàn hơn với invariant của claims. Xem ARCHITECTURE_DECISIONS §10.
+- LLM summaries chỉ enrich node file/config (function/class giữ summary chữ ký — đã
+  chính xác sẵn); run nội bộ không bị capture vì đi thẳng `RunOnce`, không qua `runTask`.
+- Cột `trigger` đổi thành `trigger_text` (TRIGGER là keyword của SQLite).
+
 Mọi mốc: `go build ./... && go vet ./... && go test ./backend/...`, frontend
 `npm run build` khi đụng, `wails generate module` sau khi đổi `app.go` — tất cả qua CI.
 

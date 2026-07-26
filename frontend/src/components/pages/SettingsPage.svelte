@@ -8,7 +8,7 @@
   import Dropdown from '../ui/Dropdown.svelte';
   import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
 
-  let subTab: 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' = 'oauth_pool';
+  let subTab: 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' | 'memory' = 'oauth_pool';
   // Use global store so agent list persists across tab switches
   let agents: Agent[] = [];
   const unsubscribeAgents = agentsStore.subscribe((v) => { agents = v as Agent[]; });
@@ -47,10 +47,44 @@
   let newKeyName = '';
   let newKeyValue = '';
 
+  // Memory subsystem settings (context pack, summaries, resume, promotion).
+  let memoryCfg = { context_pack_max_chars: 12000, auto_summarize: true, session_resume: false, lesson_promotion: false };
+  let isSavingMemoryCfg = false;
+
+  async function loadMemoryCfg() {
+    try {
+      if ((AppBindings as any).GetMemoryConfig) {
+        const cfg = await (AppBindings as any).GetMemoryConfig();
+        if (cfg) memoryCfg = cfg;
+      }
+    } catch (e) {}
+  }
+
+  async function handleSaveMemoryCfg() {
+    isSavingMemoryCfg = true;
+    try {
+      const budgetNum = Number(memoryCfg.context_pack_max_chars);
+      memoryCfg.context_pack_max_chars = Number.isFinite(budgetNum) && budgetNum > 0 ? Math.floor(budgetNum) : 0;
+      await (AppBindings as any).SaveMemoryConfig(memoryCfg);
+      addToast(
+        memoryCfg.context_pack_max_chars === 0
+          ? 'Đã lưu — context pack đang TẮT (budget = 0).'
+          : `Đã lưu cài đặt memory (pack ≤ ${memoryCfg.context_pack_max_chars} ký tự).`,
+        'SUCCESS'
+      );
+      await loadMemoryCfg();
+    } catch (e: any) {
+      addToast('Lưu cài đặt memory thất bại: ' + String(e?.message ?? e), 'ERROR');
+    } finally {
+      isSavingMemoryCfg = false;
+    }
+  }
+
   async function initSettings() {
     await loadAgents();
     await loadAntiKeys();
     await loadBudget();
+    await loadMemoryCfg();
     try {
       if ((AppBindings as any).GetIntegrationsConfig) {
         const cfg = await (AppBindings as any).GetIntegrationsConfig();
@@ -437,6 +471,13 @@
       >
         Integrations (Webhook/MCP)
       </button>
+      <button
+        on:click={() => (subTab = 'memory')}
+        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
+        {subTab === 'memory' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+      >
+        Memory
+      </button>
     </div>
   </div>
 
@@ -797,8 +838,8 @@
       </div>
 
       <div class="pt-4 border-t border-outline-variant flex justify-end">
-        <button 
-          on:click={handleSaveIntegrations} 
+        <button
+          on:click={handleSaveIntegrations}
           disabled={isIntegrationsSaving}
           class="bg-primary text-on-primary px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
         >
@@ -807,6 +848,60 @@
       </div>
 
 
+    </div>
+  {:else if subTab === 'memory'}
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-5 max-w-2xl mx-auto shadow-sm">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary text-2xl">psychology</span>
+        <h3 class="font-bold text-lg text-on-surface">Memory & Context Pack</h3>
+      </div>
+      <p class="text-xs text-on-surface-variant">
+        Điều khiển những gì được tiêm vào prompt của sub-agent. Dữ liệu xem tại trang <strong>Memory</strong> (nhóm Giám sát).
+      </p>
+
+      <div>
+        <label class="text-xs font-bold text-on-surface-variant uppercase" for="pack-budget">Ngân sách context pack (ký tự)</label>
+        <input id="pack-budget" type="number" min="0" step="500" bind:value={memoryCfg.context_pack_max_chars}
+          class="w-full mt-1 px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono text-on-surface" />
+        <p class="text-[11px] text-on-surface-variant mt-1">
+          Mặc định 12000 (~3k token). Đặt <strong>0</strong> để TẮT hẳn việc tiêm memory vào prompt (kill switch).
+        </p>
+      </div>
+
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" bind:checked={memoryCfg.auto_summarize} class="mt-0.5 accent-[var(--md-sys-color-primary,#6750a4)]" />
+        <span>
+          <span class="text-sm font-semibold text-on-surface block">Tự làm mới summaries (LLM)</span>
+          <span class="text-[11px] text-on-surface-variant">Sau mỗi task, các file đổi cấu trúc được model rẻ (Haiku) viết lại summary theo lô — nhỏ giọt, có cooldown 10 phút.</span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" bind:checked={memoryCfg.session_resume} class="mt-0.5 accent-[var(--md-sys-color-primary,#6750a4)]" />
+        <span>
+          <span class="text-sm font-semibold text-on-surface block">Session resume cho agent</span>
+          <span class="text-[11px] text-on-surface-variant">Ghi SessionID của run thành công về agent để task sau tiếp tục cùng hội thoại CLI (--resume/--conversation). Context hội thoại sẽ lớn dần và CLI tự nén khó đoán — bật khi muốn đo thử.</span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" bind:checked={memoryCfg.lesson_promotion} class="mt-0.5 accent-[var(--md-sys-color-primary,#6750a4)]" />
+        <span>
+          <span class="text-sm font-semibold text-on-surface block">Promote lesson lên global</span>
+          <span class="text-[11px] text-on-surface-variant">Lesson xuất hiện ở ≥2 workspace với confidence trung bình ≥0.8 được nhân bản sang mọi workspace. Tắt mặc định: lesson tồi ở phạm vi global gây hại ở mọi nơi cùng lúc.</span>
+        </span>
+      </label>
+
+      <div class="pt-4 border-t border-outline-variant flex justify-end">
+        <button
+          on:click={handleSaveMemoryCfg}
+          disabled={isSavingMemoryCfg}
+          class="bg-primary text-on-primary px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50 flex items-center gap-1"
+        >
+          {#if isSavingMemoryCfg}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{/if}
+          {isSavingMemoryCfg ? 'Đang lưu…' : 'Lưu cài đặt Memory'}
+        </button>
+      </div>
     </div>
   {/if}
 </div>

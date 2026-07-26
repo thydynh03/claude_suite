@@ -39,6 +39,11 @@ type RunResult struct {
 	// by the time the failure is handled — under parallel tasks those differ,
 	// and rotating positionally poisoned every healthy key in the pool.
 	AccountID string `json:"account_id"`
+	// UsageEstimated marks TokensUsed as a len/4 guess rather than a figure the
+	// CLI reported. The orchestrator subtracts its own injected context from
+	// estimated counts — otherwise the context pack inflates every estimated
+	// run and pushes quota fallback into firing on fiction.
+	UsageEstimated bool `json:"usage_estimated"`
 }
 
 // LogCallback functions report real-time output line-by-line

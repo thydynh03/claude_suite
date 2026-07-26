@@ -19,6 +19,17 @@ type UIConfig struct {
 	OnboardingVersion string `json:"onboarding_version"`
 }
 
+// MemoryConfig tunes the memory/context-pack subsystem (persisted to disk).
+// Zero-value semantics matter here: ContextPackMaxChars 0 is the deliberate
+// kill switch, so loading always starts from DefaultMemoryConfig and lets the
+// file override — a missing field keeps its default, a present 0 is respected.
+type MemoryConfig struct {
+	ContextPackMaxChars int  `json:"context_pack_max_chars"` // 0 = tắt tiêm pack hoàn toàn
+	AutoSummarize       bool `json:"auto_summarize"`         // drip LLM summaries sau incremental update
+	SessionResume       bool `json:"session_resume"`         // ghi SessionID về agent để --resume/--conversation
+	LessonPromotion     bool `json:"lesson_promotion"`       // promote lesson xuất hiện ở ≥2 workspace lên global
+}
+
 // AppConfig represents global user settings
 type AppConfig struct {
 	Theme               string `json:"theme"` // "dark" or "light"

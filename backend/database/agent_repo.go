@@ -147,6 +147,18 @@ func (r *AgentRepository) CompleteTask(agentID string) error {
 // SetProviderModel records a provider switch — the smart fallback after a quota
 // error — without disturbing the agent's live state. Written through Update, a
 // concurrent task's stale copy would put the exhausted provider straight back.
+// SetSessionID persists the CLI session a run produced, activating --resume /
+// --conversation on the agent's next dispatch. A narrow column write on
+// purpose — writing the whole row back from a task goroutine's stale copy is
+// the bug class that reverted quota fallbacks.
+func (r *AgentRepository) SetSessionID(agentID, sessionID string) error {
+	_, err := r.db.Exec(
+		`UPDATE agents SET session_id=?, updated_at=? WHERE agent_id=?`,
+		sessionID, time.Now(), agentID,
+	)
+	return err
+}
+
 func (r *AgentRepository) SetProviderModel(agentID, provider, model string) error {
 	_, err := r.db.Exec(
 		`UPDATE agents SET provider=?, model=?, updated_at=? WHERE agent_id=?`,

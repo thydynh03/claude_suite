@@ -41,3 +41,7 @@ anti_accounts.json
 # Adjudication session state is per-run and per-machine; the catalogue at
 # .claude-suite/checks.json is reviewed config and stays tracked.
 .claude-suite/session-*/
+
+# The project map digest is regenerated on every map build (see
+# backend/services/projectmap) — generated output, not reviewed config.
+.claude-suite/project-map.md

@@ -20,6 +20,7 @@
     { label: 'Đi tới: Scheduler', icon: 'schedule', run: () => go('scheduler') },
     { label: 'Đi tới: Browser Agent', icon: 'public', run: () => go('browser') },
     { label: 'Đi tới: Source Control (Git)', icon: 'account_tree', run: () => go('git'), keywords: 'git commit source control' },
+    { label: 'Đi tới: Memory & Project Map', icon: 'psychology', run: () => go('memory'), keywords: 'memory lessons map regressions bug' },
     { label: 'Đi tới: Settings', icon: 'settings', run: () => go('settings') },
     { label: 'Orchestrator: Bắt đầu', icon: 'play_arrow', run: async () => { await (AppBindings as any).StartOrchestrator(); orchestratorRunning.set(true); addToast('Orchestrator đã bắt đầu.', 'SUCCESS'); close(); }, keywords: 'start run' },
     { label: 'Orchestrator: Dừng', icon: 'stop', run: async () => { await (AppBindings as any).StopOrchestrator(); orchestratorRunning.set(false); addToast('Orchestrator đã dừng.', 'WARN'); close(); }, keywords: 'stop pause' },

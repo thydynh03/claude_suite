@@ -30,6 +30,9 @@
       title: 'Giám sát',
       items: [
         { id: 'office', label: 'Virtual Office', title: 'Virtual Office 3D', icon: 'meeting_room', color: 'text-secondary', shortcut: 'Ctrl+8' },
+        // No shortcut: all ten Ctrl+digit slots are taken, and renumbering
+        // them would break everyone's muscle memory (see App.svelte).
+        { id: 'memory', label: 'Memory', title: 'Memory & Project Map', icon: 'psychology', color: 'text-tertiary', shortcut: '' },
       ],
     },
     {
@@ -92,7 +95,7 @@
         <button
           type="button"
           on:click|preventDefault={() => activeTab.set(item.id)}
-          title="{item.title} ({item.shortcut})"
+          title={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
           class="w-[calc(100%-16px)] mx-2 my-0.5 flex items-center p-2.5 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
           {$activeTab === item.id
             ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold'
@@ -103,7 +106,9 @@
           </span>
           {#if !$sidebarCollapsed}
             <span class="truncate flex-1">{item.label}</span>
-            <span class="text-[9px] font-mono text-outline">{item.shortcut}</span>
+            {#if item.shortcut}
+              <span class="text-[9px] font-mono text-outline">{item.shortcut}</span>
+            {/if}
           {/if}
         </button>
       {/each}

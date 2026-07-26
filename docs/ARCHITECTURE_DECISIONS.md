@@ -164,3 +164,42 @@ Covered in `CLAUDE.md`. Repeated here because it has broken the build twice:
 `frontend/wailsjs/**` is generated. Run `wails generate module` after changing an
 `App` method or any struct that crosses the boundary. Hand-maintained copies
 drift, and a running `wails dev` may delete these files mid-edit.
+
+## 10. `AppendCheck` may write the falsifier catalogue — only from the guard-approval flow
+
+`backend/claims/falsifier.go` documents the catalogue's trust model: it
+"changes through review like any other code; an agent may only name an entry".
+`claims.AppendCheck` deliberately relaxes that, under conditions that must not
+erode:
+
+- It is reachable only from the Memory page's **Approve guard** flow
+  (`ApproveRegressionGuard` on both adapters), where a human has just been
+  shown the **exact argv** — the UI renders the array, never a summary — and
+  clicked approve.
+- The command stays an argv slice end to end. Nothing on this path accepts a
+  shell string, so there is still nothing for `;` or backticks to do.
+- AutoSnapshot commits `.claude-suite/checks.json` afterwards, so the change
+  still lands in git history where review can see it.
+
+If you are adding another caller of `AppendCheck` — especially one where the
+command text originates from an LLM without a human approving the argv — stop:
+that is the exact hole the argv-only design exists to close.
+
+## 11. Workspace identity has one resolver, and it checks the work tree first
+
+`projectmap.WorkspaceRemoteIdentity` is the only way a workspace directory
+becomes a memory identity, and both quirks inside it were observed live:
+
+- Outside a repo, `git config --get remote.origin.url` falls back to the
+  user's **global** config. One developer machine had a remote stored there —
+  without the `rev-parse --show-toplevel` guard, every non-repo folder on that
+  machine would share one identity and merge their memories.
+- A stray `git init` in the user's home directory swallows everything under
+  it (including `%TEMP%`). A workspace deeper than the repo toplevel therefore
+  gets `remote#subpath`, so sibling folders under an umbrella repo do not
+  collapse into one workspace.
+
+The orchestrator's capture path and the mapper must call this same function;
+resolving identity twice in two ways splits one folder's memory across two
+workspace rows, and `workspace_repo.go`'s re-keying (`RekeyWorkspace`,
+`workspaceKeyedTables`) only heals the path-gains-a-remote case.
