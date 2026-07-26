@@ -206,6 +206,10 @@ export function GetWorkspaceDiff() {
   return window['go']['main']['App']['GetWorkspaceDiff']();
 }
 
+export function ImportGCPCredentialsFile() {
+  return window['go']['main']['App']['ImportGCPCredentialsFile']();
+}
+
 export function ImportGoogleAccounts(arg1) {
   return window['go']['main']['App']['ImportGoogleAccounts'](arg1);
 }

@@ -1105,6 +1105,19 @@ func (a *App) GetGCPOAuthCredentials() map[string]string {
 }
 
 func (a *App) SaveGCPOAuthCredentials(clientID, clientSecret string) error {
+	clientID = strings.TrimSpace(clientID)
+	clientSecret = strings.TrimSpace(clientSecret)
+
+	// Rejected here rather than at the OAuth call. A blank or obviously wrong
+	// value used to save happily and then fail much later, during a login, with
+	// an error from Google that says nothing about where the value came from.
+	if clientID == "" || clientSecret == "" {
+		return fmt.Errorf("cần cả Client ID và Client Secret")
+	}
+	if !strings.HasSuffix(clientID, ".apps.googleusercontent.com") {
+		return fmt.Errorf("Client ID phải có dạng ...apps.googleusercontent.com — bạn dán nhầm giá trị khác?")
+	}
+
 	cfgPath := filepath.Join(filepath.Dir(database.GetDBPath()), "gcp_oauth.json")
 	fileCreds := map[string]string{
 		"client_id":     clientID,
@@ -1114,7 +1127,58 @@ func (a *App) SaveGCPOAuthCredentials(clientID, clientSecret string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(cfgPath, data, 0644)
+	// 0600, not 0644: this is a secret, and the data directory is inside the
+	// user profile where other accounts on a shared machine could read it.
+	return os.WriteFile(cfgPath, data, 0600)
+}
+
+// ImportGCPCredentialsFile reads the client_secret_*.json that Google Cloud
+// Console hands out and stores the credentials from it.
+//
+// Typing a client secret by hand is where this goes wrong: it is long, it is
+// pasted from a browser, and a truncated one fails at login with an error that
+// blames the login. The file is the artefact Google actually gives you.
+func (a *App) ImportGCPCredentialsFile() (string, error) {
+	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title:   "Chọn tệp client_secret_....json tải từ Google Cloud Console",
+		Filters: []wailsRuntime.FileFilter{{DisplayName: "JSON", Pattern: "*.json"}},
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	// Console wraps the credentials in "installed" for a Desktop app and in "web"
+	// for a web client. Only the desktop shape can complete the loopback flow this
+	// app uses, so a web client is named as the problem rather than half-working.
+	var wrapper struct {
+		Installed *struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+		} `json:"installed"`
+		Web *struct {
+			ClientID string `json:"client_id"`
+		} `json:"web"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return "", fmt.Errorf("tệp không phải JSON hợp lệ: %w", err)
+	}
+
+	if wrapper.Installed == nil {
+		if wrapper.Web != nil {
+			return "", fmt.Errorf("đây là OAuth client loại Web. App cần loại Desktop app — tạo lại client và chọn Desktop app")
+		}
+		return "", fmt.Errorf("không tìm thấy phần \"installed\" trong tệp — đây có phải client_secret tải từ Google Cloud Console không?")
+	}
+
+	if err := a.SaveGCPOAuthCredentials(wrapper.Installed.ClientID, wrapper.Installed.ClientSecret); err != nil {
+		return "", err
+	}
+	return wrapper.Installed.ClientID, nil
 }
 
 // defaultModelFor picks a model for a scheduled job that named a provider but no

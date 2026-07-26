@@ -109,6 +109,8 @@ export function GetWorkspaceConfig():Promise<models.WorkspaceConfig>;
 
 export function GetWorkspaceDiff():Promise<string>;
 
+export function ImportGCPCredentialsFile():Promise<string>;
+
 export function ImportGoogleAccounts(arg1:string):Promise<string>;
 
 export function IsOrchestratorRunning():Promise<boolean>;

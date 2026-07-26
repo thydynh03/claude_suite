@@ -44,6 +44,7 @@
   let gcpClientId = '';
   let gcpClientSecret = '';
   let isSavingGcp = false;
+  let isImportingCreds = false;
   
   // Custom API Key / OAuth Token form state
   let showAddForm = false;
@@ -89,7 +90,7 @@
   async function saveGcpCreds() {
     isSavingGcp = true;
     try {
-      if ((AppBindings as any).SaveGCPOAuthCredentials) {
+      {
         await (AppBindings as any).SaveGCPOAuthCredentials(gcpClientId, gcpClientSecret);
         addLog('Đã lưu GCP OAuth Credentials vào file config!', 'SUCCESS');
         addToast('Đã lưu GCP OAuth Credentials — nút Đăng Nhập Google đã sẵn sàng.', 'SUCCESS');
@@ -209,6 +210,32 @@
       addToast(`Làm nóng thất bại: ${e}`, 'ERROR');
     } finally {
       isWarming = false;
+    }
+  }
+
+  function openExternal(url: string) {
+    try {
+      (AppBindings as any).OpenURLInBrowser(url);
+    } catch {
+      window.open(url, '_blank');
+    }
+  }
+
+  async function importCredsFile() {
+    if (isImportingCreds) return;
+    isImportingCreds = true;
+    try {
+      const clientId = await (AppBindings as any).ImportGCPCredentialsFile();
+      // An empty result means the file dialog was dismissed, which is not a
+      // failure and should not be reported as one.
+      if (!clientId) return;
+      await loadGcpCreds();
+      showGcpSettings = false;
+      addToast('Đã nhập GCP Credentials từ tệp — có thể đăng nhập Google ngay.', 'SUCCESS');
+    } catch (e) {
+      addToast(`Không đọc được tệp: ${e}`, 'ERROR', 9000);
+    } finally {
+      isImportingCreds = false;
     }
   }
 
@@ -346,7 +373,42 @@
             <span class="material-symbols-outlined text-sm">close</span>
           </button>
         </div>
-        <p class="text-[11px] text-on-surface-variant">Để tính năng tự động đăng nhập Google hoạt động, bạn cần cấu hình Client ID và Client Secret. Nếu chưa có, xem <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-primary hover:underline">GCP Console</a>.</p>
+        <!-- The credentials cannot ship with the app: they would be identical in
+             every download, extractable by anyone, and revoked by Google once
+             noticed. So each user creates their own, and these are the steps. -->
+        <p class="text-[11px] text-on-surface-variant">
+          App không kèm sẵn Client ID/Secret — nếu nhúng vào bản cài thì ai tải về
+          cũng rút ra được và Google sẽ thu hồi. Mỗi người tự tạo một bộ riêng,
+          làm một lần là xong:
+        </p>
+
+        <ol class="text-[11px] text-on-surface-variant space-y-2 list-decimal pl-4">
+          <li>
+            Mở
+            <button type="button" on:click={() => openExternal('https://console.cloud.google.com/apis/credentials')} class="text-primary hover:underline font-bold cursor-pointer">Google Cloud Console → Credentials</button>,
+            tạo project mới nếu chưa có.
+          </li>
+          <li>
+            Bấm <b>Create Credentials → OAuth client ID</b>, chọn loại
+            <b>Desktop app</b>. Chọn <i>Web application</i> sẽ không đăng nhập được.
+          </li>
+          <li>Đặt tên bất kỳ rồi bấm <b>Create</b>.</li>
+          <li>
+            Bấm <b>Download JSON</b> rồi nhập tệp đó vào đây — khỏi phải copy tay:
+            <button
+              type="button"
+              on:click={importCredsFile}
+              disabled={isImportingCreds}
+              class="ml-1 px-2 py-1 rounded-lg bg-primary text-on-primary font-bold disabled:opacity-60 cursor-pointer"
+            >
+              {isImportingCreds ? 'Đang đọc tệp…' : 'Nhập tệp client_secret.json'}
+            </button>
+          </li>
+        </ol>
+
+        <p class="text-[11px] text-on-surface-variant pt-1 border-t border-outline-variant/50">
+          Hoặc dán thủ công hai giá trị bên dưới:
+        </p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label for="gcp-client-id" class="text-[10px] font-bold text-on-surface block mb-1">GCP Client ID</label>
