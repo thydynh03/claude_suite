@@ -1,6 +1,6 @@
 <script lang="ts">
   import { theme, toggleTheme } from '../../lib/stores/theme';
-  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog } from '../../lib/stores/appState';
+  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog, addToast } from '../../lib/stores/appState';
   import { currentLang } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
@@ -133,10 +133,12 @@
     try {
       await (AppBindings as any).CreateGitBranch(newBranchName.trim());
       addLog(`Đã tạo và chuyển sang git branch mới: ${newBranchName}`, 'SUCCESS');
+      addToast(`Đã tạo và chuyển sang git branch mới: ${newBranchName}`, 'SUCCESS');
       newBranchName = '';
       await loadGitData();
     } catch (e) {
       addLog(`Lỗi tạo branch: ${e}`, 'ERROR');
+      addToast(`Lỗi tạo branch: ${e}`, 'ERROR');
     } finally {
       isGitActionRunning = false;
     }
@@ -147,9 +149,11 @@
     try {
       await (AppBindings as any).CheckoutGitBranch(name);
       addLog(`Đã chuyển sang git branch: ${name}`, 'SUCCESS');
+      addToast(`Đã chuyển sang git branch: ${name}`, 'SUCCESS');
       await loadGitData();
     } catch (e) {
       addLog(`Lỗi chuyển branch: ${e}`, 'ERROR');
+      addToast(`Lỗi chuyển branch: ${e}`, 'ERROR');
     } finally {
       isGitActionRunning = false;
     }
@@ -161,9 +165,11 @@
       try {
         await (AppBindings as any).RevertGitCommit(hash);
         addLog(`Đã revert commit ${hash} thành công`, 'SUCCESS');
+        addToast(`Đã revert commit ${hash} thành công`, 'SUCCESS');
         await loadGitData();
       } catch (e) {
         addLog(`Lỗi Revert commit: ${e}`, 'ERROR');
+        addToast(`Lỗi Revert commit: ${e}`, 'ERROR');
       } finally {
         isGitActionRunning = false;
       }
@@ -176,11 +182,13 @@
     try {
       await (AppBindings as any).CreateGitCommit(commitMessage.trim());
       addLog(`Đã commit thay đổi thành công: ${commitMessage}`, 'SUCCESS');
+      addToast(`Đã commit thay đổi thành công: ${commitMessage}`, 'SUCCESS');
       commitMessage = '';
       showGitCommitModal = false;
       await loadGitData();
     } catch (e) {
       addLog(`Lỗi Commit: ${e}`, 'ERROR');
+      addToast(`Lỗi Commit: ${e}`, 'ERROR');
     } finally {
       isGitActionRunning = false;
     }

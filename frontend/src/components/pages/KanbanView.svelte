@@ -61,6 +61,7 @@
         ok++;
       } catch (e) {
         addLog(`Retry ${b.task_id} thất bại: ${e}`, 'ERROR');
+        addToast(`Retry ${b.task_id} thất bại: ${e}`, 'ERROR');
       }
     }
     onRefresh();
@@ -101,6 +102,7 @@
       if (onRefresh) await onRefresh();
     } catch (e: any) {
       addLog(`Không tải lại được bảng: ${e?.message || e}`, 'ERROR');
+      addToast(`Không tải lại được bảng: ${e?.message || e}`, 'ERROR');
     } finally {
       refreshing = false;
     }
@@ -135,13 +137,30 @@
 
   async function updateConcurrency(n: number) {
     maxConcurrency = n;
-    try { await (AppBindings as any).SetMaxConcurrency(n); addLog(`Số agent song song tối đa: ${n}`, 'INFO'); } catch (e) { console.error(e); }
+    try {
+      await (AppBindings as any).SetMaxConcurrency(n);
+      addLog(`Số agent song song tối đa: ${n}`, 'INFO');
+      addToast(`Chạy tối đa ${n} agent song song.`, 'SUCCESS');
+    } catch (e) {
+      // The local variable already moved, so a failure here leaves the control
+      // showing a limit the orchestrator is not using.
+      addToast(`Không đặt được số agent song song: ${e}`, 'ERROR');
+    }
   }
 
   let verifyBuild = true;
   async function toggleVerify() {
     verifyBuild = !verifyBuild;
-    try { await (AppBindings as any).SetVerifyBuild(verifyBuild); addLog(`Verify build trước khi Done: ${verifyBuild ? 'BẬT' : 'TẮT'}`, 'INFO'); } catch (e) {}
+    try {
+      await (AppBindings as any).SetVerifyBuild(verifyBuild);
+      addLog(`Verify build trước khi Done: ${verifyBuild ? 'BẬT' : 'TẮT'}`, 'INFO');
+      addToast(`Verify build trước khi Done: ${verifyBuild ? 'BẬT' : 'TẮT'}.`, 'SUCCESS');
+    } catch (e) {
+      // Put the toggle back: leaving it on while the backend refused it tells
+      // the user their builds are verified when they are not.
+      verifyBuild = !verifyBuild;
+      addToast(`Không đổi được cài đặt verify build: ${e}`, 'ERROR');
+    }
   }
 
   // Git diff viewer — shows what the agent changed in the workspace.
@@ -165,6 +184,7 @@
     const text = currentTaskLogs.map((l) => `[${l.time}] ${l.message}`).join('\n');
     navigator.clipboard.writeText(text);
     addLog('Đã sao chép log của task.', 'SUCCESS');
+    addToast('Đã sao chép log của task.', 'SUCCESS');
   }
   let searchQuery = '';
   let filterPriority = 'all';
@@ -228,6 +248,7 @@
       newTaskTitle = '';
       newTaskDescription = '';
       addLog(`Đã tạo Task mới: ${title}`, 'SUCCESS');
+      addToast(`Đã tạo Task mới: ${title}`, 'SUCCESS');
       if (onRefresh) await onRefresh();
     } catch (e) {
       console.error('CreateTask error:', e);
@@ -246,7 +267,10 @@
       await AppBindings.UpdateTaskStatus(taskID, newStatus);
       addLog(`Task status updated to ${newStatus}`, 'INFO');
     } catch (e) {
-      console.error(e);
+      // The card was moved optimistically, so a failure here leaves the board
+      // showing a status the database does not have. Say so and re-read.
+      addToast(`Không đổi được trạng thái task: ${e}`, 'ERROR');
+      addLog(`UpdateTaskStatus failed: ${e}`, 'ERROR');
     }
     if (onRefresh) onRefresh();
   }
@@ -261,6 +285,7 @@
       if ((AppBindings as any).AssignTask) {
         await (AppBindings as any).AssignTask(taskID, assignedTo);
         addLog(`Task assigned to ${assignedTo || 'Unassigned'}`, 'SUCCESS');
+        addToast(`Task assigned to ${assignedTo || 'Unassigned'}`, 'SUCCESS');
       }
     } catch (e) {
       console.error(e);
@@ -309,6 +334,7 @@
         selectedTaskIDs = [];
         if (onRefresh) await onRefresh();
         addLog('Đã xóa toàn bộ tasks.', 'SUCCESS');
+        addToast('Đã xóa toàn bộ tasks.', 'SUCCESS');
       } catch (e) {
         console.error('ClearAll error:', e);
       }
@@ -327,6 +353,7 @@
       // local copy the next board event would overwrite.
       await refreshBoard();
       addLog(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
+      addToast(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
     }
   }
 
@@ -334,8 +361,10 @@
     try {
       const ok = await (AppBindings as any).StopTask(taskID);
       addLog(ok ? 'Đã gửi yêu cầu dừng task.' : 'Task không đang chạy để dừng.', ok ? 'WARN' : 'INFO');
+      addToast(ok ? 'Đã gửi yêu cầu dừng task.' : 'Task này không đang chạy.', ok ? 'SUCCESS' : 'INFO');
     } catch (e) {
-      console.error('StopTask error:', e);
+      addToast(`Không dừng được task: ${e}`, 'ERROR');
+      addLog(`StopTask failed: ${e}`, 'ERROR');
     }
   }
 
@@ -343,9 +372,11 @@
     try {
       await (AppBindings as any).RetryTask(taskID);
       addLog('Đã đưa task về Backlog để chạy lại.', 'INFO');
+      addToast('Đã đưa task về Backlog để chạy lại.', 'SUCCESS');
       if (onRefresh) await onRefresh();
     } catch (e) {
-      console.error('RetryTask error:', e);
+      addToast(`Retry thất bại: ${e}`, 'ERROR');
+      addLog(`RetryTask failed: ${e}`, 'ERROR');
     }
   }
 
@@ -362,6 +393,7 @@
       tasksStore.set([...remaining]);
       if (onRefresh) await onRefresh();
       addLog(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
+      addToast(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
     } catch (e) {
       console.error('ClearDone error:', e);
     }

@@ -101,9 +101,11 @@
       tasksStore.set(loaded);
       subTab = 'kanban';
       addLog(`Created ${loaded.length} tasks!`, 'SUCCESS');
+      addToast(`Created ${loaded.length} tasks!`, 'SUCCESS');
     } catch (e: any) {
       const errStr = String(e || '');
       addLog(`Decompose error: ${errStr}`, 'ERROR');
+      addToast(`Decompose error: ${errStr}`, 'ERROR');
       
       if (errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.toLowerCase().includes('limit') || errStr.toLowerCase().includes('balance') || errStr.toLowerCase().includes('exhausted')) {
         failedAgentName = providerName;
@@ -138,18 +140,29 @@
       const loaded = Array.isArray(res) ? res : [];
       tasksStore.set(loaded);
       addLog(`Đã phân rã thành công ${loaded.length} tasks bằng ${fallbackAgentName}!`, 'SUCCESS');
+      addToast(`Đã phân rã thành công ${loaded.length} tasks bằng ${fallbackAgentName}!`, 'SUCCESS');
       planModelChoice = `${fallbackProvider}:${fallbackModel}`;
     } catch (err2) {
       addLog(`Lỗi phân rã bằng ${fallbackAgentName}: ${err2}`, 'ERROR');
+      addToast(`Lỗi phân rã bằng ${fallbackAgentName}: ${err2}`, 'ERROR');
     } finally {
       isDecomposing = false;
     }
   }
 
   async function handleClearAll() {
-    await AppBindings.ClearAllTasks();
-    await loadTasks();
-    addLog('Cleared all tasks', 'INFO');
+    // Deleting the whole board cannot be undone, and the plan may have taken a
+    // model call to produce.
+    if (!confirm('Xoá toàn bộ task trên bảng? Không hoàn tác được.')) return;
+    try {
+      await AppBindings.ClearAllTasks();
+      await loadTasks();
+      addLog('Cleared all tasks', 'INFO');
+      addToast('Đã xoá toàn bộ task.', 'SUCCESS');
+    } catch (e) {
+      addLog(`ClearAllTasks failed: ${e}`, 'ERROR');
+      addToast(`Không xoá được task: ${e}`, 'ERROR');
+    }
   }
 
   // Says what the orchestrator can actually do with the current board.
@@ -198,6 +211,7 @@
     } catch (e) {
       addToast(`Không khởi động được orchestrator: ${e}`, 'ERROR');
       addLog(`Execute Plan failed: ${e}`, 'ERROR');
+      addToast(`Execute Plan failed: ${e}`, 'ERROR');
     } finally {
       isStarting = false;
     }
@@ -213,10 +227,12 @@
     try {
       const file = await AppBindings.ExportKanbanReport();
       addLog(`Exported report to ${file}`, 'SUCCESS');
+      addToast(`Exported report to ${file}`, 'SUCCESS');
       lastReportPath = file;
       addToast(`Đã xuất báo cáo: ${file}`, 'SUCCESS', 8000);
     } catch (e) {
       addLog(`Export failed: ${e}`, 'ERROR');
+      addToast(`Export failed: ${e}`, 'ERROR');
       addToast(`Xuất báo cáo thất bại: ${e}`, 'ERROR');
     } finally {
       isExporting = false;

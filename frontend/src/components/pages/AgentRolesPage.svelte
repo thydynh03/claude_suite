@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, addToast } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   let roles: string[] = [];
@@ -25,6 +25,7 @@
       }
     } catch (e: any) {
       addLog(`Failed to load roles: ${e.message}`, 'ERROR');
+      addToast(`Failed to load roles: ${e.message}`, 'ERROR');
     }
   }
 
@@ -38,6 +39,7 @@
       }
     } catch (e: any) {
       addLog(`Failed to read role ${role}: ${e.message}`, 'ERROR');
+      addToast(`Failed to read role ${role}: ${e.message}`, 'ERROR');
       roleContent = '';
     } finally {
       isLoading = false;
@@ -51,9 +53,11 @@
       if ((AppBindings as any).SaveRoleContent) {
         await (AppBindings as any).SaveRoleContent(selectedRole, roleContent);
         addLog(`Đã lưu cấu hình role: ${selectedRole}`, 'SUCCESS');
+        addToast(`Đã lưu cấu hình role: ${selectedRole}`, 'SUCCESS');
       }
     } catch (e: any) {
       addLog(`Lỗi khi lưu role ${selectedRole}: ${e.message}`, 'ERROR');
+      addToast(`Lỗi khi lưu role ${selectedRole}: ${e.message}`, 'ERROR');
     } finally {
       isSaving = false;
     }
@@ -70,12 +74,14 @@
       if ((AppBindings as any).SaveRoleContent) {
         await (AppBindings as any).SaveRoleContent(name, `# ${name}\n\nNhập quy tắc và system prompt cho role này tại đây.`);
         addLog(`Đã tạo role mới: ${name}`, 'SUCCESS');
+        addToast(`Đã tạo role mới: ${name}`, 'SUCCESS');
         await loadRoles();
         selectRole(name);
         newRoleName = '';
       }
     } catch (e: any) {
       addLog(`Lỗi khi tạo role: ${e.message}`, 'ERROR');
+      addToast(`Lỗi khi tạo role: ${e.message}`, 'ERROR');
     } finally {
       isCreating = false;
     }
@@ -87,6 +93,7 @@
       if ((AppBindings as any).DeleteRole) {
         await (AppBindings as any).DeleteRole(role);
         addLog(`Đã xóa role: ${role}`, 'SUCCESS');
+        addToast(`Đã xóa role: ${role}`, 'SUCCESS');
         if (selectedRole === role) {
           selectedRole = '';
           roleContent = '';
@@ -95,6 +102,7 @@
       }
     } catch (e: any) {
       addLog(`Lỗi khi xóa role ${role}: ${e.message}`, 'ERROR');
+      addToast(`Lỗi khi xóa role ${role}: ${e.message}`, 'ERROR');
     }
   }
 </script>

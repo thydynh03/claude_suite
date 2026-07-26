@@ -61,6 +61,7 @@
     if ((window as any)?.runtime?.EventsOn) {
       unoff = (window as any).runtime.EventsOn('oauth_success', async (data: any) => {
         addLog(`Đăng nhập Google thành công: ${data.email || ''}`, 'SUCCESS');
+        addToast(`Đăng nhập Google thành công: ${data.email || ''}`, 'SUCCESS');
         await loadAccounts();
       });
     }
@@ -93,11 +94,13 @@
       {
         await (AppBindings as any).SaveGCPOAuthCredentials(gcpClientId, gcpClientSecret);
         addLog('Đã lưu GCP OAuth Credentials vào file config!', 'SUCCESS');
+        addToast('Đã lưu GCP OAuth Credentials vào file config!', 'SUCCESS');
         addToast('Đã lưu GCP OAuth Credentials — nút Đăng Nhập Google đã sẵn sàng.', 'SUCCESS');
         showGcpSettings = false;
       }
     } catch (e) {
       addLog(`Lỗi lưu GCP Creds: ${e}`, 'ERROR');
+      addToast(`Lỗi lưu GCP Creds: ${e}`, 'ERROR');
       addToast(`Lưu GCP Credentials thất bại: ${e}`, 'ERROR');
     } finally {
       isSavingGcp = false;
@@ -107,6 +110,7 @@
   async function handleAddAntiKey() {
     if (!newKeyName.trim() || !newKeyValue.trim()) {
       addLog('Vui lòng nhập đầy đủ tên và giá trị (Key/Token).', 'ERROR');
+      addToast('Vui lòng nhập đầy đủ tên và giá trị (Key/Token).', 'ERROR');
       return;
     }
     try {
@@ -114,11 +118,13 @@
         if ((AppBindings as any).AddAntiAccountKey) {
           await (AppBindings as any).AddAntiAccountKey(newKeyName, newKeyValue);
           addLog(`Đã thêm API Key: ${newKeyName}`, 'SUCCESS');
+          addToast(`Đã thêm API Key: ${newKeyName}`, 'SUCCESS');
         }
       } else {
         if ((AppBindings as any).AddAntiOAuthAccountKey) {
           await (AppBindings as any).AddAntiOAuthAccountKey(newKeyName, newKeyValue);
           addLog(`Đã thêm OAuth Token: ${newKeyName}`, 'SUCCESS');
+          addToast(`Đã thêm OAuth Token: ${newKeyName}`, 'SUCCESS');
         }
       }
       newKeyName = '';
@@ -127,6 +133,7 @@
       await loadAccounts();
     } catch (e) {
       addLog(`Lỗi thêm key: ${e}`, 'ERROR');
+      addToast(`Lỗi thêm key: ${e}`, 'ERROR');
     }
   }
 
@@ -149,10 +156,12 @@
       if ((AppBindings as any).SetCurrentAntiAccountKey) {
         await (AppBindings as any).SetCurrentAntiAccountKey(id);
         addLog('Đã chuyển tài khoản hiện tại!', 'SUCCESS');
+        addToast('Đã chuyển tài khoản hiện tại!', 'SUCCESS');
         await loadAccounts();
       }
     } catch (e) {
       addLog(`Lỗi chọn tài khoản: ${e}`, 'ERROR');
+      addToast(`Lỗi chọn tài khoản: ${e}`, 'ERROR');
     }
   }
 
@@ -166,6 +175,7 @@
       }
     } catch (e) {
       addLog(`Lỗi xóa tài khoản: ${e}`, 'ERROR');
+      addToast(`Lỗi xóa tài khoản: ${e}`, 'ERROR');
     }
   }
 
@@ -178,6 +188,7 @@
       }
     } catch (e) {
       addLog(`Lỗi đổi trạng thái: ${e}`, 'ERROR');
+      addToast(`Lỗi đổi trạng thái: ${e}`, 'ERROR');
     }
   }
 
@@ -207,6 +218,7 @@
       addLog(`Warmup: ${refreshed} refreshed, ${failed} failed, ${skipped} skipped`, 'INFO');
     } catch (e) {
       addLog(`Lỗi Warmup: ${e}`, 'ERROR');
+      addToast(`Lỗi Warmup: ${e}`, 'ERROR');
       addToast(`Làm nóng thất bại: ${e}`, 'ERROR');
     } finally {
       isWarming = false;
@@ -271,6 +283,7 @@
         } catch (e) {
           failed++;
           addLog(`${label} thất bại cho ${id}: ${e}`, 'ERROR');
+          addToast(`${label} thất bại cho ${id}: ${e}`, 'ERROR');
         }
       }
       await loadAccounts();
@@ -299,6 +312,7 @@
     if (!text) return;
     navigator.clipboard.writeText(text);
     addLog(`Đã sao chép ${label}!`, 'SUCCESS');
+    addToast(`Đã sao chép ${label}!`, 'SUCCESS');
   }
 
   $: filteredAccounts = accounts.filter(acc => {

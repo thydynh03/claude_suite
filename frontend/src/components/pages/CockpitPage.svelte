@@ -98,9 +98,13 @@
       if ((AppBindings as any).SetShowCLIConsole) {
         await (AppBindings as any).SetShowCLIConsole(showCLIConsole);
         addLog(`Cài đặt cửa sổ CMD: ${showCLIConsole ? 'BẬT (Hiện CMD)' : 'TẮT (Ẩn ngầm)'}`, 'INFO');
+        addToast(`Cửa sổ CMD: ${showCLIConsole ? 'hiện' : 'ẩn'}.`, 'SUCCESS');
       }
     } catch (e) {
-      console.error(e);
+      // The checkbox already moved, so leaving this silent shows a setting the
+      // backend never accepted.
+      showCLIConsole = !showCLIConsole;
+      addToast(`Không đổi được cài đặt cửa sổ CMD: ${e}`, 'ERROR');
     }
   }
 
@@ -124,15 +128,18 @@
       if (res && res.success) {
         cliOutput = res.output;
         addLog(`Execution finished successfully (${res.duration_sec.toFixed(1)}s)`, 'SUCCESS');
+        addToast(`Execution finished successfully (${res.duration_sec.toFixed(1)}s)`, 'SUCCESS');
         addToast(`Chạy xong sau ${res.duration_sec.toFixed(1)}s.`, 'SUCCESS');
       } else if (res) {
         cliOutput = 'Lỗi thực thi: ' + res.error;
         addLog(`Execution failed: ${res.error}`, 'ERROR');
+        addToast(`Execution failed: ${res.error}`, 'ERROR');
         addToast(`Thực thi thất bại: ${res.error}`, 'ERROR');
       }
     } catch (e) {
       cliOutput = 'Lỗi kết nối: ' + e;
       addLog(`Error executing CLI: ${e}`, 'ERROR');
+      addToast(`Error executing CLI: ${e}`, 'ERROR');
       addToast(`Không kết nối được CLI: ${e}`, 'ERROR');
     } finally {
       isRunning = false;
@@ -145,8 +152,10 @@
     try {
       await AppBindings.DecomposePlan(promptInput);
       addLog('Plan decomposed! Check Task Board.', 'SUCCESS');
+      addToast('Plan decomposed! Check Task Board.', 'SUCCESS');
     } catch (e) {
       addLog(`Decompose failed: ${e}`, 'ERROR');
+      addToast(`Decompose failed: ${e}`, 'ERROR');
     }
   }
 </script>

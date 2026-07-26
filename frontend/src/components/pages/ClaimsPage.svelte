@@ -124,8 +124,10 @@
       const res = await (AppBindings as any).StartClaimsHost(port);
       if (res?.success) {
         addLog(`Claims host đang lắng nghe trên ${res.addr}`, 'SUCCESS');
+        addToast(`Claims host đang lắng nghe trên ${res.addr}`, 'SUCCESS');
       } else {
         addLog(`Không mở được claims host: ${res?.error}`, 'ERROR');
+        addToast(`Không mở được claims host: ${res?.error}`, 'ERROR');
       }
       await refreshStatus();
     } finally {
@@ -157,6 +159,7 @@
         await refreshSession();
       } else {
         addLog(`Không mở được phiên: ${res?.error}`, 'ERROR');
+        addToast(`Không mở được phiên: ${res?.error}`, 'ERROR');
       }
     } finally {
       busy = false;
@@ -171,6 +174,7 @@
       await refreshSession();
     } catch (e: any) {
       addLog(`Không chạy được kiểm chứng: ${e?.message || e}`, 'ERROR');
+      addToast(`Không chạy được kiểm chứng: ${e?.message || e}`, 'ERROR');
     } finally {
       busy = false;
     }
@@ -189,6 +193,7 @@
       await refreshSession();
     } catch (e: any) {
       addLog(`Không kết thúc được phiên: ${e?.message || e}`, 'ERROR');
+      addToast(`Không kết thúc được phiên: ${e?.message || e}`, 'ERROR');
     } finally {
       busy = false;
     }
@@ -202,6 +207,7 @@
       await refreshSession();
     } catch (e: any) {
       addLog(`Không mở được vòng thảo luận: ${e?.message || e}`, 'ERROR');
+      addToast(`Không mở được vòng thảo luận: ${e?.message || e}`, 'ERROR');
     } finally {
       busy = false;
     }

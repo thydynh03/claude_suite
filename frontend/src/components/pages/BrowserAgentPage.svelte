@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, addToast } from '../../lib/stores/appState';
 
   interface BrowserActionResult {
     url: string;
@@ -59,6 +59,7 @@
       otherAnswer = '';
     } catch (e: any) {
       addLog(`Lỗi gửi phản hồi cho Agent: ${e?.message || e}`, 'ERROR');
+      addToast(`Lỗi gửi phản hồi cho Agent: ${e?.message || e}`, 'ERROR');
     } finally {
       submittingAsk = false;
     }
@@ -127,11 +128,14 @@
       if (res?.success) {
         chromeAgentReady = true;
         addLog('✅ Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy ĐÓNG cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
+        addToast('✅ Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy ĐÓNG cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
       } else {
         addLog(`❌ Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
+        addToast(`❌ Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
       }
     } catch (e: any) {
       addLog(`Lỗi OpenAgentChromeWindow: ${e?.message || e}`, 'ERROR');
+      addToast(`Lỗi OpenAgentChromeWindow: ${e?.message || e}`, 'ERROR');
     } finally {
       isOpeningChrome = false;
     }
@@ -142,9 +146,11 @@
       if ((AppBindings as any).StopBrowserTask) {
         await (AppBindings as any).StopBrowserTask();
         addLog('Đã phát lệnh Dừng Browser Agent!', 'WARNING');
+        addToast('Đã gửi lệnh dừng — agent sẽ dừng ở cuối bước hiện tại.', 'SUCCESS');
       }
     } catch (e: any) {
-      console.error('Lỗi khi dừng Browser Agent:', e);
+      addToast(`Không dừng được Browser Agent: ${e}`, 'ERROR');
+      addLog(`StopBrowserTask failed: ${e}`, 'ERROR');
     }
   }
 
@@ -176,14 +182,18 @@
         }
         if (res && res.success) {
           addLog(`Browser Agent hoàn tất trang "${res.title}"! (Trạng thái: ${res.status || 'OK'})`, 'SUCCESS');
+          addToast(`Browser Agent hoàn tất trang "${res.title}"! (Trạng thái: ${res.status || 'OK'})`, 'SUCCESS');
         } else {
           addLog(`Browser Agent thất bại: ${res?.error || 'Lỗi không xác định'}`, 'ERROR');
+          addToast(`Browser Agent thất bại: ${res?.error || 'Lỗi không xác định'}`, 'ERROR');
         }
       } else {
         addLog('Wails binding RunBrowserTask chưa sẵn sàng', 'ERROR');
+        addToast('Wails binding RunBrowserTask chưa sẵn sàng', 'ERROR');
       }
     } catch (e: any) {
       addLog(`Lỗi thực thi Browser Agent: ${e?.message || e}`, 'ERROR');
+      addToast(`Lỗi thực thi Browser Agent: ${e?.message || e}`, 'ERROR');
     } finally {
       isRunning = false;
     }

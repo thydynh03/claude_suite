@@ -32,6 +32,7 @@
       servers = (await (AppBindings as any).GetMCPServers()) || [];
     } catch (e) {
       addLog(`Không tải được danh sách MCP: ${e}`, 'ERROR');
+      addToast(`Không tải được danh sách MCP: ${e}`, 'ERROR');
     }
   }
 

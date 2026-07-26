@@ -49,6 +49,7 @@ VIAddVersionKey "ProductName"     "${INFO_PRODUCTNAME}"
 ManifestDPIAware true
 
 !include "MUI.nsh"
+!include "LogicLib.nsh"
 
 !define MUI_ICON "..\icon.ico"
 !define MUI_UNICON "..\icon.ico"
@@ -85,6 +86,20 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+
+   # Builds up to v2.14.1 installed under the author's GitHub handle
+   # ("...\thydynh03\Claude Suite"). companyName is the product name now, so
+   # without this a machine ends up with two installations and two entries in
+   # Apps & features, and the old Start-menu shortcut keeps launching the old
+   # build. Declining is allowed: it is the user's machine.
+   ReadRegStr $R0 SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\thydynh03ClaudeSuite" "UninstallString"
+   ${If} $R0 != ""
+       MessageBox MB_YESNO|MB_ICONQUESTION \
+           "Đã có bản Claude Suite cũ cài ở thư mục khác. Gỡ bản cũ trước khi cài bản mới?" \
+           IDNO skip_old_uninstall
+       ExecWait '$R0 /S'
+       skip_old_uninstall:
+   ${EndIf}
 FunctionEnd
 
 Section

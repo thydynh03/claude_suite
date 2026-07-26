@@ -69,6 +69,7 @@
         (window as any).runtime.EventsOn("oauth_success", async (data: any) => {
           await loadAntiKeys();
           addLog(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
+          addToast(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
         });
       }
     } catch (e) {}
@@ -95,15 +96,18 @@
       if (newAuthType === 'oauth_token' && (AppBindings as any).AddAntiOAuthAccountKey) {
         await (AppBindings as any).AddAntiOAuthAccountKey(newKeyName.trim(), newKeyValue.trim());
         addLog(`Đã thêm Antigravity Manager OAuth Token '${newKeyName}' vào Pool!`, 'SUCCESS');
+        addToast(`Đã thêm Antigravity Manager OAuth Token '${newKeyName}' vào Pool!`, 'SUCCESS');
       } else if ((AppBindings as any).AddAntiAccountKey) {
         await (AppBindings as any).AddAntiAccountKey(newKeyName.trim(), newKeyValue.trim());
         addLog(`Đã thêm Backup API Key '${newKeyName}' vào Anti CLI Pool!`, 'SUCCESS');
+        addToast(`Đã thêm Backup API Key '${newKeyName}' vào Anti CLI Pool!`, 'SUCCESS');
       }
       newKeyName = '';
       newKeyValue = '';
       await loadAntiKeys();
     } catch (e) {
       addLog(`Thêm tài khoản thất bại: ${e}`, 'ERROR');
+      addToast(`Thêm tài khoản thất bại: ${e}`, 'ERROR');
     }
   }
 
@@ -120,6 +124,7 @@
       }
     } catch (e) {
       addLog(`Mở Google OAuth thất bại: ${e}`, 'ERROR');
+      addToast(`Mở Google OAuth thất bại: ${e}`, 'ERROR');
     }
   }
 
@@ -142,6 +147,7 @@
           await AppBindings.ResetAgentsToDefaults();
           loaded = await AppBindings.GetAgents();
           addLog('Auto-seeded 8 default corporate agents.', 'INFO');
+          addToast('Chưa có agent nào — đã tạo bộ agent mặc định.', 'INFO');
         }
         agentsStore.set(loaded || []);
       }
@@ -155,15 +161,18 @@
     const loaded = await AppBindings.GetAgents();
     agentsStore.set(loaded || []);
     addLog(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
+    addToast(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
   }
 
   async function handleSaveAgent(agent: Agent) {
     try {
       await AppBindings.SaveAgent(agent as any);
       addLog(`Đã lưu Agent ${agent.name}.`, 'SUCCESS');
+      addToast(`Đã lưu Agent ${agent.name}.`, 'SUCCESS');
       // agent_updated event refreshes agentsStore globally (3D office, kanban, cockpit).
     } catch (e) {
       addLog(`Lỗi lưu agent: ${e}`, 'ERROR');
+      addToast(`Lỗi lưu agent: ${e}`, 'ERROR');
     }
   }
 
@@ -203,9 +212,11 @@
       agentFormOpen = false;
       await loadAgents();
       addLog(`Đã lưu Agent: ${agent.name}.`, 'SUCCESS');
+      addToast(`Đã lưu Agent: ${agent.name}.`, 'SUCCESS');
       addToast(`Đã lưu agent "${agent.name}".`, 'SUCCESS');
     } catch (err) {
       addLog(`Lỗi lưu agent: ${err}`, 'ERROR');
+      addToast(`Lỗi lưu agent: ${err}`, 'ERROR');
       addToast(`Lưu agent thất bại: ${err}`, 'ERROR');
     }
   }
@@ -218,6 +229,7 @@
       addLog(`Đã xóa Agent ${agent.name}.`, 'WARN');
     } catch (e) {
       addLog(`Lỗi xóa agent: ${e}`, 'ERROR');
+      addToast(`Lỗi xóa agent: ${e}`, 'ERROR');
     }
   }
 
@@ -233,9 +245,14 @@
     try {
       await (AppBindings as any).SetDailyBudgetUSD(Number(budgetLimit) || 0);
       await loadBudget();
-      addLog(Number(budgetLimit) > 0 ? `Trần chi phí mỗi ngày: $${Number(budgetLimit).toFixed(2)}` : "Đã bỏ trần chi phí mỗi ngày.", "SUCCESS");
+      const msg = Number(budgetLimit) > 0
+        ? `Trần chi phí mỗi ngày: $${Number(budgetLimit).toFixed(2)}`
+        : 'Đã bỏ trần chi phí mỗi ngày.';
+      addLog(msg, 'SUCCESS');
+      addToast(msg, 'SUCCESS');
     } catch (e) {
-      addLog(`Lỗi lưu trần chi phí: ${e}`, "ERROR");
+      addLog(`Lỗi lưu trần chi phí: ${e}`, 'ERROR');
+      addToast(`Không lưu được trần chi phí: ${e}`, 'ERROR');
     } finally {
       isSavingBudget = false;
     }
@@ -249,8 +266,10 @@
         mcp_connection_string: mcpConnectionString.trim(),
       });
       addLog('Đã lưu cấu hình Webhook & MCP. Sự kiện task done/failed sẽ được gửi tới URL này.', 'SUCCESS');
+      addToast('Đã lưu cấu hình Webhook & MCP. Sự kiện task done/failed sẽ được gửi tới URL này.', 'SUCCESS');
     } catch (e) {
       addLog(`Lỗi lưu cấu hình integrations: ${e}`, 'ERROR');
+      addToast(`Lỗi lưu cấu hình integrations: ${e}`, 'ERROR');
     } finally {
       isIntegrationsSaving = false;
     }
@@ -302,6 +321,7 @@
       updateStatusMessage = 'Không tìm thấy file .exe trong bản release mới nhất trên GitHub (v' + updateInfo.version + '). Vui lòng tải thủ công!';
       updateStatusType = 'error';
       addLog('Không tìm thấy file .exe trong release mới nhất của GitHub.', 'ERROR');
+      addToast('Không tìm thấy file .exe trong release mới nhất của GitHub.', 'ERROR');
       return;
     }
 
@@ -322,6 +342,7 @@
         updateStatusMessage = '❌ Cập nhật thất bại: ' + (res?.error || 'Không xác định');
         updateStatusType = 'error';
         addLog('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
+        addToast('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
         isUpdating = false;
       }
     } catch (e: any) {
@@ -330,6 +351,7 @@
       updateStatusMessage = '✅ Đã tải xong! Ứng dụng đang được khởi động lại tự động...';
       updateStatusType = 'success';
       addLog('App is restarting with new version. Please wait...', 'SUCCESS');
+      addToast('App is restarting with new version. Please wait...', 'SUCCESS');
       // Do NOT set isUpdating = false — app is mid-restart
     }
   }

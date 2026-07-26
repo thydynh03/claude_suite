@@ -4,7 +4,7 @@
   import CodeEditor from '../ui/CodeEditor.svelte';
   import FileTreeNode from '../ui/FileTreeNode.svelte';
   import { buildTree, fuzzyMatch, matchScore } from '../../lib/fileTree';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, addToast } from '../../lib/stores/appState';
 
   interface OpenTab {
     path: string;
@@ -155,6 +155,7 @@
       }
     } catch (e: any) {
       addLog(`Lỗi mở file ${filePath}: ${e?.message || e}`, 'ERROR');
+      addToast(`Lỗi mở file ${filePath}: ${e?.message || e}`, 'ERROR');
     } finally {
       isReading = false;
     }
@@ -190,8 +191,10 @@
       currentTab.isDirty = false;
       openTabs = [...openTabs];
       addLog(`Đã lưu file: ${activeTabPath}`, 'SUCCESS');
+      addToast(`Đã lưu file: ${activeTabPath}`, 'SUCCESS');
     } catch (e: any) {
       addLog(`Lỗi lưu file: ${e?.message || e}`, 'ERROR');
+      addToast(`Lỗi lưu file: ${e?.message || e}`, 'ERROR');
     } finally {
       isSaving = false;
     }
@@ -331,6 +334,7 @@
         }
 
         addLog(`AI đã sửa & lưu trực tiếp tệp ${activeTabPath}`, 'SUCCESS');
+        addToast(`AI đã sửa & lưu trực tiếp tệp ${activeTabPath}`, 'SUCCESS');
         viewMode = 'diff';
       } else if (res && res.error) {
         if (targetTurn) {
@@ -381,8 +385,10 @@
       turn.status = 'reverted';
       turns = [...turns];
       addLog(`Đã hoàn tác (Undo) tệp ${activeTabPath} về trước lượt tin nhắn!`, 'SUCCESS');
+      addToast(`Đã hoàn tác (Undo) tệp ${activeTabPath} về trước lượt tin nhắn!`, 'SUCCESS');
     } catch (e: any) {
       addLog(`Lỗi khi hoàn tác: ${e?.message || e}`, 'ERROR');
+      addToast(`Lỗi khi hoàn tác: ${e?.message || e}`, 'ERROR');
     }
   }
 
