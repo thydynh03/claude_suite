@@ -100,15 +100,26 @@ func TestDispatchSkipsTaskWithUnfinishedDependency(t *testing.T) {
 	first := seedTask(t, taskRepo, "First task", name, nil)
 	blocked := seedTask(t, taskRepo, "Blocked task", name, []string{first.TaskID})
 
+	// Hold the first run open. The fake runner finishes instantly by default,
+	// and dispatchAvailable keeps scanning in a loop — so on a slow scheduler
+	// (the race-detector CI job) the dependency completes before the next
+	// NextDispatchable, at which point dispatching the blocked task is correct
+	// behaviour and the test's "still not done" premise is simply false.
+	release := make(chan struct{})
+	runner.Behaviour = func(ctx context.Context, agent *models.Agent, prompt string) *cli.RunResult {
+		<-release
+		return &cli.RunResult{Success: true, Output: "done"}
+	}
+
 	o.SetMaxConcurrency(4)
 	o.dispatchAvailable()
 
 	waitFor(t, "the unblocked task to run", func() bool { return runner.CallCount() >= 1 })
-	o.wg.Wait()
-
-	// The dependency is still not done, so the blocked task must not have run.
+	// Give an (incorrectly) dispatched blocked task a chance to show up before
+	// asserting — the dependency is genuinely unfinished for this whole window.
+	time.Sleep(300 * time.Millisecond)
 	if got := runner.CallCount(); got != 1 {
-		t.Fatalf("expected exactly 1 run, got %d", got)
+		t.Fatalf("expected exactly 1 run while the dependency is unfinished, got %d", got)
 	}
 	all, err := taskRepo.GetAll()
 	if err != nil {
@@ -119,6 +130,9 @@ func TestDispatchSkipsTaskWithUnfinishedDependency(t *testing.T) {
 			t.Fatalf("blocked task status = %q, want backlog", task.Status)
 		}
 	}
+
+	close(release)
+	o.wg.Wait()
 }
 
 func TestDispatchRespectsMaxConcurrency(t *testing.T) {
