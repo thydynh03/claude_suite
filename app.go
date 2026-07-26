@@ -1358,7 +1358,12 @@ func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interf
 	}
 
 	addr := a.claimsHost.Addr()
-	host := "ws://" + strings.Replace(addr, "[::]", "YOUR-HOST", 1)
+	// The listener binds every interface, which prints as [::]. Emitting
+	// "YOUR-HOST" made the copied line work for nobody: a teammate on this
+	// machine — the usual case, a second agent in another IDE — had to know to
+	// edit it first, and most did not. localhost works there, and the UI says
+	// what to change when the teammate is on another machine.
+	host := "ws://" + strings.Replace(addr, "[::]", "localhost", 1)
 	return map[string]interface{}{
 		"success": true,
 		"id":      id,
@@ -1367,10 +1372,10 @@ func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interf
 		// The exact command a teammate's agent runs. Handing over a ready line
 		// avoids the flag-by-flag reconstruction that goes wrong over chat.
 		"join_command": fmt.Sprintf(
-			`claude-suite-claim --host %s --session %s --token %s `+
+			`%s --host %s --session %s --token %s `+
 				`--author YOU/your-agent --provider claude `+
 				`--subject "file.go:12" --assert "what is wrong" --falsify "check-name"`,
-			host, id, token),
+			claimToolCommand(), host, id, token),
 	}
 }
 
@@ -1415,4 +1420,26 @@ func (a *App) ForceAdjudicateClaims(sessionID string) error {
 // FinishClaimSession closes a session and returns its outcome.
 func (a *App) FinishClaimSession(sessionID string) (*claims.Outcome, error) {
 	return a.claimsHost.Finish(sessionID)
+}
+
+// claimToolCommand is how the join command should invoke the claim CLI.
+//
+// The installer puts claude-suite-claim.exe beside the app, which is not on
+// PATH, so a bare name only works for someone who ran `go install` from source.
+// The whole point of the copied line is that a teammate's agent can run it
+// without being told to install anything first, so it names the full path when
+// the tool is there and falls back to the bare name when it is not — which is
+// the development case, where PATH does have it.
+func claimToolCommand() string {
+	const toolName = "claude-suite-claim.exe"
+
+	exe, err := os.Executable()
+	if err == nil {
+		beside := filepath.Join(filepath.Dir(exe), toolName)
+		if info, statErr := os.Stat(beside); statErr == nil && !info.IsDir() {
+			// Quoted: the install path contains a space ("Program Files").
+			return `"` + beside + `"`
+		}
+	}
+	return "claude-suite-claim"
 }

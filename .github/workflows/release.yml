@@ -128,9 +128,25 @@ jobs:
       # release is a loose .exe: nothing puts it in Program Files, nothing adds a
       # Start menu entry, and nothing registers an uninstaller, so it never looks
       # like an installed application. NSIS ships on the windows-latest image.
+      # The companion tools have to exist before NSIS runs, because the installer
+      # script picks them up out of build/bin. -clean wipes that directory, so
+      # they are built after the app rather than before it.
       - name: Build Production Wails App + Installer
         run: |
-          wails build -platform windows/amd64 -clean -nsis -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
+          wails build -platform windows/amd64 -clean -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
+          go build -o build/bin/claude-suite-claim.exe ./cmd/claude-suite-claim
+          go build -o build/bin/claude-suite-tui.exe ./cmd/claude-suite-tui
+          wails build -platform windows/amd64 -nsis -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
+
+      - name: Verify the companion tools were packaged
+        shell: pwsh
+        run: |
+          foreach ($tool in 'claude-suite-claim.exe','claude-suite-tui.exe') {
+            if (-not (Test-Path "build/bin/$tool")) {
+              Write-Error "$tool missing from build/bin — the installer would ship without it"
+              exit 1
+            }
+          }
 
       - name: Verify the installer was produced
         shell: pwsh
@@ -149,6 +165,8 @@ jobs:
           path: |
             build/bin/ClaudeSuite.exe
             build/bin/*installer*.exe
+            build/bin/claude-suite-claim.exe
+            build/bin/claude-suite-tui.exe
 
       - name: Create GitHub Release on Tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -157,6 +175,8 @@ jobs:
           files: |
             build/bin/*installer*.exe
             build/bin/ClaudeSuite.exe
+            build/bin/claude-suite-claim.exe
+            build/bin/claude-suite-tui.exe
           name: Release ${{ github.ref_name }}
           body: |
             Claude Suite ${{ github.ref_name }}
@@ -166,6 +186,11 @@ jobs:
 
             `ClaudeSuite.exe` là bản chạy thẳng không cần cài, dành cho ai muốn
             mang theo USB — nó không tạo shortcut và không tự cập nhật.
+
+            Bản cài đặt kèm luôn hai công cụ dòng lệnh, đặt cạnh app:
+            `claude-suite-claim` (agent của đồng đội dùng để nộp claim — lệnh mà
+            app đưa cho bạn đã trỏ sẵn đường dẫn này) và `claude-suite-tui`
+            (giao diện terminal). Không cần cài Go hay build gì thêm.
           draft: false
           prerelease: false
         env:
