@@ -125,6 +125,25 @@ func truncateText(text string) string {
 	return textutil.Truncate(text, 4000, "\n... [Text Content Truncated]")
 }
 
+// normalizeNavURL makes a user-typed target navigable over CDP. Page.navigate
+// takes its URL literally: "google.com" fails with "Cannot navigate to
+// invalid URL (-32000)" — even though the same text works in the omnibox and
+// as a Chrome launch argument, which is exactly why it looks like it should
+// work. Anything without an explicit scheme gets https://.
+func normalizeNavURL(raw string) string {
+	u := strings.TrimSpace(raw)
+	if u == "" {
+		return u
+	}
+	lower := strings.ToLower(u)
+	for _, scheme := range []string{"http://", "https://", "about:", "file://", "data:", "chrome://", "ws://", "wss://"} {
+		if strings.HasPrefix(lower, scheme) {
+			return u
+		}
+	}
+	return "https://" + u
+}
+
 // RunBrowserTask performs browser navigation, DOM inspection & full-page screenshot via Chrome CDP
 func (s *BrowserAgentService) RunBrowserTask(targetURL string, prompt string, takeScreenshot bool, headless bool) (*BrowserActionResult, error) {
 	return s.RunE2ETestWithProfile(targetURL, prompt, nil, takeScreenshot, headless, false)
@@ -140,6 +159,7 @@ func (s *BrowserAgentService) RunE2ETestWithProfile(targetURL string, prompt str
 	if targetURL == "" {
 		return nil, fmt.Errorf("target URL cannot be empty")
 	}
+	targetURL = normalizeNavURL(targetURL)
 
 	var logs []string
 	logf := func(msg string) { logs = append(logs, msg) }
@@ -313,6 +333,8 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 		result.Status = "failed"
 		return result, fmt.Errorf("target URL cannot be empty")
 	}
+	targetURL = normalizeNavURL(targetURL)
+	result.URL = targetURL
 
 	// Cancellable task context
 	ctx, cancelTask := context.WithCancel(context.Background())
@@ -722,7 +744,9 @@ func (s *BrowserAgentService) executeActionOnCDPContext(
 		}
 		tasks = append(tasks, chromedp.Sleep(time.Duration(seconds)*time.Second))
 	case "reload", "navigate":
-		target := strings.TrimSpace(text)
+		// The AI writes this target too, and it drops the scheme as readily
+		// as a person does.
+		target := normalizeNavURL(text)
 		if target == "" {
 			target = result.URL
 		}
