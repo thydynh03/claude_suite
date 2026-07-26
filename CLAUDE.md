@@ -98,3 +98,29 @@ a suggestion, and being asked for the command that would disprove it is what
 separates a real defect from a confident guess.
 
 Afterwards read `.claude-suite/session-<id>/verdict.json` for the result.
+
+### No claude-suite-claim on this machine?
+
+Two more doors into a session, in order of friction (the app's Claims page
+hands out ready-made copies of all three):
+
+- **Download the tool** (Windows, PowerShell): fetch the published exe into
+  `%TEMP%` and run it from there — the release URL is stable across versions:
+
+  ```powershell
+  $c = "$env:TEMP\claude-suite-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c https://github.com/thydynh03/claude_suite/releases/latest/download/claude-suite-claim.exe }
+  ```
+
+- **MCP, nothing downloaded**: the host serves each session as an MCP server;
+  register it and the whole protocol becomes tools:
+
+  ```bash
+  claude mcp add --transport http claude-suite-debate "http://HOST:9111/mcp/SESSION?token=T"
+  ```
+
+  Then `join_session` (save the `participant_key` it returns — every later
+  call needs it with your author), `list_checks`, `submit_claim` per finding,
+  `finish_reporting`, and poll `get_session_state` for verdicts. The collect
+  phase is blind and adjudication waits for your `finish_reporting`, but a
+  participant silent past the collect window is treated as departed — keep
+  polling. See `backend/claims/mcp.go`.
