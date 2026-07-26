@@ -6,27 +6,46 @@ import (
 	"time"
 )
 
-func TestQuotaReadyWithAnActiveAccount(t *testing.T) {
+func TestQuotaReadyWithAnUntouchedAccount(t *testing.T) {
 	pool := poolWith(active("a"))
 	if ok, _ := pool.QuotaReady(QuotaCooldown); !ok {
-		t.Fatal("an active account should make the pool ready")
+		t.Fatal("an account with no measured rate-limit should make the pool ready")
 	}
 }
 
-// The reason WaitForQuota exists: every account measured rate-limited
-// recently means a run now would just burn a retry into a wall.
-func TestQuotaReadyHoldsWhileEveryAccountIsFreshlyLimited(t *testing.T) {
-	k := active("a")
-	k.Status = "rate_limited_429"
-	k.Usage.LastRateLimitAt = time.Now().Add(-1 * time.Hour)
-	pool := poolWith(k)
+// The gate judges by the measured timestamp, never Status: rotation leaves
+// whichever account it lands on marked "active" while its minutes-old 429
+// persists, so a status-based gate read a fully exhausted pool as open.
+// This drives the REAL rotation sequence and expects the gate closed.
+func TestQuotaReadyClosesAfterRealRotationExhaustsThePool(t *testing.T) {
+	pool := poolWith(active("a"), active("b"))
+
+	// Both accounts 429 in sequence, exactly as executeWithRotation does it.
+	pool.RotateNextKey("a") // marks a, lands on b (Status becomes "active")
+	pool.RotateNextKey("b") // marks b, lands on a (Status becomes "active")
 
 	ok, reason := pool.QuotaReady(QuotaCooldown)
 	if ok {
-		t.Fatal("a pool rate-limited an hour ago is not ready under a 24h cooldown")
+		t.Fatalf("pool exhausted by real rotation still reads ready (%s) — the gate is judging Status, not measurements", reason)
 	}
 	if !strings.Contains(reason, "hồi lúc") {
 		t.Errorf("reason should say when quota is expected back, got %q", reason)
+	}
+}
+
+// A single-account pool has nowhere to rotate, but its 429 is still measured
+// — without the recording, the gate can never hold a job for the most common
+// setup of all.
+func TestQuotaReadyClosesForASingleAccountAfterA429(t *testing.T) {
+	pool := poolWith(active("only"))
+
+	pool.RotateNextKey("only")
+
+	if ok, _ := pool.QuotaReady(QuotaCooldown); ok {
+		t.Fatal("single-account pool reads ready right after its measured 429")
+	}
+	if hits := pool.GetKeys()[0].Usage.RateLimitHits; hits != 1 {
+		t.Fatalf("rate_limit_hits = %d, want the 429 recorded even with nowhere to rotate", hits)
 	}
 }
 
@@ -52,18 +71,6 @@ func TestQuotaReadyNeverCountsDisabledAccounts(t *testing.T) {
 	}
 	if !strings.Contains(reason, "tắt") {
 		t.Errorf("reason should say the pool is disabled, got %q", reason)
-	}
-}
-
-// A rate-limit mark with no measured timestamp cannot schedule anything;
-// holding a job forever on data nobody recorded would be worse than firing.
-func TestQuotaReadyIgnoresUnmeasuredRateLimitMarks(t *testing.T) {
-	k := active("a")
-	k.Status = "rate_limited_429"
-	pool := poolWith(k)
-
-	if ok, _ := pool.QuotaReady(QuotaCooldown); !ok {
-		t.Fatal("an unmeasured rate-limit mark must not hold the gate")
 	}
 }
 

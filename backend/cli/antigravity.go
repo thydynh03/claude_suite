@@ -359,7 +359,18 @@ func (p *AccountKeyPool) GetCurrentKey() string {
 func (p *AccountKeyPool) RotateNextKey(fromAccountID string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if len(p.keys) <= 1 {
+	if len(p.keys) == 0 {
+		return ""
+	}
+	if len(p.keys) == 1 {
+		// Nowhere to rotate, but the 429 was still MEASURED — record it, or
+		// a single-account pool never carries a rate-limit timestamp and the
+		// quota gate (QuotaReady) can never hold a job for it.
+		if fromAccountID == "" || p.keys[0].ID == fromAccountID {
+			p.keys[0].Status = "rate_limited_429"
+			p.keys[0].Usage.RateLimitHits++
+			p.keys[0].Usage.LastRateLimitAt = time.Now()
+		}
 		return ""
 	}
 

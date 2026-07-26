@@ -181,6 +181,14 @@ func (a *App) startup(ctx context.Context) {
 	a.gitWatch = services.NewGitWatchService(filepath.Dir(database.GetDBPath()))
 	a.gitWatch.SetHooks(
 		func() (bool, error) {
+			// A workspace with agents mid-task is BUSY, not abandoned: the
+			// dirty clock must not accrue through an overnight plan run, or
+			// auto-commit writes a half-finished agent edit into history and
+			// breaks the AutoSnapshot invariant every diff reader relies on
+			// (the uncommitted diff IS the current task's edits).
+			if a.runningTaskCount() > 0 {
+				return false, nil
+			}
 			ws := a.workspaceConfig.LastWorkspaceFolder
 			if ws == "" {
 				return false, nil
@@ -667,10 +675,13 @@ type UpdateResponse struct {
 // survive os.Exit as orphans, still editing the workspace; on relaunch
 // ResetRunningTasks would then dispatch a second agent onto the same
 // workspace beside the orphan.
-func (a *App) updateBlockedByRunningTasks() string {
+// runningTaskCount reports how many tasks are mid-run right now — the shared
+// "are agents working?" answer for anything that must not act over their
+// heads (the updater's exit, the git watch's commit).
+func (a *App) runningTaskCount() int {
 	tasks, err := a.taskRepo.GetAll()
 	if err != nil {
-		return ""
+		return 0
 	}
 	running := 0
 	for _, t := range tasks {
@@ -678,7 +689,11 @@ func (a *App) updateBlockedByRunningTasks() string {
 			running++
 		}
 	}
-	if running > 0 {
+	return running
+}
+
+func (a *App) updateBlockedByRunningTasks() string {
+	if running := a.runningTaskCount(); running > 0 {
 		return fmt.Sprintf("Đang có %d task chạy — cập nhật sẽ đóng app và bỏ rơi agent giữa chừng. Dừng hoặc chờ các task xong rồi cập nhật.", running)
 	}
 	return ""
@@ -1782,14 +1797,9 @@ func firstLine(s string) string {
 // digest). waitForQuota holds the job past its due time until the anti pool
 // reports usable quota — scheduling work for the moment a quota resets.
 func (a *App) ScheduleKind(kind, prompt, targetTime string, repeat bool, provider, model string, waitForQuota bool) (string, error) {
-	id, err := a.schedulerSvc.ScheduleKind(kind, prompt, targetTime, repeat, provider, model)
-	if err != nil {
-		return "", err
-	}
-	if waitForQuota {
-		a.schedulerSvc.SetJobWaitForQuota(id, true)
-	}
-	return id, nil
+	// One atomic creation: the flag lands with the row. Patching it on after
+	// insert left a gap the one-second scan ticker could fire through.
+	return a.schedulerSvc.ScheduleKindJob(kind, prompt, targetTime, repeat, provider, model, waitForQuota)
 }
 
 // ── Git watch ──────────────────────────────────────────────────────────

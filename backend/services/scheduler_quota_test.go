@@ -29,12 +29,11 @@ func TestWaitForQuotaHoldsADueJobUntilTheGateOpens(t *testing.T) {
 		return gateOpen.Load(), "đang cạn quota (test)"
 	})
 
-	id, err := s.ScheduleKind(JobKindPrompt, "overnight run", time.Now().Add(-time.Second).Format(time.RFC3339), false, "anti", "gemini-3.6-flash-high")
+	// Atomic creation: the flag lands with the row, in the same critical
+	// section — a due-now job must be born held, never patched into holding.
+	id, err := s.ScheduleKindJob(JobKindPrompt, "overnight run", time.Now().Add(-time.Second).Format(time.RFC3339), false, "anti", "gemini-3.6-flash-high", true)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !s.SetJobWaitForQuota(id, true) {
-		t.Fatal("SetJobWaitForQuota did not find the job")
 	}
 
 	// Gate closed: however many ticks pass, nothing fires and the one-shot
@@ -99,11 +98,10 @@ func TestWaitForQuotaPersists(t *testing.T) {
 	if err := s.UseStore(store); err != nil {
 		t.Fatal(err)
 	}
-	id, err := s.ScheduleKind(JobKindPrompt, "x", time.Now().Add(time.Hour).Format(time.RFC3339), false, "anti", "m")
+	id, err := s.ScheduleKindJob(JobKindPrompt, "x", time.Now().Add(time.Hour).Format(time.RFC3339), false, "anti", "m", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.SetJobWaitForQuota(id, true)
 
 	reloaded := NewSchedulerService()
 	if err := reloaded.UseStore(store); err != nil {

@@ -122,18 +122,6 @@ func (s *SchedulerService) SetQuotaGate(gate func(provider string) (bool, string
 	s.quotaGate = gate
 }
 
-// SetJobWaitForQuota flips the hold-until-quota flag on an existing job.
-func (s *SchedulerService) SetJobWaitForQuota(id string, wait bool) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	job, ok := s.jobs[id]
-	if !ok {
-		return false
-	}
-	job.WaitForQuota = wait
-	s.saveLocked()
-	return true
-}
 
 // SetContext and SetTriggerCallback are currently called before Start, where the
 // `go` statement itself orders the write ahead of the loop's reads. They take the
@@ -391,28 +379,25 @@ func (s *SchedulerService) SchedulePrompt(prompt string, targetTimeStr string, r
 // ScheduleKind adds a job of a given kind. An unknown kind is rejected here
 // rather than at midnight, when nobody is watching.
 func (s *SchedulerService) ScheduleKind(kind, prompt, targetTimeStr string, repeat bool, provider, model string) (string, error) {
-	resolved, err := normaliseKind(kind)
-	if err != nil {
-		return "", err
-	}
-	id, err := s.ScheduleJob(prompt, targetTimeStr, repeat, provider, model)
-	if err != nil {
-		return "", err
-	}
-
-	s.mu.Lock()
-	if job, ok := s.jobs[id]; ok {
-		job.Kind = resolved
-		s.saveLocked()
-	}
-	s.mu.Unlock()
-	return id, nil
+	return s.ScheduleKindJob(kind, prompt, targetTimeStr, repeat, provider, model, false)
 }
 
 // ScheduleJob adds a job that runs against a chosen provider and model. Pointing
 // heavy overnight work at the provider whose quota resets first is the reason
 // this app carries two of them.
 func (s *SchedulerService) ScheduleJob(prompt, targetTimeStr string, repeat bool, provider, model string) (string, error) {
+	return s.ScheduleKindJob("", prompt, targetTimeStr, repeat, provider, model, false)
+}
+
+// ScheduleKindJob adds a complete job in ONE critical section. Kind and the
+// quota flag land with the row: the one-second scan ticker contends on the
+// same lock, so a due-now job created bare and patched afterwards could fire
+// in the gap — unheld, and without its kind.
+func (s *SchedulerService) ScheduleKindJob(kind, prompt, targetTimeStr string, repeat bool, provider, model string, waitForQuota bool) (string, error) {
+	resolved, err := normaliseKind(kind)
+	if err != nil {
+		return "", err
+	}
 	targetTime, err := time.Parse(time.RFC3339, targetTimeStr)
 	if err != nil {
 		return "", fmt.Errorf("invalid time format: %v", err)
@@ -423,13 +408,15 @@ func (s *SchedulerService) ScheduleJob(prompt, targetTimeStr string, repeat bool
 
 	id := uuid.New().String()
 	s.jobs[id] = &ScheduledJob{
-		ID:         id,
-		Prompt:     prompt,
-		TargetTime: targetTime,
-		Repeat:     repeat,
-		Provider:   provider,
-		Model:      model,
-		Enabled:    true,
+		ID:           id,
+		Kind:         resolved,
+		Prompt:       prompt,
+		TargetTime:   targetTime,
+		Repeat:       repeat,
+		Provider:     provider,
+		Model:        model,
+		Enabled:      true,
+		WaitForQuota: waitForQuota,
 	}
 	s.saveLocked()
 
