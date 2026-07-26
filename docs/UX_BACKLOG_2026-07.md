@@ -317,6 +317,54 @@ claim gửi lên đều mang tên `YOU/your-agent`.
 Việc phải làm: mặc định lấy `os.UserHomeDir` / `os.Hostname` → `an@may-cua-an/claude-code`,
 vẫn cho phép ghi đè bằng cờ `--author`. Lệnh copy ra sẽ chạy được ngay mà không cần sửa.
 
+### 9.1b Trả lời: đường dẫn `C:\Program Files\thydynh03\Claude Suite\claude-suite-claim.exe`
+**là tự lấy theo máy, không hardcode** — nhưng chữ `thydynh03` thì có vấn đề riêng
+
+Hai phần của chuỗi lệnh có nguồn gốc khác hẳn nhau, nên trả lời tách ra:
+
+**Phần đường dẫn — lấy động lúc chạy.** `app.go:1433`, hàm `claimToolCommand()`:
+
+```go
+exe, err := os.Executable()          // đường dẫn thật của app đang chạy
+if err == nil {
+    beside := filepath.Join(filepath.Dir(exe), toolName)
+    if info, statErr := os.Stat(beside); statErr == nil && !info.IsDir() {
+        return `"` + beside + `"`    // có bọc nháy vì "Program Files" có dấu cách
+    }
+}
+return "claude-suite-claim"          // dự phòng: dựa vào PATH
+```
+
+Nó hỏi hệ điều hành app đang nằm ở đâu, rồi tìm `claude-suite-claim.exe` **ngay cạnh**. Nên:
+
+- Người dùng cài vào `D:\Apps\ClaudeSuite` → lệnh sinh ra trỏ đúng `D:\Apps\ClaudeSuite\...`
+- Cài theo kiểu user (`%LOCALAPPDATA%\Programs\...`) → cũng đúng
+- Chạy bản portable `ClaudeSuite.exe` từ USB mà không có công cụ đi kèm → `os.Stat` thất
+  bại, rơi về `claude-suite-claim` trần, tức là phụ thuộc PATH. Trường hợp này lệnh sẽ báo
+  "not found" — chính là lỗi mà agent bên máy khác từng gặp, và là lý do v2.14.1 đóng gói
+  công cụ vào bộ cài.
+
+Vậy phần đường dẫn không cần sửa. Chỉ nên bổ sung: khi rơi vào nhánh dự phòng, UI phải nói rõ
+"không tìm thấy công cụ cạnh app — hãy cài bằng file installer, hoặc thêm vào PATH", thay vì
+đưa ra một lệnh trông có vẻ chạy được.
+
+**Phần `thydynh03` — đây mới là chỗ hardcode.** Nó đến từ `wails.json:14`:
+
+```json
+"companyName": "thydynh03",
+```
+
+NSIS lấy giá trị đó làm thư mục cài mặc định (`project.nsi:79`:
+`InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"`). Kết quả là **tên
+tài khoản GitHub của tác giả nằm trong Program Files của mọi người tải app về**, và nó cũng
+là khoá đăng ký gỡ cài đặt (`UNINST_KEY_NAME`).
+
+Việc phải làm: đổi `companyName` thành tên sản phẩm/tổ chức đàng hoàng (ví dụ `Claude Suite`),
+để đường dẫn thành `C:\Program Files\Claude Suite\`. Lưu ý đây là **thay đổi phá vỡ tương
+thích**: người đã cài bản cũ sẽ có hai thư mục và hai mục trong Apps & features. Cần xử lý
+gỡ bản cũ trong `.onInit` của installer, hoặc chấp nhận và ghi rõ trong release note. Nên làm
+sớm, càng nhiều người cài thì càng khó đổi.
+
 ### 9.2 ➕ Chat nhiều agent + trọng tài
 
 Hiện `ClaimsPage.svelte` chỉ có nộp claim và xem verdict. Cần dựng thêm:
@@ -402,9 +450,10 @@ Xếp theo **tác động chia cho công sức**, không theo thứ tự ngườ
 3. Phản hồi Execute Plan + badge task bị chặn (§2.2)
 4. Checkbox pool + hành động hàng loạt (§1.6)
 5. Render markdown trang Docs, bỏ emoji hardcode (§12)
-6. `--author` tự lấy tên máy (§9.1)
+6. `--author` tự lấy tên máy (§9.1) + báo rõ khi không tìm thấy công cụ claim (§9.1b)
 
 **Đợt 2 — dữ liệu phải thật**
+6b. Đổi `companyName` khỏi tên tài khoản cá nhân, xử lý gỡ bản cũ (§9.1b)
 7. Lấy quota + tier thật, bỏ số bịa (§1.1, §1.2)
 8. Warmup gọi mạng thật, báo cáo thành công/thất bại (§1.3)
 9. Wizard cấu hình GCP OAuth (§1.5)
