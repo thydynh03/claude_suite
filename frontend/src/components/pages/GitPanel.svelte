@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import { layoutCommits, laneColor } from '../../lib/gitGraph';
   import { addLog, addToast, workspaceFolder } from '../../lib/stores/appState';
 
   type ChangeRow = { code: string; file: string };
@@ -8,6 +9,13 @@
   let branches: string[] = [];
   let changes: ChangeRow[] = [];
   let log: any[] = [];
+
+  // Layout is derived from the fetched log, so it cannot go stale relative to
+  // the rows it decorates.
+  $: graph = layoutCommits(log as any);
+
+  const LANE_W = 14;
+  const ROW_H = 36;
   let diffText = '';
   let commitMsg = '';
   let cmdInput = '';
@@ -205,11 +213,49 @@
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
         <span class="text-xs font-bold uppercase text-on-surface-variant">History</span>
         <div class="max-h-52 overflow-y-auto divide-y divide-outline-variant/40">
-          {#each log as c}
-            <div class="flex items-center gap-3 py-2 group">
+          {#each graph as c, i}
+            <div class="flex items-center gap-2 py-2 group">
+              <!-- Lane gutter. Each row draws its own node plus the lines down to
+                   the next row, so branches and merges are visible instead of the
+                   flat list this used to be. -->
+              <svg
+                width={Math.max(1, c.width) * LANE_W + 4}
+                height={ROW_H}
+                class="flex-shrink-0 overflow-visible"
+                aria-hidden="true"
+              >
+                {#each c.edges as edge}
+                  <path
+                    d="M {edge.from * LANE_W + LANE_W / 2} {ROW_H / 2}
+                       C {edge.from * LANE_W + LANE_W / 2} {ROW_H},
+                         {edge.to * LANE_W + LANE_W / 2} {ROW_H / 2},
+                         {edge.to * LANE_W + LANE_W / 2} {ROW_H}"
+                    fill="none"
+                    stroke={laneColor(edge.to)}
+                    stroke-width="1.5"
+                  />
+                {/each}
+                <circle
+                  cx={c.lane * LANE_W + LANE_W / 2}
+                  cy={ROW_H / 2}
+                  r={c.isMerge ? 4.5 : 3.5}
+                  fill={c.isMerge ? 'transparent' : laneColor(c.lane)}
+                  stroke={laneColor(c.lane)}
+                  stroke-width="2"
+                />
+              </svg>
+
               <span class="font-mono text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded">{(c.hash || '').slice(0, 7)}</span>
               <div class="flex-1 min-w-0">
-                <p class="text-xs text-on-surface truncate">{c.message}</p>
+                <p class="text-xs text-on-surface truncate">
+                  {#each c.refs || [] as ref}
+                    <span class="mr-1 px-1.5 py-0.5 rounded text-[9px] font-bold align-middle
+                      {ref === branch
+                        ? 'bg-primary/20 text-primary border border-primary/40'
+                        : 'bg-surface-container-high text-on-surface-variant'}">{ref}</span>
+                  {/each}
+                  {c.message}
+                </p>
                 <p class="text-[10px] text-on-surface-variant">{c.author} · {c.date}</p>
               </div>
               <button on:click={() => revert(c.hash)} title="Revert"

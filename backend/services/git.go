@@ -9,11 +9,24 @@ import (
 	"claude_suite/backend/sysproc"
 )
 
+// logFieldSep separates the fields of one git-log line. A "|" was used before
+// and real commit subjects contain it, so those lines split into more fields
+// than expected and the subject arrived truncated. ASCII unit separator cannot
+// appear in any of these fields.
+const logFieldSep = ""
+
 type GitCommitInfo struct {
 	Hash    string `json:"hash"`
 	Message string `json:"message"`
 	Author  string `json:"author"`
 	Date    string `json:"date"`
+	// Parents is what makes a graph drawable: one parent is a normal commit, two
+	// or more is a merge, and none is the root. Without it the UI could only ever
+	// render a flat list, which is what it did.
+	Parents []string `json:"parents"`
+	// Refs are the branch and tag names pointing at this commit, so the graph can
+	// show where each branch head actually is.
+	Refs []string `json:"refs"`
 }
 
 type GitBranchInfo struct {
@@ -202,7 +215,12 @@ func (g *GitService) GetLog(cwd string, limit int) ([]GitCommitInfo, error) {
 		limit = 10
 	}
 
-	cmd := sysproc.Command("git", "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%h|%an|%ar|%s")
+	// --all so branches other than the current one appear; without it the "graph"
+	// could only ever be a straight line. %p gives the parents and %D the refs.
+	// The separator is a unit separator rather than "|", which occurs in real
+	// commit subjects and used to split them into fragments.
+	cmd := sysproc.Command("git", "log", "--all", fmt.Sprintf("-n%d", limit),
+		"--date-order", "--pretty=format:%h"+logFieldSep+"%an"+logFieldSep+"%ar"+logFieldSep+"%p"+logFieldSep+"%D"+logFieldSep+"%s")
 	cmd.Dir = cwd
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -211,18 +229,35 @@ func (g *GitService) GetLog(cwd string, limit int) ([]GitCommitInfo, error) {
 	}
 
 	lines := strings.Split(out.String(), "\n")
-	var commits []GitCommitInfo
+	commits := make([]GitCommitInfo, 0, len(lines))
 	for _, l := range lines {
-		parts := strings.Split(l, "|")
-		if len(parts) >= 4 {
-			commits = append(commits, GitCommitInfo{
-				Hash:    parts[0],
-				Author:  parts[1],
-				Date:    parts[2],
-				Message: strings.Join(parts[3:], "|"),
-			})
+		parts := strings.Split(l, logFieldSep)
+		if len(parts) < 6 {
+			continue
 		}
+
+		c := GitCommitInfo{
+			Hash:    parts[0],
+			Author:  parts[1],
+			Date:    parts[2],
+			Message: parts[5],
+		}
+		if p := strings.TrimSpace(parts[3]); p != "" {
+			c.Parents = strings.Fields(p)
+		}
+		for _, ref := range strings.Split(parts[4], ",") {
+			ref = strings.TrimSpace(ref)
+			if ref == "" {
+				continue
+			}
+			// "HEAD -> master" names the branch the working tree is on; keeping
+			// the arrow form would print the pointer rather than the branch name.
+			ref = strings.TrimPrefix(ref, "HEAD -> ")
+			c.Refs = append(c.Refs, ref)
+		}
+		commits = append(commits, c)
 	}
+
 	return commits, nil
 }
 

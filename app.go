@@ -842,7 +842,19 @@ func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, m
 		}
 	}
 
-	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner, onLog)
+	// A frame per step, so the user can watch a headless run instead of trusting
+	// the log. Cheap enough at one capture per step; a CDP screencast would be
+	// smoother but is a different mechanism with its own failure modes.
+	onFrame := func(step int, dataURL string) {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "browser_agent_frame", map[string]interface{}{
+				"step":  step,
+				"image": dataURL,
+			})
+		}
+	}
+
+	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner, onLog, onFrame)
 }
 
 // ── Anti CLI Multi-Account / Key Pool ──────────────────────────────────

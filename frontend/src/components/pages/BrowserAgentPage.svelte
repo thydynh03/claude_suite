@@ -28,6 +28,8 @@
   let isRunning = false;
 
   let liveLogs: string[] = [];
+  let liveFrame = '';
+  let liveFrameStep = 0;
 
   let roles: string[] = [];
   let selectedRole = 'front-end-agent.md';
@@ -79,6 +81,15 @@
         if (data?.log) {
           liveLogs = [...liveLogs, `[${data.time || ''}] ${data.log}`];
         }
+      });
+
+      // A frame per step. Only the latest is kept: this is a live view, not a
+      // recording, and holding every frame of a 20-step run in memory as base64
+      // PNGs is megabytes for something nobody scrolls back through.
+      (window as any).runtime.EventsOn('browser_agent_frame', (data: any) => {
+        if (!data?.image) return;
+        liveFrame = data.image;
+        liveFrameStep = data.step || 0;
       });
 
       (window as any).runtime.EventsOn('browser_ask_user', (data: any) => {
@@ -321,6 +332,20 @@
           <span class="text-[10px] text-emerald-400 font-bold tracking-wider">● RUNNING CHROME CDP IN REALTIME</span>
         {/if}
       </div>
+      <!-- What the agent is looking at right now. A headless run used to be
+           entirely invisible until the single screenshot at the end. -->
+      {#if liveFrame}
+        <div class="mb-3 rounded-lg overflow-hidden border border-slate-700">
+          <div class="px-2 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 flex items-center justify-between">
+            <span>Màn hình agent — bước {liveFrameStep}</span>
+            {#if isRunning}
+              <span class="text-emerald-400">● trực tiếp</span>
+            {/if}
+          </div>
+          <img src={liveFrame} alt="Ảnh màn hình trình duyệt của agent ở bước {liveFrameStep}" class="w-full max-h-72 object-contain bg-black" />
+        </div>
+      {/if}
+
       <div class="max-h-48 overflow-y-auto space-y-1.5 leading-relaxed text-emerald-400 pr-2">
         {#each liveLogs as log}
           <div class="flex items-start gap-2">

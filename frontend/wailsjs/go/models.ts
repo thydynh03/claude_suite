@@ -749,6 +749,8 @@ export namespace services {
 	    message: string;
 	    author: string;
 	    date: string;
+	    parents: string[];
+	    refs: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new GitCommitInfo(source);
@@ -760,6 +762,8 @@ export namespace services {
 	        this.message = source["message"];
 	        this.author = source["author"];
 	        this.date = source["date"];
+	        this.parents = source["parents"];
+	        this.refs = source["refs"];
 	    }
 	}
 	export class MCPServer {

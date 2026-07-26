@@ -282,6 +282,11 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 	maxSteps int,
 	runner cli.CLIRunner,
 	onLog func(msg string),
+	// onFrame receives a screenshot of the page at the start of each step, as a
+	// data URL. Without it the only visible evidence of a multi-step run was the
+	// log text and a single screenshot at the end, so a headless agent doing five
+	// steps was something the user had to take on trust. May be nil.
+	onFrame func(step int, dataURL string),
 ) (*BrowserActionResult, error) {
 	if maxSteps <= 0 {
 		maxSteps = 5
@@ -447,6 +452,15 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 
 		result.CurrentStep = step
 		logMsg(fmt.Sprintf("🔄 [Bước %d/%d]: Đang phân tích DOM & lịch sử thao tác...", step, maxSteps))
+
+		// Best effort: a frame that fails to capture is not worth failing a step
+		// over, and the log already says what the agent is doing.
+		if onFrame != nil {
+			var frame []byte
+			if err := chromedp.Run(ctx, chromedp.CaptureScreenshot(&frame)); err == nil && len(frame) > 0 {
+				onFrame(step, "data:image/png;base64,"+base64.StdEncoding.EncodeToString(frame))
+			}
+		}
 
 		historyStr := "Chưa có thao tác nào."
 		if len(actionHistory) > 0 {
