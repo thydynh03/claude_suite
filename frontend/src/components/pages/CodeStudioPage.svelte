@@ -409,10 +409,17 @@
     }
   }
 
-  // Visual Diff calculator
-  function getDiffLines() {
-    const orig = originalContent.split('\n');
-    const curr = fileContent.split('\n');
+  // Visual Diff calculator.
+  //
+  // Derived reactively rather than called from the markup: Svelte reads a
+  // template function call untracked, so `{#each getDiffLines() as d}` showed
+  // the diff as it stood when the panel opened and never followed an edit.
+  $: diffLines = computeDiffLines(originalContent, fileContent);
+  $: changedLineCount = diffLines.filter((d) => d.type !== 'same').length;
+
+  function computeDiffLines(original: string, current: string) {
+    const orig = original.split('\n');
+    const curr = current.split('\n');
     const max = Math.max(orig.length, curr.length);
     const diffs = [];
 
@@ -544,7 +551,7 @@
           on:click={() => viewMode = 'diff'}
           class="px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1
           {viewMode === 'diff' ? 'bg-primary text-on-primary font-bold shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-          <span class="material-symbols-outlined text-sm">difference</span> Visual Diff ({getDiffLines().filter(d => d.type !== 'same').length})
+          <span class="material-symbols-outlined text-sm">difference</span> Visual Diff ({changedLineCount})
         </button>
       </div>
 
@@ -742,7 +749,7 @@
           <div class="w-1/2 flex flex-col overflow-hidden">
             <div class="bg-slate-900 px-3 py-1.5 border-b border-slate-800 text-[11px] font-bold text-slate-400">Gốc (Original File)</div>
             <div class="flex-1 overflow-y-auto p-3 space-y-1">
-              {#each getDiffLines() as d}
+              {#each diffLines as d (d.line)}
                 <div class="flex gap-2 text-[11px] {d.type === 'removed' ? 'bg-rose-950/40 text-rose-300' : ''}">
                   <span class="w-8 text-slate-600 select-none text-right">{d.line}</span>
                   <span class="whitespace-pre flex-1">{d.orig}</span>
@@ -755,7 +762,7 @@
           <div class="w-1/2 flex flex-col overflow-hidden">
             <div class="bg-slate-900 px-3 py-1.5 border-b border-slate-800 text-[11px] font-bold text-emerald-400">Đã sửa trực tiếp / AI Auto-Save</div>
             <div class="flex-1 overflow-y-auto p-3 space-y-1">
-              {#each getDiffLines() as d}
+              {#each diffLines as d (d.line)}
                 <div class="flex gap-2 text-[11px] {d.type === 'added' ? 'bg-emerald-950/40 text-emerald-300 font-bold' : d.type === 'modified' ? 'bg-amber-950/40 text-amber-300' : ''}">
                   <span class="w-8 text-slate-600 select-none text-right">{d.line}</span>
                   <span class="whitespace-pre flex-1">{d.curr}</span>

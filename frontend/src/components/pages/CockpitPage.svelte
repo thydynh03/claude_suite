@@ -13,7 +13,11 @@
   $: mTokens = ($agentsStore || []).reduce((s: number, a: any) => s + (a.tokens_used || 0), 0);
   $: mTokensText = mTokens > 999999 ? `${(mTokens / 1e6).toFixed(2)}M` : mTokens > 999 ? `${(mTokens / 1000).toFixed(1)}k` : `${mTokens}`;
 
-  const metricCards = () => [
+  // A reactive value, not a function called from the markup. Svelte reads a
+  // template function call untracked, so `{#each metricCards() as m}` rendered
+  // once and then never again: the numbers froze at mount while the Kanban
+  // board next door kept moving. Covered by CockpitPage.test.ts.
+  $: metricCards = [
     { label: 'Running', value: mRunning, icon: 'bolt', cls: 'text-primary' },
     { label: 'Queue', value: mQueued, icon: 'hourglass_empty', cls: 'text-secondary' },
     { label: 'Done', value: mDone, icon: 'check_circle', cls: 'text-emerald-600' },
@@ -151,7 +155,7 @@
 
   <!-- Aggregated live metrics -->
   <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
-    {#each metricCards() as m}
+    {#each metricCards as m (m.label)}
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex flex-col gap-1 shadow-sm">
         <div class="flex items-center gap-1.5 text-[10px] uppercase font-bold text-on-surface-variant">
           <span class="material-symbols-outlined text-sm {m.cls}">{m.icon}</span> {m.label}
