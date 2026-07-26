@@ -51,6 +51,11 @@ export interface LogEntry {
   message: string;
   level: string; // "INFO" | "SUCCESS" | "WARN" | "ERROR" | "THINKING" | "SEND"
   time: string;
+  // Unique per entry within the session. Streamed lines repeat — same second,
+  // same text — so nothing derived from the content is usable as an each-block
+  // key: Svelte 5 throws each_key_duplicate mid-render, which left the task
+  // drawer's full-screen overlay stuck over a dead UI.
+  seq?: number;
 }
 
 export interface WorkspaceConfig {

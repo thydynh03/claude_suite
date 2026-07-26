@@ -776,7 +776,11 @@
           </div>
         </div>
         <div bind:this={logContainer} class="bg-black/90 text-emerald-400 p-3 rounded-xl border border-slate-800 font-mono text-[11px] h-44 overflow-y-auto space-y-1 shadow-inner leading-relaxed scroll-smooth">
-          {#each visibleTaskLogs as l (l.time + l.message)}
+          <!-- Keyed by the store-assigned seq: time+message repeats during
+               streaming, and a duplicate key is a thrown error in Svelte 5 —
+               the drawer died mid-render with its overlay covering the app.
+               The index fallback cannot collide either. -->
+          {#each visibleTaskLogs as l, i (l.seq ?? `fallback-${i}`)}
             <div class="flex items-start gap-2">
               <span class="text-slate-500 font-mono">[{l.time || 'NOW'}]</span>
               <span class={l.level === 'ERROR' ? 'text-rose-400' : l.level === 'SUCCESS' ? 'text-emerald-400' : l.level === 'WARN' ? 'text-amber-300' : l.level === 'TOOL' ? 'text-cyan-300 font-semibold' : 'text-slate-300'}>

@@ -92,6 +92,21 @@ describe('addTaskLog', () => {
     expect(byTask['task-a']).toBeUndefined()
     expect(byTask['task-b']).toHaveLength(1)
   })
+
+  // Streaming agents repeat lines — same second, same text. The drawer keys
+  // its {#each} on this seq; anything derived from the content collides, and
+  // a duplicate key is a thrown error in Svelte 5 that froze the app behind
+  // the half-rendered task overlay.
+  it('gives identical lines distinct seq values', () => {
+    addTaskLog('task-a', '```', 'INFO', '09:41:00')
+    addTaskLog('task-a', '```', 'INFO', '09:41:00')
+    addTaskLog('task-a', '```', 'INFO', '09:41:00')
+
+    const entries = get(taskLogsStore)['task-a']
+    const seqs = entries.map((e) => e.seq)
+    expect(seqs.every((s) => typeof s === 'number')).toBe(true)
+    expect(new Set(seqs).size).toBe(seqs.length)
+  })
 })
 
 describe('setTaskScreenshot', () => {

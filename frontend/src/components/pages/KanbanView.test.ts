@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import KanbanView from './KanbanView.svelte'
-import { agentsStore, tasksStore } from '../../lib/stores/appState'
+import { addTaskLog, agentsStore, taskLogsStore, tasksStore } from '../../lib/stores/appState'
 
 // The board never fetches for itself — App.svelte's central board_updated
 // handler refreshes tasksStore and this view reads it. The bindings it does
@@ -128,5 +128,55 @@ describe('KanbanView blocked badges', () => {
 
     expect(screen.queryByText('Đang chờ task khác')).not.toBeInTheDocument()
     expect(screen.queryByText('Bị chặn bởi task lỗi')).not.toBeInTheDocument()
+  })
+})
+
+// The inspector drawer's log stream, keyed. Streamed lines repeat — same
+// second, same text — and a duplicate each-key is a THROWN error in Svelte 5:
+// the drawer died mid-render and its fixed overlay froze the whole window.
+describe('KanbanView task inspector log stream', () => {
+  beforeEach(() => {
+    tasksStore.set([])
+    agentsStore.set([])
+    taskLogsStore.set({})
+  })
+
+  it('opens the drawer and renders duplicate log lines without crashing', async () => {
+    tasksStore.set([task('a', 'running')] as never)
+    // Three byte-identical lines in the same second — the exact shape that
+    // used to collide when the key was time+message.
+    addTaskLog('a', '```', 'INFO', '09:41:00')
+    addTaskLog('a', '```', 'INFO', '09:41:00')
+    addTaskLog('a', '```', 'INFO', '09:41:00')
+
+    render(KanbanView, { props: { onRefresh: vi.fn() } })
+    await tick()
+
+    ;(await screen.findByText('Task a')).click()
+    await tick()
+
+    // The drawer is up (header badge) and every duplicate line rendered.
+    expect(await screen.findByText('Task Inspector & Sub-Agent Monitor')).toBeInTheDocument()
+    expect(screen.getAllByText('```')).toHaveLength(3)
+  })
+
+  it('keeps the drawer alive while identical lines stream in', async () => {
+    tasksStore.set([task('a', 'running')] as never)
+    render(KanbanView, { props: { onRefresh: vi.fn() } })
+    await tick()
+
+    ;(await screen.findByText('Task a')).click()
+    await tick()
+    expect(await screen.findByText('Task Inspector & Sub-Agent Monitor')).toBeInTheDocument()
+
+    // Live stream after the drawer is open, duplicates included.
+    for (let i = 0; i < 5; i++) addTaskLog('a', 'progress .', 'INFO', '09:41:01')
+    await tick()
+
+    expect(screen.getAllByText('progress .')).toHaveLength(5)
+    // The close button still works — the app is not frozen behind the overlay.
+    ;(await screen.findByText('Đóng Panel')).click()
+    await tick()
+    expect(screen.queryByText('Task Inspector & Sub-Agent Monitor')).not.toBeInTheDocument()
   })
 })

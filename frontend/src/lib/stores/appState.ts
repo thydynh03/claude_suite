@@ -27,12 +27,18 @@ export function addLog(msg: string, level = 'INFO', time = '') {
   logs.update((l) => [...l.slice(-1000), { message: msg, level, time: t }]);
 }
 
+// Streamed lines repeat — same second, same text — so each entry carries a
+// unique seq for the drawer's keyed {#each}. Keying on time+message threw
+// Svelte 5's each_key_duplicate mid-render and froze the whole window behind
+// the half-mounted overlay.
+let taskLogSeq = 0;
+
 export function addTaskLog(taskId: string, msg: string, level = 'INFO', time = '') {
   if (!taskId) return;
   const t = time || new Date().toLocaleTimeString('en-US', { hour12: false });
   taskLogsStore.update((m) => {
     const prev = m[taskId] || [];
-    return { ...m, [taskId]: [...prev.slice(-500), { message: msg, level, time: t }] };
+    return { ...m, [taskId]: [...prev.slice(-500), { message: msg, level, time: t, seq: ++taskLogSeq }] };
   });
 }
 
