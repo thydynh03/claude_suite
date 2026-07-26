@@ -2,8 +2,10 @@
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import CodeEditor from '../ui/CodeEditor.svelte';
+  import DiffView from '../ui/DiffView.svelte';
   import FileTreeNode from '../ui/FileTreeNode.svelte';
   import { buildTree, fuzzyMatch, matchScore } from '../../lib/fileTree';
+  import { countDiffChunks } from '../../lib/diffStats';
   import { addLog, addToast } from '../../lib/stores/appState';
 
   interface OpenTab {
@@ -392,33 +394,12 @@
     }
   }
 
-  // Visual Diff calculator.
-  //
-  // Derived reactively rather than called from the markup: Svelte reads a
-  // template function call untracked, so `{#each getDiffLines() as d}` showed
-  // the diff as it stood when the panel opened and never followed an edit.
-  $: diffLines = computeDiffLines(originalContent, fileContent);
-  $: changedLineCount = diffLines.filter((d) => d.type !== 'same').length;
-
-  function computeDiffLines(original: string, current: string) {
-    const orig = original.split('\n');
-    const curr = current.split('\n');
-    const max = Math.max(orig.length, curr.length);
-    const diffs = [];
-
-    for (let i = 0; i < max; i++) {
-      const o = orig[i] ?? '';
-      const c = curr[i] ?? '';
-      let type: 'same' | 'added' | 'removed' | 'modified' = 'same';
-      if (o !== c) {
-        if (!orig[i]) type = 'added';
-        else if (!curr[i]) type = 'removed';
-        else type = 'modified';
-      }
-      diffs.push({ line: i + 1, orig: o, curr: c, type });
-    }
-    return diffs;
-  }
+  // The badge on the Visual Diff button. Counted with the same chunk
+  // computation the MergeView draws — the old positional line comparison
+  // counted every line below an insertion as changed. (Derived reactively
+  // rather than called from the markup: Svelte reads a template function
+  // call untracked.)
+  $: changedChunkCount = countDiffChunks(originalContent, fileContent);
 
   function getThemeClasses(theme: string) {
     switch (theme) {
@@ -534,7 +515,7 @@
           on:click={() => viewMode = 'diff'}
           class="px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1
           {viewMode === 'diff' ? 'bg-primary text-on-primary font-bold shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-          <span class="material-symbols-outlined text-sm">difference</span> Visual Diff ({changedLineCount})
+          <span class="material-symbols-outlined text-sm">difference</span> Visual Diff ({changedChunkCount})
         </button>
       </div>
 
@@ -728,32 +709,23 @@
           </div>
         </div>
       {:else}
-        <!-- Visual Side-by-Side Diff View -->
-        <div class="flex-1 flex overflow-hidden font-mono text-xs bg-slate-950 text-slate-200 divide-x divide-slate-800">
-          <!-- Left: Original -->
-          <div class="w-1/2 flex flex-col overflow-hidden">
-            <div class="bg-slate-900 px-3 py-1.5 border-b border-slate-800 text-[11px] font-bold text-slate-400">Gốc (Original File)</div>
-            <div class="flex-1 overflow-y-auto p-3 space-y-1">
-              {#each diffLines as d (d.line)}
-                <div class="flex gap-2 text-[11px] {d.type === 'removed' ? 'bg-rose-950/40 text-rose-300' : ''}">
-                  <span class="w-8 text-slate-600 select-none text-right">{d.line}</span>
-                  <span class="whitespace-pre flex-1">{d.orig}</span>
-                </div>
-              {/each}
-            </div>
+        <!-- Visual Side-by-Side Diff View: CodeMirror MergeView with the same
+             language + theme as the editor, real chunk alignment and
+             per-character highlights. The hand-rendered version compared line
+             i against line i, so one inserted line marked everything below it
+             and nothing got syntax colours. -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+          <div class="flex text-[11px] font-bold font-mono border-b border-outline-variant">
+            <div class="w-1/2 px-3 py-1.5 bg-surface-container-low text-on-surface-variant border-r border-outline-variant">Gốc (Original File)</div>
+            <div class="w-1/2 px-3 py-1.5 bg-surface-container-low text-emerald-500">Đã sửa trực tiếp / AI Auto-Save</div>
           </div>
-
-          <!-- Right: Modified / AI Output -->
-          <div class="w-1/2 flex flex-col overflow-hidden">
-            <div class="bg-slate-900 px-3 py-1.5 border-b border-slate-800 text-[11px] font-bold text-emerald-400">Đã sửa trực tiếp / AI Auto-Save</div>
-            <div class="flex-1 overflow-y-auto p-3 space-y-1">
-              {#each diffLines as d (d.line)}
-                <div class="flex gap-2 text-[11px] {d.type === 'added' ? 'bg-emerald-950/40 text-emerald-300 font-bold' : d.type === 'modified' ? 'bg-amber-950/40 text-amber-300' : ''}">
-                  <span class="w-8 text-slate-600 select-none text-right">{d.line}</span>
-                  <span class="whitespace-pre flex-1">{d.curr}</span>
-                </div>
-              {/each}
-            </div>
+          <div class="flex-1 overflow-hidden">
+            <DiffView
+              original={originalContent}
+              modified={fileContent}
+              path={activeTabPath}
+              dark={codeTheme !== 'github-light'}
+            />
           </div>
         </div>
       {/if}

@@ -2,8 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // jsdom cannot host CodeMirror (it measures layout); the stub keeps value and
-// the change event observable, which is all these tests assert through.
+// the change event observable, which is all these tests assert through. The
+// MergeView-based diff pane is stubbed for the same reason — these tests
+// never open it, but a stub keeps an accidental instantiation from taking
+// the suite down with a layout error.
 vi.mock('../ui/CodeEditor.svelte', () => import('../../test/CodeEditorStub.svelte'))
+vi.mock('../ui/DiffView.svelte', () => import('../../test/CodeEditorStub.svelte'))
 
 const readFileContent = vi.fn(async (path: string) => `// contents of ${path}\n`)
 const saveFileContent = vi.fn(async () => undefined)

@@ -7,13 +7,7 @@
   import { bracketMatching, foldGutter, foldKeymap, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
   import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete';
   import { oneDark } from '@codemirror/theme-one-dark';
-  import { javascript } from '@codemirror/lang-javascript';
-  import { json } from '@codemirror/lang-json';
-  import { go } from '@codemirror/lang-go';
-  import { html } from '@codemirror/lang-html';
-  import { css } from '@codemirror/lang-css';
-  import { markdown } from '@codemirror/lang-markdown';
-  import { python } from '@codemirror/lang-python';
+  import { languageFor } from '../../lib/editorLang';
 
   /**
    * The code editor for Code Studio.
@@ -39,39 +33,8 @@
   const theme = new Compartment();
   const editable = new Compartment();
 
-  function languageFor(p: string) {
-    const ext = (p.split('.').pop() || '').toLowerCase();
-    switch (ext) {
-      case 'ts':
-      case 'tsx':
-        return javascript({ typescript: true, jsx: ext === 'tsx' });
-      case 'js':
-      case 'jsx':
-      case 'mjs':
-      case 'cjs':
-        return javascript({ jsx: ext === 'jsx' });
-      case 'json':
-        return json();
-      case 'go':
-        return go();
-      // Svelte has no dedicated package here; its markup is close enough to HTML
-      // that highlighting it as HTML is better than not highlighting it at all.
-      case 'html':
-      case 'svelte':
-      case 'vue':
-        return html();
-      case 'css':
-      case 'scss':
-        return css();
-      case 'md':
-      case 'markdown':
-        return markdown();
-      case 'py':
-        return python();
-      default:
-        return [];
-    }
-  }
+  // Language selection lives in lib/editorLang.ts, shared with DiffView so
+  // the same file highlights identically in both panes.
 
   function buildExtensions() {
     return [
