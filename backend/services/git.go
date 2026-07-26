@@ -89,10 +89,25 @@ func (g *GitService) RunCommand(cwd string, args []string) (string, error) {
 	if !allowedGitSubcommands[sub] {
 		return "", fmt.Errorf("lệnh git '%s' không được phép trong panel này", sub)
 	}
-	// Block force pushes explicitly.
-	joined := strings.Join(args, " ")
-	if sub == "push" || strings.Contains(joined, "--force") || strings.Contains(joined, "-f ") {
-		return "", fmt.Errorf("push/--force bị chặn trong panel vì an toàn")
+	if sub == "push" {
+		return "", fmt.Errorf("push bị chặn trong panel vì an toàn")
+	}
+	// Destructive flags are matched per argument, exactly. The old check
+	// substring-scanned the joined string: `checkout -f` slipped through (the
+	// pattern needed a trailing space), `reset --hard` was never looked at —
+	// each able to destroy the current task's uncommitted diff, the one thing
+	// AutoSnapshot exists to preserve — while a commit message mentioning
+	// "-f " was blocked with a force-push error.
+	for _, a := range args[1:] {
+		switch a {
+		case "-f", "--force", "--force-with-lease", "-D", "--hard", "--delete-force":
+			return "", fmt.Errorf("cờ '%s' bị chặn trong panel vì có thể phá dữ liệu chưa commit", a)
+		}
+		// Flag arguments end at "--"; everything after is pathspec/message
+		// territory where these tokens are data, not switches.
+		if a == "--" {
+			break
+		}
 	}
 
 	cmd := sysproc.Command("git", args...)
@@ -135,8 +150,14 @@ func (g *GitService) GetWorkspaceDiff(cwd string) (string, error) {
 		}
 	}
 
+	// A clean tree returns "", not a sentence. The old in-band sentinel
+	// ("Không có thay đổi...") was detected downstream with strings.Contains,
+	// so a REAL diff touching any file containing that phrase — this repo's
+	// own UI files — read as "no changes": the commit-message button errored
+	// and the nightly commit job skipped, both silently. Callers render
+	// their own empty-state text.
 	if strings.TrimSpace(out.String()) == "" {
-		return "Không có thay đổi nào trong workspace.", nil
+		return "", nil
 	}
 	return out.String(), nil
 }

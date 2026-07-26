@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -120,26 +119,26 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	// Parse stdout as newline-delimited JSON events (stream-json).
 	go func() {
 		defer wg.Done()
-		scanner := bufio.NewScanner(stdoutPipe)
-		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024) // events can be large
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
+		if err := forEachLine(stdoutPipe, func(line string) {
+			line = strings.TrimSpace(line)
 			if line == "" {
-				continue
+				return
 			}
 			parseStreamEvent(line, parsed, onLog)
+		}); err != nil && onLog != nil {
+			onLog(fmt.Sprintf("stdout stream error: %v", err), "WARN")
 		}
 	}()
 
 	// Stream stderr line by line
 	go func() {
 		defer wg.Done()
-		scanner := bufio.NewScanner(io.TeeReader(stderrPipe, &stderrBuf))
-		for scanner.Scan() {
-			line := scanner.Text()
+		if err := forEachLine(io.TeeReader(stderrPipe, &stderrBuf), func(line string) {
 			if onLog != nil {
 				onLog(line, "WARN")
 			}
+		}); err != nil && onLog != nil {
+			onLog(fmt.Sprintf("stderr stream error: %v", err), "WARN")
 		}
 	}()
 
@@ -152,6 +151,24 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	outStr := parsed.result
 	if outStr == "" {
 		outStr = parsed.assistantText.String()
+	}
+
+	// A timeout kill is a failure no matter what was streamed first: the
+	// process died mid-edit. The partial-success fallthrough below used to
+	// catch it — any run that produced one text block before the deadline
+	// came back Success:true, and the orchestrator marked the half-finished
+	// task done. The parent cannot tell either: the deadline fires on OUR
+	// context, so the orchestrator's own ctx.Err() stays nil.
+	if ctx.Err() == context.DeadlineExceeded {
+		return &RunResult{
+			Success:     false,
+			Output:      outStr,
+			Error:       fmt.Sprintf("run bị dừng vì quá TaskTimeout — công việc dở dang, output một phần được giữ lại. %s", errStr),
+			SessionID:   parsed.sessionID,
+			TokensUsed:  parsed.totalTokens(),
+			CostUSD:     parsed.costUSD,
+			DurationSec: duration,
+		}
 	}
 
 	if err != nil {

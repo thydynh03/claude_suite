@@ -66,7 +66,10 @@
         showCLIConsole = await (AppBindings as any).GetShowCLIConsole();
       }
       if ((window as any)?.runtime?.EventsOn) {
-        (window as any).runtime.EventsOn("oauth_success", async (data: any) => {
+        // Captured for cleanup: the page is destroyed on every tab switch,
+        // and a listener left behind fires once per past visit — k visits
+        // meant k+1 duplicate toasts per OAuth login.
+        offOAuthSuccess = (window as any).runtime.EventsOn("oauth_success", async (data: any) => {
           await loadAntiKeys();
           addLog(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
           addToast(`🎉 Tự động đăng nhập và lưu OAuth Token cho ${data?.email || 'Google Account'} thành công!`, 'SUCCESS');
@@ -75,9 +78,14 @@
     } catch (e) {}
   }
 
+  let offOAuthSuccess: (() => void) | null = null;
+
   onMount(() => {
     initSettings();
-    return () => { unsubscribeAgents(); };
+    return () => {
+      unsubscribeAgents();
+      offOAuthSuccess?.();
+    };
   });
 
   let newAuthType: 'api_key' | 'oauth_token' = 'api_key';
@@ -164,9 +172,22 @@
     addToast(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
   }
 
+  // In-progress persona edits live here, keyed by agent id, NOT on the store
+  // objects: agent_updated replaces agentsStore whenever any task finishes
+  // anywhere, and a bind:value on the store object silently discarded
+  // whatever the user had typed.
+  let personaDrafts: Record<string, string> = {};
+
+  function setPersonaDraft(agentId: string, value: string) {
+    personaDrafts = { ...personaDrafts, [agentId]: value };
+  }
+
   async function handleSaveAgent(agent: Agent) {
     try {
-      await AppBindings.SaveAgent(agent as any);
+      const system = personaDrafts[agent.agent_id] ?? agent.system;
+      await AppBindings.SaveAgent({ ...agent, system } as any);
+      const { [agent.agent_id]: _saved, ...rest } = personaDrafts;
+      personaDrafts = rest;
       addLog(`Đã lưu Agent ${agent.name}.`, 'SUCCESS');
       addToast(`Đã lưu Agent ${agent.name}.`, 'SUCCESS');
       // agent_updated event refreshes agentsStore globally (3D office, kanban, cockpit).
@@ -333,7 +354,7 @@
     try {
       // Show installing message before calling backend
       // App will call os.Exit(0) during this → IPC cut → catch fires. That is NORMAL.
-      updateStatusMessage = '⚙️ Đang cài đặt... Ứng dụng sẽ tự động khởi động lại sau vài giây.';
+      updateStatusMessage = '⚙️ Đang cài đặt... Bản cài đặt sẽ mở trình cài đặt (bấm Yes ở hộp thoại UAC); bản portable sẽ tự khởi động lại.';
       updateStatusType = 'success';
 
       const res = await (AppBindings as any).DownloadAndUpdate(updateInfo.download_url);
@@ -347,11 +368,12 @@
       }
     } catch (e: any) {
       // App called os.Exit(0) → IPC dropped → catch fires. This is expected.
-      // The updater.bat is running in background and will relaunch the app.
-      updateStatusMessage = '✅ Đã tải xong! Ứng dụng đang được khởi động lại tự động...';
+      // Installed copy: the NSIS installer is opening (UAC prompt first).
+      // Portable copy: the updater .bat swaps the exe and relaunches.
+      updateStatusMessage = '✅ Đã tải xong! App sẽ đóng để cập nhật — nếu trình cài đặt hiện ra, làm theo các bước.';
       updateStatusType = 'success';
-      addLog('App is restarting with new version. Please wait...', 'SUCCESS');
-      addToast('App is restarting with new version. Please wait...', 'SUCCESS');
+      addLog('Update downloaded; app is closing to apply it.', 'SUCCESS');
+      addToast('Update downloaded; app is closing to apply it.', 'SUCCESS');
       // Do NOT set isUpdating = false — app is mid-restart
     }
   }
@@ -486,7 +508,8 @@
                   </button>
                 </div>
                 <textarea
-                  bind:value={agent.system}
+                  value={personaDrafts[agent.agent_id] ?? agent.system}
+                  on:input={(e) => setPersonaDraft(agent.agent_id, (e.currentTarget as HTMLTextAreaElement).value)}
                   class="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 h-16 resize-none focus:ring-1 focus:ring-primary outline-none text-on-surface text-[11px]"
                   placeholder="Enter system prompt for agent..."
                 ></textarea>

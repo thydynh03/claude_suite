@@ -200,6 +200,43 @@ func TestRetryTaskReturnsAFailedTaskToTheBacklog(t *testing.T) {
 	})
 }
 
+// The backoff used to exist only inside the log line: the failed task went
+// straight back to the backlog and the next scan re-ran it, so every paid
+// retry fired before a transient error could clear.
+func TestFailedTaskWaitsOutItsBackoff(t *testing.T) {
+	o, taskRepo, agentRepo, runner := newTestOrchestrator(t)
+	agent := seedAgent(t, agentRepo, "Runner")
+	seedTask(t, taskRepo, "transient failure", agent, nil)
+
+	o.retryBackoff = func(int) time.Duration { return 500 * time.Millisecond }
+	runner.Behaviour = func(context.Context, *models.Agent, string) *cli.RunResult {
+		return &cli.RunResult{Success: false, Error: "boom"}
+	}
+
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+	if got := runner.CallCount(); got != 1 {
+		t.Fatalf("first attempt ran %d times, want 1", got)
+	}
+
+	// Scans inside the backoff window must not re-dispatch it.
+	for i := 0; i < 5; i++ {
+		o.dispatchAvailable()
+		waitForIdle(t, o)
+	}
+	if got := runner.CallCount(); got != 1 {
+		t.Fatalf("task re-ran during its backoff window: %d runs", got)
+	}
+
+	// Once the window has passed, the retry goes through.
+	time.Sleep(600 * time.Millisecond)
+	o.dispatchAvailable()
+	waitForIdle(t, o)
+	if got := runner.CallCount(); got != 2 {
+		t.Fatalf("after the backoff elapsed: %d runs, want 2", got)
+	}
+}
+
 // A task that always fails must stop after max_retries attempts. It used to run
 // forever: the orchestrator incremented the retry counter on its own copy of the
 // task, the database column stayed at zero, and every scan started another paid

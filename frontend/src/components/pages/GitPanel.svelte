@@ -203,9 +203,16 @@
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
         <span class="text-xs font-bold uppercase text-on-surface-variant">Diff</span>
         <div class="bg-black/90 p-3 rounded-lg font-mono text-[11px] max-h-56 overflow-auto leading-relaxed">
-          {#each (diffText || '').split('\n') as line}
-            <div class={line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-400' : line.startsWith('@@') ? 'text-cyan-300' : 'text-slate-300'}>{line || ' '}</div>
-          {/each}
+          <!-- The empty state is rendered here: the backend returns "" for a
+               clean tree (an in-band sentinel sentence used to be misread as
+               data by the commit paths). -->
+          {#if !(diffText || '').trim()}
+            <div class="text-slate-400 italic">Không có thay đổi nào trong workspace.</div>
+          {:else}
+            {#each (diffText || '').split('\n') as line}
+              <div class={line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-400' : line.startsWith('@@') ? 'text-cyan-300' : 'text-slate-300'}>{line || ' '}</div>
+            {/each}
+          {/if}
         </div>
       </div>
 

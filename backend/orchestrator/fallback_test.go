@@ -31,13 +31,13 @@ func TestFallbackHandler_GetFallbackModel(t *testing.T) {
 	handler := NewFallbackHandler()
 
 	agentClaude := &models.Agent{Provider: "claude_cli", Model: "claude-opus-4-8"}
-	p, m := handler.GetFallbackModel(agentClaude)
+	p, m := handler.GetFallbackModel(agentClaude, "")
 	if p != "anti_cli" || m != "gemini-3.6-flash-high" {
 		t.Errorf("expected anti_cli fallback, got provider=%s model=%s", p, m)
 	}
 
 	agentAnti := &models.Agent{Provider: "anti_cli", Model: "gemini-3.6-flash-high"}
-	p2, m2 := handler.GetFallbackModel(agentAnti)
+	p2, m2 := handler.GetFallbackModel(agentAnti, "")
 	if p2 != "claude_cli" || m2 != "claude-sonnet-4-5" {
 		t.Errorf("expected claude_cli fallback, got provider=%s model=%s", p2, m2)
 	}

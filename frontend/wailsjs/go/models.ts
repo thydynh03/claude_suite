@@ -347,6 +347,7 @@ export namespace cli {
 	    tokens_used: number;
 	    cost_usd: number;
 	    duration_sec: number;
+	    account_id: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -361,6 +362,7 @@ export namespace cli {
 	        this.tokens_used = source["tokens_used"];
 	        this.cost_usd = source["cost_usd"];
 	        this.duration_sec = source["duration_sec"];
+	        this.account_id = source["account_id"];
 	    }
 	}
 

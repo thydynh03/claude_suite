@@ -18,8 +18,17 @@ const components = import.meta.glob('/src/**/*.svelte', {
 // HTML comment must not fail the build.
 function markupOf(source: string): string {
   const lastScript = source.lastIndexOf('</script>')
-  const markup = lastScript === -1 ? source : source.slice(lastScript + '</script>'.length)
-  return markup.replace(/<!--[\s\S]*?-->/g, '')
+  let markup = lastScript === -1 ? source : source.slice(lastScript + '</script>'.length)
+  // To a fixpoint, not one pass: removing `<!-- -->` can splice a new `<!--`
+  // together out of the surrounding text, and the comment it opens would then
+  // hide (or expose) markup this check is supposed to see.
+  // (CodeQL js/incomplete-multi-character-sanitization)
+  let before: string
+  do {
+    before = markup
+    markup = markup.replace(/<!--[\s\S]*?-->/g, '')
+  } while (markup !== before)
+  return markup
 }
 
 describe('no untracked function calls drive the markup', () => {
@@ -33,6 +42,10 @@ describe('no untracked function calls drive the markup', () => {
     expect(markupOf('</script>{#each metricCards() as m}')).toMatch(OFFENDER)
     expect(markupOf('</script>{#each metricCards as m}')).not.toMatch(OFFENDER)
     expect(markupOf('<script>// {#each rows() as r}</script>')).not.toMatch(OFFENDER)
+    // A comment spliced together by the first removal pass is still a comment:
+    // one-pass stripping would leave `<!--{#each rows() as r}-->` behind and
+    // flag its contents as live markup.
+    expect(markupOf('</script><!<!-- x -->--{#each rows() as r}-->')).not.toMatch(OFFENDER)
   })
 
   it.each(files)('%s', (file) => {

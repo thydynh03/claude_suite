@@ -42,8 +42,13 @@
   ];
 
   async function handleExecutePlan() {
-    const started = await AppBindings.StartOrchestrator();
-    orchestratorRunning.set(started === true);
+    // StartOrchestrator() returns whether THIS call started it — false also
+    // means "already running". Either way the orchestrator is running now;
+    // writing the return value into the store flipped every indicator to
+    // 'stopped' while the pool kept dispatching, and made the TopNavBar
+    // toggle call Start again instead of Stop.
+    await AppBindings.StartOrchestrator();
+    orchestratorRunning.set(true);
   }
 </script>
 

@@ -98,7 +98,14 @@ func (w *WebhookService) Start(port int) error {
 	go func() {
 		_ = server.Serve(listener)
 		w.mu.Lock()
-		w.running = false
+		// Only OUR shutdown clears the flag. On a quick Stop-then-Start this
+		// goroutine can wake after the next server is already up; clearing
+		// unconditionally left that server listening while IsRunning said no
+		// and Stop refused to touch it — an invisible server holding the port
+		// until app restart.
+		if w.server == server {
+			w.running = false
+		}
 		w.mu.Unlock()
 	}()
 

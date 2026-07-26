@@ -34,6 +34,11 @@ type RunResult struct {
 	TokensUsed  int64   `json:"tokens_used"`
 	CostUSD     float64 `json:"cost_usd"`
 	DurationSec float64 `json:"duration_sec"`
+	// AccountID names the pool account the run actually used (anti_cli only).
+	// Rotation must punish this account, not whichever one the pool points at
+	// by the time the failure is handled — under parallel tasks those differ,
+	// and rotating positionally poisoned every healthy key in the pool.
+	AccountID string `json:"account_id"`
 }
 
 // LogCallback functions report real-time output line-by-line

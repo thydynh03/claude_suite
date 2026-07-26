@@ -21,6 +21,11 @@ import (
 // defaultMaxConcurrency is how many sub-agents may execute tasks in parallel.
 const defaultMaxConcurrency = 3
 
+// e2eTagRe matches every spelling runTask accepts as a browser-test tag. The
+// auto-fix task's title is cleaned with this exact set — detection and
+// stripping drifting apart is what made fix tasks re-run as browser tests.
+var e2eTagRe = regexp.MustCompile(`(?i)\[(?:e2e|web ?test)\]`)
+
 type Orchestrator struct {
 	ctx            context.Context
 	agentRepo      *database.AgentRepository
@@ -42,6 +47,13 @@ type Orchestrator struct {
 	running        bool
 	autoApproveAll bool
 	stopCh         chan struct{}
+	// loopDone is closed by the scan loop as it exits; Stop waits on it so a
+	// Stop-then-Start can never leave two loops scanning at once.
+	loopDone chan struct{}
+	// dispatchMu serialises dispatchAvailable: two interleaved scans both see
+	// the same backlog task before either registers it, and the second
+	// activeRuns write makes the first run unstoppable.
+	dispatchMu     sync.Mutex
 	mu             sync.Mutex
 	onLog          func(message, level string)
 	onApproval     func(taskID, agentName, taskTitle string)
@@ -53,7 +65,15 @@ type Orchestrator struct {
 	maxConcurrency int
 	runMu          sync.Mutex
 	activeRuns     map[string]context.CancelFunc // taskID -> cancel func for in-flight tasks
-	wg             sync.WaitGroup
+	// retryAt holds each failed task's earliest next attempt. In memory on
+	// purpose: the backoff is seconds-scale, so surviving a restart buys
+	// nothing, and a DB column would drag the Task model (and the Wails
+	// bindings) along with it.
+	retryAt map[string]time.Time
+	// retryBackoff computes the wait before attempt retries+1. A field so
+	// tests can zero it; production keeps the exponential default.
+	retryBackoff func(retries int) time.Duration
+	wg           sync.WaitGroup
 }
 
 // SetEventHandlers connects a frontend-neutral event sink. Wails runtime
@@ -95,6 +115,10 @@ func NewOrchestrator(
 		approvalChans:  make(map[string]chan bool),
 		maxConcurrency: defaultMaxConcurrency,
 		activeRuns:     make(map[string]context.CancelFunc),
+		retryAt:        make(map[string]time.Time),
+		retryBackoff: func(retries int) time.Duration {
+			return time.Duration(1<<uint(retries)) * time.Second
+		},
 	}
 }
 
@@ -165,15 +189,17 @@ func (o *Orchestrator) Start() bool {
 	}
 	o.running = true
 	o.stopCh = make(chan struct{})
-	// Hand this run's channel to the loop rather than letting it read the field.
-	// A later Start replaces the field, and an old loop still reading it is a data
-	// race — one the race detector catches on the Stop-then-Start path a user
-	// takes with two button presses.
+	o.loopDone = make(chan struct{})
+	// Hand this run's channels to the loop rather than letting it read the
+	// fields. A later Start replaces the fields, and an old loop still reading
+	// them is a data race — one the race detector catches on the
+	// Stop-then-Start path a user takes with two button presses.
 	stop := o.stopCh
+	done := o.loopDone
 	o.mu.Unlock()
 
 	o.emitLog(fmt.Sprintf("🚀 Orchestrator ACTIVE: Quét Backlog & phân công song song (tối đa %d agent).", o.GetMaxConcurrency()), "INFO")
-	go o.loop(stop)
+	go o.loop(stop, done)
 	return true
 }
 
@@ -187,6 +213,11 @@ func (o *Orchestrator) stopChannel() <-chan struct{} {
 }
 
 // Stop halts backlog scanning and reports whether this call is what stopped it.
+//
+// It waits for the scan loop to actually exit. Returning while a scan is
+// mid-flight let the next Start run a second loop beside it: both picked the
+// same backlog task, and the activeRuns overwrite left one paid run
+// unstoppable and invisible to slot accounting.
 func (o *Orchestrator) Stop() bool {
 	o.mu.Lock()
 	if !o.running {
@@ -195,7 +226,12 @@ func (o *Orchestrator) Stop() bool {
 	}
 	o.running = false
 	close(o.stopCh)
+	done := o.loopDone
 	o.mu.Unlock()
+
+	if done != nil {
+		<-done
+	}
 
 	o.emitLog("🛑 Orchestrator INACTIVE: Đã tạm dừng quét Backlog (task đang chạy vẫn tiếp tục).", "WARN")
 	return true
@@ -243,7 +279,8 @@ func (o *Orchestrator) GetAutoApproveAll() bool {
 	return o.autoApproveAll
 }
 
-func (o *Orchestrator) loop(stop <-chan struct{}) {
+func (o *Orchestrator) loop(stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
 	ticker := time.NewTicker(1500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -252,6 +289,14 @@ func (o *Orchestrator) loop(stop <-chan struct{}) {
 		case <-stop:
 			return
 		case <-ticker.C:
+			// A closed stop channel and a pending tick are both ready, and
+			// select picks randomly — without this check a stopped loop can
+			// run one more whole scan half the time.
+			select {
+			case <-stop:
+				return
+			default:
+			}
 			o.dispatchAvailable()
 		}
 	}
@@ -284,6 +329,11 @@ func (o *Orchestrator) baseCtx() context.Context {
 // dispatchAvailable launches as many dependency-satisfied tasks as there are
 // free concurrency slots, each in its own goroutine (true parallel execution).
 func (o *Orchestrator) dispatchAvailable() {
+	// One scan at a time, whoever calls: the pick→register sequence below is
+	// not atomic, and two interleaved scans dispatch the same task twice.
+	o.dispatchMu.Lock()
+	defer o.dispatchMu.Unlock()
+
 	// Nothing new starts once the day's ceiling is reached. Work already running
 	// is left to finish: killing an agent mid-edit would leave the workspace in a
 	// worse state than the cost of letting it end.
@@ -310,6 +360,16 @@ func (o *Orchestrator) dispatchAvailable() {
 			// Already in-flight (DB not yet reflecting running); stop to avoid a busy loop.
 			o.runMu.Unlock()
 			return
+		}
+		if notBefore, backing := o.retryAt[task.TaskID]; backing {
+			if time.Now().Before(notBefore) {
+				// Its backoff has not elapsed; let this scan tick pass. The
+				// wait is seconds, so anything queued behind it is delayed at
+				// most that long.
+				o.runMu.Unlock()
+				return
+			}
+			delete(o.retryAt, task.TaskID)
 		}
 		o.runMu.Unlock()
 
@@ -393,6 +453,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 	}
 
 	// Automated E2E Web Test Skill Auto-Binding — only for explicitly tagged tasks.
+	// Kept in lockstep with e2eTagRe: what this detects, the auto-fix title must strip.
 	titleLower := strings.ToLower(task.Title)
 	agentLower := strings.ToLower(agent.Name + " " + agent.Role)
 	isExplicitE2E := strings.Contains(titleLower, "[e2e]") || strings.Contains(titleLower, "[webtest]") ||
@@ -431,8 +492,13 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 					maxFix = 3
 				}
 				if task.RetryCount < maxFix {
+					// Strip every spelling the detection above accepts, not just
+					// the uppercase prefix: a surviving "[webtest]" tag makes the
+					// fix task run as another browser test, which fails the same
+					// way and spawns its own fix task — an unbounded chain of
+					// Chrome runs with no coding agent ever invoked.
 					fix := &models.Task{
-						Title:    "[CODE] Auto-fix lỗi E2E: " + strings.TrimPrefix(task.Title, "[E2E]"),
+						Title:    "[CODE] Auto-fix lỗi E2E: " + strings.TrimSpace(e2eTagRe.ReplaceAllString(task.Title, "")),
 						Priority: "high",
 						Status:   "backlog",
 						Prompt:   buildE2EFixPrompt(bRes),
@@ -585,7 +651,7 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 
 	// Smart fallback on quota exhaustion.
 	if !result.Success && o.fallback.IsQuotaExhausted(agent, result.Error) {
-		newProvider, newModel := o.fallback.GetFallbackModel(agent)
+		newProvider, newModel := o.fallback.GetFallbackModel(agent, result.AccountID)
 		agent.Provider = newProvider
 		agent.Model = newModel
 		_ = o.agentRepo.SetProviderModel(agent.AgentID, newProvider, newModel)
@@ -633,7 +699,14 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 			onLog(fmt.Sprintf("Could not record the failed attempt (%v); not retrying.", err), "ERROR")
 		}
 		if retries < maxRetries {
-			backoffSec := time.Duration(1<<uint(retries)) * time.Second
+			backoffSec := o.retryBackoff(retries)
+			// Record when the retry may actually run. The log below used to
+			// be the only place this duration existed — nothing waited, so
+			// every paid retry fired on the very next 1.5s scan, burning the
+			// whole retry budget before a transient error could clear.
+			o.runMu.Lock()
+			o.retryAt[task.TaskID] = time.Now().Add(backoffSec)
+			o.runMu.Unlock()
 			o.persistTask(task.TaskID, "trạng thái task", o.taskRepo.UpdateStatus(task.TaskID, "backlog", "", ""))
 			onLog(fmt.Sprintf("Failed '%s', retrying in %v (%d/%d)...", task.Title, backoffSec, retries, maxRetries), "WARN")
 		} else {

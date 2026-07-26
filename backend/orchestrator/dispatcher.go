@@ -58,7 +58,10 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 	roles := []RoleDef{
 		{RoleName: "Tech Lead & Architect", RoleDesc: "Technical Leadership & System Architecture", Keywords: []string{"TECHLEAD", "ARCH", "DESIGN", "SYSTEM", "STRUCTURE"}, Icon: "🏗️", System: "You are a Tech Lead & Principal Systems Architect."},
 		{RoleName: "Product Manager (PdM)", RoleDesc: "Product Strategy & Feature Definition", Keywords: []string{"PDM", "PRODUCT", "FEATURE", "ROADMAP"}, Icon: "🎯", System: "You are a Product Manager defining feature roadmap and product vision."},
-		{RoleName: "Project Manager (PM)", RoleDesc: "Agile Execution & Task Orchestration", Keywords: []string{"PM", "SPRINT", "AGILE", "TASK"}, Icon: "📊", System: "You are a Technical Project Manager tracking project milestones."},
+		// No "TASK" keyword here: in a Kanban app that word appears in most
+		// titles and prompts, and it routed coding work to a PM persona that
+		// wrote planning prose, changed no files, and was marked done green.
+		{RoleName: "Project Manager (PM)", RoleDesc: "Agile Execution & Task Orchestration", Keywords: []string{"PM", "SPRINT", "AGILE"}, Icon: "📊", System: "You are a Technical Project Manager tracking project milestones."},
 		{RoleName: "Business Analyst (BA)", RoleDesc: "Requirements Specification & Domain Analysis", Keywords: []string{"BA", "REQUIREMENT", "SPEC", "ANALYSIS"}, Icon: "📋", System: "You are a Senior Business Analyst specifying acceptance criteria."},
 		{RoleName: "Front-end Developer", RoleDesc: "UI/UX & Frontend Web Engineering", Keywords: []string{"FE", "FRONTEND", "UI", "UX", "HTML", "CSS", "SVELTE", "REACT"}, Icon: "🎨", System: "You are a Senior Frontend Developer specializing in UI/UX web applications."},
 		{RoleName: "Back-end Developer", RoleDesc: "Core Business Logic & API/Database Engineering", Keywords: []string{"BE", "BACKEND", "API", "DB", "DATABASE", "GO", "NODE", "SQL", "CODE"}, Icon: "⚙️", System: "You are a Senior Backend Engineer specializing in core logic, APIs, and databases."},
@@ -67,9 +70,15 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 		{RoleName: "Web E2E Tester (Chrome CDP)", RoleDesc: "Automated Web Testing & Screenshot Verification", Keywords: []string{"E2E", "WEB TEST", "BROWSER", "UI TEST", "SCREENSHOT", "CHROME", "CDP", "PLAYWRIGHT"}, Icon: "language", System: "You are an Automated Web E2E Testing Agent controlling Chrome CDP to navigate web apps, extract DOM, and verify UI screenshot proofs."},
 	}
 
-	for _, r := range roles {
-		for _, kw := range r.Keywords {
-			if keywordMatch(tagStr, kw) {
+	matchRole := func(source string) *models.Agent {
+		if strings.TrimSpace(source) == "" {
+			return nil
+		}
+		for _, r := range roles {
+			for _, kw := range r.Keywords {
+				if !keywordMatch(source, kw) {
+					continue
+				}
 				// Search for existing matching agent
 				for i, a := range agents {
 					if keywordMatch(strings.ToUpper(a.Name), kw) || keywordMatch(strings.ToUpper(a.Role), kw) || strings.EqualFold(a.Name, r.RoleName) {
@@ -89,6 +98,18 @@ func (d *AgentDispatcher) FindMatchingAgent(task *models.Task, agents []models.A
 				}
 			}
 		}
+		return nil
+	}
+
+	// Two passes: the bracketed tags someone wrote deliberately outrank a
+	// keyword that merely occurs in prose. "[UI] Sửa task inspector" is a
+	// Front-end task even though roles scanned earlier also match words in
+	// the full text.
+	if agent := matchRole(strings.ToUpper(strings.Join(tags, " "))); agent != nil {
+		return agent
+	}
+	if agent := matchRole(tagStr); agent != nil {
+		return agent
 	}
 
 	if len(agents) > 0 {

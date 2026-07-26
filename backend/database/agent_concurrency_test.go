@@ -67,6 +67,33 @@ func TestUpdateFromAStaleCopyOverwritesOtherChanges(t *testing.T) {
 	}
 }
 
+// Saving a persona edit while tasks run must not roll the live counters back
+// to what the settings page happened to load: Update writes the profile, and
+// only the profile.
+func TestUpdateLeavesLiveStateAlone(t *testing.T) {
+	repo, agent := agentRepoWithOne(t)
+
+	pageCopy := *agent // what the settings page holds, loaded before any run
+
+	// A task finishes while the user is typing.
+	if err := repo.CompleteTask(agent.AgentID); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	pageCopy.System = "edited persona"
+	if err := repo.Update(&pageCopy); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	got := reload(t, repo)
+	if got.System != "edited persona" {
+		t.Errorf("system = %q, the profile edit was lost", got.System)
+	}
+	if got.TasksDone != 1 {
+		t.Errorf("tasks_done = %d, the save rolled live counters back", got.TasksDone)
+	}
+}
+
 // SetProviderModel records the fallback switch on its own, so a task finishing
 // afterwards cannot put the exhausted provider back.
 func TestSetProviderModelSurvivesALaterStatusWrite(t *testing.T) {

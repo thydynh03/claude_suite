@@ -455,9 +455,12 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 
 		// Best effort: a frame that fails to capture is not worth failing a step
 		// over, and the log already says what the agent is doing.
+		// cdpCtx, not ctx: chromedp.Run on the plain task context returns
+		// ErrInvalidContext unconditionally, which this guard then swallowed —
+		// the live-frame feature was wired end to end and never fired once.
 		if onFrame != nil {
 			var frame []byte
-			if err := chromedp.Run(ctx, chromedp.CaptureScreenshot(&frame)); err == nil && len(frame) > 0 {
+			if err := chromedp.Run(cdpCtx, chromedp.CaptureScreenshot(&frame)); err == nil && len(frame) > 0 {
 				onFrame(step, "data:image/png;base64,"+base64.StdEncoding.EncodeToString(frame))
 			}
 		}

@@ -133,12 +133,28 @@ func (s *SchedulerService) load() error {
 		return fmt.Errorf("parse scheduled jobs: %w", err)
 	}
 
+	// Migration for files written before the Enabled field existed, decided by
+	// whether the key is present at all — not by inferring from values. The
+	// old value-based heuristic ran on every tick and matched a just-fired
+	// one-shot job (Enabled freshly false, run not yet recorded), re-arming
+	// and re-firing it once per second until the first run finished; it also
+	// silently un-paused any never-run job the user had switched off.
+	var keyPresence []struct {
+		Enabled *bool `json:"enabled"`
+	}
+	_ = json.Unmarshal(data, &keyPresence)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range stored {
 		job := stored[i]
 		if job.ID == "" {
 			continue
+		}
+		if i < len(keyPresence) && keyPresence[i].Enabled == nil {
+			// Legacy entry with no enabled key: treat as on rather than
+			// silently never running it.
+			job.Enabled = true
 		}
 		s.jobs[job.ID] = &job
 	}
@@ -241,11 +257,8 @@ func (s *SchedulerService) checkJobs() {
 	fired := false
 
 	for id, job := range s.jobs {
-		if job.Enabled == false && job.RunCount == 0 && job.LastStatus == "" {
-			// Jobs written before Enabled existed default to false on load; treat
-			// an untouched one as on rather than silently never running it.
-			job.Enabled = true
-		}
+		// No migration here: legacy files are handled once, in load(), by key
+		// presence. Doing it per-tick re-armed one-shot jobs mid-run.
 		if !job.Enabled || !now.After(job.TargetTime) {
 			continue
 		}

@@ -485,12 +485,7 @@ func (a *App) DecomposePlan(requirement string) ([]models.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	for i := range tasks {
-		_ = a.taskRepo.Create(&tasks[i])
-	}
-
-	return a.taskRepo.GetAll()
+	return a.persistDecomposedPlan(tasks)
 }
 
 func (a *App) DecomposePlanWithProvider(requirement string, provider string, model string) ([]models.Task, error) {
@@ -498,11 +493,21 @@ func (a *App) DecomposePlanWithProvider(requirement string, provider string, mod
 	if err != nil {
 		return nil, err
 	}
+	return a.persistDecomposedPlan(tasks)
+}
 
+// persistDecomposedPlan writes a decomposed plan to the board. Create errors
+// used to be discarded: a SQLITE_BUSY during the loop dropped tasks from the
+// plan while the UI announced it queued, and with no board_updated emitted
+// the board did not even refresh to show what little had landed.
+func (a *App) persistDecomposedPlan(tasks []models.Task) ([]models.Task, error) {
 	for i := range tasks {
-		_ = a.taskRepo.Create(&tasks[i])
+		if err := a.taskRepo.Create(&tasks[i]); err != nil {
+			a.emitBoardUpdated()
+			return nil, fmt.Errorf("lưu task %q thất bại: %w", tasks[i].Title, err)
+		}
 	}
-
+	a.emitBoardUpdated()
 	return a.taskRepo.GetAll()
 }
 
@@ -521,7 +526,20 @@ func (a *App) ToggleWebhook(port int) bool {
 		_ = a.webhookService.Stop()
 		return false
 	}
-	_ = a.webhookService.Start(port)
+	// The service binds synchronously precisely so a taken port surfaces
+	// here; discarding the error re-created the "UI shows listening while
+	// nothing is bound" bug the service layer fixed — and drifted from the
+	// TUI, which reports the failure.
+	if err := a.webhookService.Start(port); err != nil {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+				"message": "❌ Webhook không mở được: " + err.Error(),
+				"level":   "ERROR",
+				"time":    time.Now().Format("15:04:05"),
+			})
+		}
+		return false
+	}
 	return true
 }
 
@@ -542,7 +560,32 @@ type UpdateResponse struct {
 	Error   string `json:"error"`
 }
 
+// updateBlockedByRunningTasks refuses to let the updater exit the process
+// while sub-agents are mid-task. The agents are separate processes that
+// survive os.Exit as orphans, still editing the workspace; on relaunch
+// ResetRunningTasks would then dispatch a second agent onto the same
+// workspace beside the orphan.
+func (a *App) updateBlockedByRunningTasks() string {
+	tasks, err := a.taskRepo.GetAll()
+	if err != nil {
+		return ""
+	}
+	running := 0
+	for _, t := range tasks {
+		if t.Status == "running" {
+			running++
+		}
+	}
+	if running > 0 {
+		return fmt.Sprintf("Đang có %d task chạy — cập nhật sẽ đóng app và bỏ rơi agent giữa chừng. Dừng hoặc chờ các task xong rồi cập nhật.", running)
+	}
+	return ""
+}
+
 func (a *App) DownloadAndUpdate(downloadUrl string) UpdateResponse {
+	if msg := a.updateBlockedByRunningTasks(); msg != "" {
+		return UpdateResponse{Success: false, Error: msg}
+	}
 	err := a.updaterService.DownloadAndInstall(downloadUrl, nil)
 	if err != nil {
 		return UpdateResponse{Success: false, Error: err.Error()}
@@ -551,6 +594,9 @@ func (a *App) DownloadAndUpdate(downloadUrl string) UpdateResponse {
 }
 
 func (a *App) DownloadAndInstallUpdate(url string) error {
+	if msg := a.updateBlockedByRunningTasks(); msg != "" {
+		return fmt.Errorf("%s", msg)
+	}
 	return a.updaterService.DownloadAndInstall(url, func(downloaded, total int64) {
 		if a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, "update_progress", map[string]int64{
@@ -620,7 +666,7 @@ func (a *App) GenerateCommitMessage() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(diff) == "" || strings.Contains(diff, "Không có thay đổi") {
+	if strings.TrimSpace(diff) == "" {
 		return "", fmt.Errorf("không có thay đổi để tạo commit message")
 	}
 	diff = textutil.Truncate(diff, 12000, "\n... [diff truncated]")
@@ -1061,8 +1107,10 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 		return ""
 	}
 
+	state := ""
 	if a.oauthListener != nil {
-		_ = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, accessToken, refreshToken string) {
+		var err error
+		state, err = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, accessToken, refreshToken string) {
 			if refreshToken != "" {
 				cli.GlobalAntiPool.AddRefreshAccount(email, refreshToken)
 				a.saveAntiKeys()
@@ -1079,10 +1127,23 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 				})
 			}
 		})
+		if err != nil {
+			// A dead listener means Google's redirect lands on nothing. Say
+			// so instead of opening a browser flow that cannot complete.
+			if a.ctx != nil {
+				wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+					"message": "❌ Không mở được cổng đăng nhập Google: " + err.Error(),
+					"level":   "ERROR",
+					"time":    time.Now().Format("15:04:05"),
+				})
+			}
+			return ""
+		}
 	}
 
-	// Added access_type=offline and prompt=consent to ensure Google returns a refresh_token
-	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&access_type=offline&prompt=consent"
+	// access_type=offline + prompt=consent so Google returns a refresh_token;
+	// state ties the callback to this click — the listener rejects anything else.
+	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&access_type=offline&prompt=consent&state=" + state
 	if a.ctx != nil {
 		wailsRuntime.BrowserOpenURL(a.ctx, authURL)
 	}
@@ -1367,7 +1428,7 @@ func (a *App) runScheduledCommit() error {
 	if err != nil {
 		return fmt.Errorf("read diff: %w", err)
 	}
-	if strings.TrimSpace(diff) == "" || strings.Contains(diff, "Không có thay đổi") {
+	if strings.TrimSpace(diff) == "" {
 		return nil // nothing to commit is a success, not a failure
 	}
 
@@ -1495,6 +1556,15 @@ func (a *App) RefreshAccountTokens() (refreshed int, failed int) {
 		return 0, 0
 	}
 
+	// Missing OAuth creds is OUR configuration state, not Google's verdict on
+	// the tokens. Disabling on it wiped every imported account before Google
+	// was ever contacted — persisted, and nothing re-enables disabled
+	// accounts. WarmupAntiAccountKeys already guards this identically.
+	if clientID == "" || clientSecret == "" {
+		a.emitLog("⚠️ Chưa cấu hình GCP OAuth (CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET hoặc gcp_oauth.json) — bỏ qua làm mới token, không tài khoản nào bị vô hiệu hoá.", "WARN")
+		return 0, len(pending)
+	}
+
 	for id, refreshToken := range pending {
 		token, err := services.RefreshGoogleAccessToken(context.Background(), clientID, clientSecret, refreshToken)
 		if err != nil {
@@ -1595,6 +1665,14 @@ func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interf
 			"label":   t.Label,
 			"host":    t.Host,
 			"command": claims.JoinCommand(t.Host, id, token),
+			// For the teammate who never installed the app: a one-line
+			// PowerShell bootstrap, an MCP registration that needs no
+			// download at all, and a paste-into-any-AI prompt carrying the
+			// whole decision tree (has app → use it; no app → ask to
+			// download, else MCP).
+			"bootstrap": claims.BootstrapJoinCommand(t.Host, id, token),
+			"mcp":       claims.MCPJoinCommand(t.Host, id, token),
+			"prompt":    claims.AgentJoinPrompt(t.Host, id, token, subject),
 		})
 	}
 

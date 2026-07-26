@@ -52,7 +52,7 @@ func TestGetCurrentAccountReturnsNilWhenPoolIsEmpty(t *testing.T) {
 func TestRotateNextKeyMovesToTheNextAccount(t *testing.T) {
 	pool := poolWith(active("first"), active("second"))
 
-	if name := pool.RotateNextKey(); name != "second" {
+	if name := pool.RotateNextKey(""); name != "second" {
 		t.Errorf("rotated to %q, want %q", name, "second")
 	}
 
@@ -70,7 +70,7 @@ func TestRotateNextKeyMovesToTheNextAccount(t *testing.T) {
 func TestRotateNextKeyNeverWakesADisabledAccount(t *testing.T) {
 	pool := poolWith(active("first"), disabled("second"), active("third"))
 
-	if name := pool.RotateNextKey(); name != "third" {
+	if name := pool.RotateNextKey(""); name != "third" {
 		t.Errorf("rotated to %q, want %q — the disabled account must be skipped", name, "third")
 	}
 
@@ -84,13 +84,13 @@ func TestRotateNextKeyNeverWakesADisabledAccount(t *testing.T) {
 func TestRotateNextKeyReportsNothingWhenEveryOtherAccountIsDisabled(t *testing.T) {
 	pool := poolWith(active("first"), disabled("second"))
 
-	if name := pool.RotateNextKey(); name != "" {
+	if name := pool.RotateNextKey(""); name != "" {
 		t.Errorf("rotated to %q, want no rotation", name)
 	}
 }
 
 func TestRotateNextKeyNeedsMoreThanOneAccount(t *testing.T) {
-	if name := poolWith(active("only")).RotateNextKey(); name != "" {
+	if name := poolWith(active("only")).RotateNextKey(""); name != "" {
 		t.Errorf("rotated to %q with a single account, want no rotation", name)
 	}
 }
@@ -100,7 +100,7 @@ func TestRotateNextKeyNeedsMoreThanOneAccount(t *testing.T) {
 func TestRotateNextKeyRetriesARateLimitedAccount(t *testing.T) {
 	pool := poolWith(active("first"), AntiAccountKey{ID: "second", Name: "second", Status: "rate_limited_429"})
 
-	if name := pool.RotateNextKey(); name != "second" {
+	if name := pool.RotateNextKey(""); name != "second" {
 		t.Fatalf("rotated to %q, want second", name)
 	}
 	for _, k := range pool.GetKeys() {

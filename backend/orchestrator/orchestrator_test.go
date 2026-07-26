@@ -39,6 +39,10 @@ func newTestOrchestrator(t *testing.T) (*Orchestrator, *database.TaskRepository,
 	// approval, not the git/build side effects.
 	o.SetWorkspaceDir("")
 	o.SetVerifyBuild(false)
+	// Zero backoff: lifecycle tests drive scans directly and assert on the
+	// retry *count*, not the pacing. TestFailedTaskWaitsOutItsBackoff covers
+	// the pacing with a real duration.
+	o.retryBackoff = func(int) time.Duration { return 0 }
 
 	return o, taskRepo, agentRepo, runner
 }

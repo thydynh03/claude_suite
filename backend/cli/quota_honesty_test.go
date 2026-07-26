@@ -49,7 +49,7 @@ func TestUsageCountsWhatTheAppActuallyObserves(t *testing.T) {
 		t.Error("last_request_at not recorded")
 	}
 
-	pool.RotateNextKey()
+	pool.RotateNextKey("")
 	first := pool.GetKeys()[0]
 	if first.Usage.RateLimitHits != 1 {
 		t.Errorf("rate_limit_hits = %d, want 1", first.Usage.RateLimitHits)

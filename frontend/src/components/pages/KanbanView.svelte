@@ -825,6 +825,9 @@
           <div class="bg-black/90 p-3 rounded-xl border border-slate-800 font-mono text-[11px] max-h-60 overflow-auto leading-relaxed">
             {#if loadingDiff}
               <span class="text-slate-400 italic">Đang tải diff...</span>
+            {:else if !diffText.trim()}
+              <!-- Backend returns "" for a clean tree; the text lives here now. -->
+              <span class="text-slate-400 italic">Không có thay đổi nào trong workspace.</span>
             {:else}
               {#each diffText.split('\n') as line}
                 <div class={line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-400' : line.startsWith('@@') ? 'text-cyan-300' : 'text-slate-300'}>{line || ' '}</div>

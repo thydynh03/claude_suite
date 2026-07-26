@@ -153,7 +153,18 @@ func (s *MCPStore) Add(server MCPServer) (MCPServer, error) {
 	defer s.mu.Unlock()
 
 	if server.ID == "" {
-		server.ID = fmt.Sprintf("mcp-%d", len(s.servers)+1)
+		// Max existing suffix + 1, not len+1: after any removal the length
+		// walks back over IDs still in use, the duplicate check below then
+		// matched forever, and Add was wedged with a duplicate-NAME error for
+		// a name that did not exist.
+		next := 1
+		for _, existing := range s.servers {
+			var n int
+			if _, err := fmt.Sscanf(existing.ID, "mcp-%d", &n); err == nil && n >= next {
+				next = n + 1
+			}
+		}
+		server.ID = fmt.Sprintf("mcp-%d", next)
 	}
 	for _, existing := range s.servers {
 		if existing.ID == server.ID || strings.EqualFold(existing.Name, server.Name) {

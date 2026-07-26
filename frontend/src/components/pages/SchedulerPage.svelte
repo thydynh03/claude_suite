@@ -60,8 +60,11 @@
     refreshJobs();
     const runtime = (window as any)?.runtime;
     if (!runtime?.EventsOn) return;
-    runtime.EventsOn('scheduler_updated', refreshJobs);
-    runtime.EventsOn('scheduler_log', (data: any) => {
+    // Cancel functions returned so the listeners die with the page: left
+    // behind, every past visit's closure re-fetched jobs into a dead
+    // component on each scheduler event.
+    const offUpdated = runtime.EventsOn('scheduler_updated', refreshJobs);
+    const offLog = runtime.EventsOn('scheduler_log', (data: any) => {
       if (!data) return;
       logs = [
         ...logs.slice(-200),
@@ -72,6 +75,10 @@
         },
       ];
     });
+    return () => {
+      offUpdated?.();
+      offLog?.();
+    };
   });
 
   async function refreshJobs() {

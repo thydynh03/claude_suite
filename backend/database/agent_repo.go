@@ -106,10 +106,16 @@ func (r *AgentRepository) Create(a *models.Agent) error {
 	return err
 }
 
+// Update writes the agent's PROFILE — the fields a person edits. Live state
+// (status, tasks_done, tokens_used, last_task, last_error, session_id) is
+// deliberately not here: the caller's copy of those is as old as the page it
+// was loaded into, and saving a persona edit while a task ran used to roll
+// the counters back to page-load values. Live state goes through the narrow
+// updaters below, which is the whole reason they exist.
 func (r *AgentRepository) Update(a *models.Agent) error {
 	a.UpdatedAt = time.Now()
-	query := `UPDATE agents SET name=?, role=?, provider=?, model=?, system=?, icon=?, session_id=?, status=?, tasks_done=?, last_task=?, last_error=?, notes=?, tokens_used=?, token_limit=?, updated_at=? WHERE agent_id=?`
-	_, err := r.db.Exec(query, a.Name, a.Role, a.Provider, a.Model, a.System, a.Icon, a.SessionID, a.Status, a.TasksDone, a.LastTask, a.LastError, a.Notes, a.TokensUsed, a.TokenLimit, a.UpdatedAt, a.AgentID)
+	query := `UPDATE agents SET name=?, role=?, provider=?, model=?, system=?, icon=?, notes=?, token_limit=?, updated_at=? WHERE agent_id=?`
+	_, err := r.db.Exec(query, a.Name, a.Role, a.Provider, a.Model, a.System, a.Icon, a.Notes, a.TokenLimit, a.UpdatedAt, a.AgentID)
 	return err
 }
 

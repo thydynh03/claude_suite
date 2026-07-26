@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog, addToast } from '../../lib/stores/appState';
 
@@ -65,7 +65,51 @@
     }
   }
 
+  // Cancel functions for the Wails listeners. Registered synchronously and
+  // torn down in onDestroy: this page is destroyed on every tab switch, and
+  // the old async-onMount registration leaked every visit's closures — each
+  // appending to liveLogs of a dead component forever (a cleanup returned
+  // from an async onMount is ignored by Svelte, hence onDestroy).
+  let offBrowserEvents: (() => void)[] = [];
+
   onMount(async () => {
+    if ((window as any)?.runtime?.EventsOn) {
+      const on = (window as any).runtime.EventsOn;
+      offBrowserEvents = [
+        on('browser_agent_log', (data: any) => {
+          if (data?.log) {
+            // Bounded like the frame below: an unbounded live log grew with
+            // every step of every run for the app's lifetime.
+            liveLogs = [...liveLogs, `[${data.time || ''}] ${data.log}`].slice(-500);
+          }
+        }),
+        // A frame per step. Only the latest is kept: this is a live view, not a
+        // recording, and holding every frame of a 20-step run in memory as base64
+        // PNGs is megabytes for something nobody scrolls back through.
+        on('browser_agent_frame', (data: any) => {
+          if (!data?.image) return;
+          liveFrame = data.image;
+          liveFrameStep = data.step || 0;
+        }),
+        on('browser_ask_user', (data: any) => {
+          if (!data?.id) return;
+          pendingAsk = {
+            id: data.id,
+            question: data.question || '',
+            options: Array.isArray(data.options) ? data.options : [],
+            allowOther: data.allow_other !== false,
+          };
+          otherAnswer = '';
+        }),
+        on('browser_ask_close', (data: any) => {
+          if (pendingAsk && data?.id === pendingAsk.id) {
+            pendingAsk = null;
+            otherAnswer = '';
+          }
+        }),
+      ];
+    }
+
     try {
       if ((AppBindings as any).ListRoles) {
         roles = await (AppBindings as any).ListRoles() || [];
@@ -76,41 +120,11 @@
     } catch (e: any) {
       console.warn('Failed to fetch roles:', e);
     }
+  });
 
-    if ((window as any)?.runtime?.EventsOn) {
-      (window as any).runtime.EventsOn('browser_agent_log', (data: any) => {
-        if (data?.log) {
-          liveLogs = [...liveLogs, `[${data.time || ''}] ${data.log}`];
-        }
-      });
-
-      // A frame per step. Only the latest is kept: this is a live view, not a
-      // recording, and holding every frame of a 20-step run in memory as base64
-      // PNGs is megabytes for something nobody scrolls back through.
-      (window as any).runtime.EventsOn('browser_agent_frame', (data: any) => {
-        if (!data?.image) return;
-        liveFrame = data.image;
-        liveFrameStep = data.step || 0;
-      });
-
-      (window as any).runtime.EventsOn('browser_ask_user', (data: any) => {
-        if (!data?.id) return;
-        pendingAsk = {
-          id: data.id,
-          question: data.question || '',
-          options: Array.isArray(data.options) ? data.options : [],
-          allowOther: data.allow_other !== false,
-        };
-        otherAnswer = '';
-      });
-
-      (window as any).runtime.EventsOn('browser_ask_close', (data: any) => {
-        if (pendingAsk && data?.id === pendingAsk.id) {
-          pendingAsk = null;
-          otherAnswer = '';
-        }
-      });
-    }
+  onDestroy(() => {
+    for (const off of offBrowserEvents) off?.();
+    offBrowserEvents = [];
   });
 
   let isOpeningChrome = false;

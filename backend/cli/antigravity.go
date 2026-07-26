@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -347,7 +346,17 @@ func (p *AccountKeyPool) GetCurrentKey() string {
 	return acc.APIKey
 }
 
-func (p *AccountKeyPool) RotateNextKey() string {
+// RotateNextKey marks the account that hit the limit and moves the pool to
+// the next usable one.
+//
+// fromAccountID is the account the failing run actually used. Tasks run in
+// parallel and share this pool, so by the time one failure is handled another
+// may have rotated already — punishing p.current positionally then marked a
+// healthy account rate-limited and, a rotation later, woke the genuinely
+// exhausted one back up. When the pool has already moved off fromAccountID,
+// this is a no-op that reports the account currently in use. An empty
+// fromAccountID keeps the old positional behaviour.
+func (p *AccountKeyPool) RotateNextKey(fromAccountID string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.keys) <= 1 {
@@ -355,6 +364,9 @@ func (p *AccountKeyPool) RotateNextKey() string {
 	}
 
 	current := p.current % len(p.keys)
+	if fromAccountID != "" && p.keys[current].ID != fromAccountID {
+		return p.keys[current].Name
+	}
 	p.keys[current].Status = "rate_limited_429"
 	// Counted, because it is one of the few things about an account's limits this
 	// app observes first-hand. The quota table shows it in place of the invented
@@ -409,7 +421,7 @@ func (a *AntigravityCLI) executeWithRotation(ctx context.Context, model, prompt,
 	if !res.Success && attempt < 3 {
 		errLower := strings.ToLower(res.Error)
 		if isRotatableAuthError(errLower) {
-			nextKeyName := GlobalAntiPool.RotateNextKey()
+			nextKeyName := GlobalAntiPool.RotateNextKey(res.AccountID)
 			if nextKeyName != "" {
 				if onLog != nil {
 					onLog(fmt.Sprintf("⚠️ Anti CLI gặp lỗi 429 Rate Limit / Quota. Tự động xoay vòng sang %s và thử lại ngay lập tức...", nextKeyName), "WARN")
@@ -455,6 +467,12 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 	)
 
 	acc := GlobalAntiPool.GetCurrentAccount()
+	// Remembered so the failure path can rotate the account this run actually
+	// used, not whichever one the pool points at by then.
+	usedAccountID := ""
+	if acc != nil {
+		usedAccountID = acc.ID
+	}
 	if acc != nil {
 		if acc.Type == "oauth_token" && acc.OAuthToken != "" {
 			env = append(env,
@@ -491,23 +509,23 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 
 	go func() {
 		defer wg.Done()
-		scanner := bufio.NewScanner(io.TeeReader(stdoutPipe, &stdoutBuf))
-		for scanner.Scan() {
-			line := scanner.Text()
+		if err := forEachLine(io.TeeReader(stdoutPipe, &stdoutBuf), func(line string) {
 			if onLog != nil {
 				onLog(line, classifyAntiLogLine(line))
 			}
+		}); err != nil && onLog != nil {
+			onLog(fmt.Sprintf("stdout stream error: %v", err), "WARN")
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		scanner := bufio.NewScanner(io.TeeReader(stderrPipe, &stderrBuf))
-		for scanner.Scan() {
-			line := scanner.Text()
+		if err := forEachLine(io.TeeReader(stderrPipe, &stderrBuf), func(line string) {
 			if onLog != nil {
 				onLog(line, "WARN")
 			}
+		}); err != nil && onLog != nil {
+			onLog(fmt.Sprintf("stderr stream error: %v", err), "WARN")
 		}
 	}()
 
@@ -518,12 +536,25 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 	outStr := stdoutBuf.String()
 	errStr := stderrBuf.String()
 
+	// Same rule as the Claude runner: a deadline kill is a failure even with
+	// partial stdout, or the half-done task gets marked done.
+	if ctx.Err() == context.DeadlineExceeded {
+		return &RunResult{
+			Success:     false,
+			Output:      outStr,
+			Error:       fmt.Sprintf("run bị dừng vì quá TaskTimeout — công việc dở dang, output một phần được giữ lại. %s", errStr),
+			DurationSec: duration,
+			AccountID:   usedAccountID,
+		}
+	}
+
 	if err != nil && outStr == "" {
 		return &RunResult{
 			Success:     false,
 			Output:      outStr,
 			Error:       fmt.Sprintf("%v: %s", err, errStr),
 			DurationSec: duration,
+			AccountID:   usedAccountID,
 		}
 	}
 
@@ -540,6 +571,7 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 		TokensUsed:  tokens,
 		CostUSD:     cost,
 		DurationSec: duration,
+		AccountID:   usedAccountID,
 	}
 }
 
@@ -683,13 +715,15 @@ func (p *AccountKeyPool) DisableKey(id, reason string) bool {
 	return false
 }
 
+// rotatableErrRe matches quota/auth failures on word boundaries. Bare
+// substring matching here burned accounts on innocent text: "limit" matched
+// "context limit exceeded" (another account fares no better against a long
+// prompt) and "429" matched any number containing it, each costing an account
+// mark plus three paid retries.
+var rotatableErrRe = regexp.MustCompile(`(?i)\b(?:429|401|rate.?limit(?:ed)?|quota|too many requests|exhausted|unauthorized|invalid_grant|token expired|daily limit)\b`)
+
 // isRotatableAuthError reports whether a failure is one another account might
 // survive: an exhausted quota, or an access token that expired mid-run.
 func isRotatableAuthError(errLower string) bool {
-	for _, sign := range []string{"429", "quota", "limit", "exhausted", "401", "unauthorized", "invalid_grant", "token expired"} {
-		if strings.Contains(errLower, sign) {
-			return true
-		}
-	}
-	return false
+	return rotatableErrRe.MatchString(errLower)
 }
