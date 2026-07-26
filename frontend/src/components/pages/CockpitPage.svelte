@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { workspaceFolder, logs, addLog, tasksStore, agentsStore, orchestratorRunning } from '../../lib/stores/appState';
+  import { workspaceFolder, logs, addLog, addToast, tasksStore, agentsStore, orchestratorRunning } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   // Aggregated live metrics derived from real task/agent state.
@@ -34,6 +34,10 @@
   $: activeAgent = selectedModel.includes('gemini') ? 'Antigravity (Gemini 3.6 Flash)' : selectedModel.includes('opus') ? 'Claude 4.8 Opus' : 'Claude 4.5 Sonnet';
   let topTab = 'active'; // 'active' | 'history'
   let cliOutput = '';
+  // Lines the CLI emits while it is still working. Kept apart from cliOutput so
+  // the final answer replaces the progress rather than being appended to it.
+  let liveLines: string[] = [];
+  let unoffQuickLog: any;
   let showCLIConsole = false;
 
   let showFileTreeModal = false;
@@ -58,7 +62,25 @@
     selectedFiles = [];
   }
 
-  onMount(async () => {
+  onMount(() => {
+    // Registered before any await: onMount captures its cleanup closure
+    // synchronously, so a listener attached after one would leak.
+    if ((window as any)?.runtime?.EventsOn) {
+      unoffQuickLog = (window as any).runtime.EventsOn('quick_cli_log', (data: any) => {
+        if (!isRunning) return;
+        const line = `${data?.time || ''} ${data?.message || ''}`.trim();
+        // Bounded: a long run can emit thousands of lines and the panel only
+        // shows the tail anyway.
+        liveLines = [...liveLines.slice(-300), line];
+      });
+    }
+    initCockpit();
+    return () => {
+      if (typeof unoffQuickLog === 'function') unoffQuickLog();
+    };
+  });
+
+  async function initCockpit() {
     try {
       if ((window as any)?.go?.main?.App) {
         workspaceFiles = await AppBindings.ScanWorkspaceFiles();
@@ -69,7 +91,7 @@
     } catch (e) {
       console.error(e);
     }
-  });
+  }
 
   async function handleToggleShowCLIConsole() {
     try {
@@ -91,9 +113,10 @@
   }
 
   async function handleRunAuto() {
-    if (!promptInput.trim()) return;
+    if (!promptInput.trim() || isRunning) return;
     isRunning = true;
-    cliOutput = '⏳ Đang kết nối Agent và thực thi CLI...';
+    liveLines = [];
+    cliOutput = '';
     addLog(`Initiated execution sequence for: "${promptInput.slice(0, 40)}..."`, 'SEND');
 
     try {
@@ -101,13 +124,16 @@
       if (res && res.success) {
         cliOutput = res.output;
         addLog(`Execution finished successfully (${res.duration_sec.toFixed(1)}s)`, 'SUCCESS');
+        addToast(`Chạy xong sau ${res.duration_sec.toFixed(1)}s.`, 'SUCCESS');
       } else if (res) {
-        cliOutput = '❌ Lỗi thực thi: ' + res.error;
+        cliOutput = 'Lỗi thực thi: ' + res.error;
         addLog(`Execution failed: ${res.error}`, 'ERROR');
+        addToast(`Thực thi thất bại: ${res.error}`, 'ERROR');
       }
     } catch (e) {
-      cliOutput = '❌ Lỗi kết nối: ' + e;
+      cliOutput = 'Lỗi kết nối: ' + e;
       addLog(`Error executing CLI: ${e}`, 'ERROR');
+      addToast(`Không kết nối được CLI: ${e}`, 'ERROR');
     } finally {
       isRunning = false;
     }
@@ -361,6 +387,25 @@
 
         <!-- Real-time Log Container & CLI Output -->
         <div class="flex-1 font-mono text-xs p-4 overflow-y-auto bg-slate-900 text-slate-100 space-y-3">
+          <!-- What the CLI is doing right now. Without this the panel stayed
+               empty for the whole run and only filled in at the end, so a prompt
+               that takes minutes looked like a button that does nothing. -->
+          {#if isRunning}
+            <div class="p-3 bg-slate-800/90 border border-slate-700 rounded-lg shadow-inner">
+              <div class="text-[10px] text-slate-400 uppercase font-bold mb-1 pb-1 border-b border-slate-700 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                Agent đang chạy ({selectedModel})…
+              </div>
+              {#if liveLines.length === 0}
+                <div class="text-slate-400">Đang khởi động CLI…</div>
+              {:else}
+                {#each liveLines.slice(-40) as line}
+                  <div class="text-slate-300 whitespace-pre-wrap break-all">{line}</div>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+
           {#if cliOutput}
             <div class="p-3 bg-slate-800/90 border border-slate-700 rounded-lg text-emerald-400 whitespace-pre-wrap font-mono text-xs shadow-inner">
               <div class="text-[10px] text-slate-400 uppercase font-bold mb-1 pb-1 border-b border-slate-700">Phản hồi từ Agent ({selectedModel}):</div>

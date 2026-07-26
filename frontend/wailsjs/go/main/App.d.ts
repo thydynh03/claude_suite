@@ -11,6 +11,8 @@ export function AddAntiAccountKey(arg1:string,arg2:string):Promise<void>;
 
 export function AddAntiOAuthAccountKey(arg1:string,arg2:string):Promise<void>;
 
+export function AddMCPServer(arg1:services.MCPServer):Promise<services.MCPServer>;
+
 export function AssignTask(arg1:string,arg2:string):Promise<void>;
 
 export function CancelScheduledJob(arg1:string):Promise<void>;
@@ -87,6 +89,10 @@ export function GetIntegrationsConfig():Promise<models.IntegrationsConfig>;
 
 export function GetJobKinds():Promise<Array<string>>;
 
+export function GetMCPCatalogue():Promise<Array<services.MCPServer>>;
+
+export function GetMCPServers():Promise<Array<services.MCPServer>>;
+
 export function GetMaxConcurrency():Promise<number>;
 
 export function GetPipelineSteps():Promise<Array<models.PipelineStep>>;
@@ -137,6 +143,8 @@ export function ReadFileContent(arg1:string):Promise<string>;
 
 export function RefreshAccountTokens():Promise<number|number>;
 
+export function RemoveMCPServer(arg1:string):Promise<void>;
+
 export function ResetAgentsToDefaults():Promise<void>;
 
 export function ResolveApproval(arg1:string,arg2:boolean):Promise<void>;
@@ -185,6 +193,8 @@ export function SetCurrentAntiAccountKey(arg1:string):Promise<boolean>;
 
 export function SetDailyBudgetUSD(arg1:number):Promise<number>;
 
+export function SetMCPServerEnabled(arg1:string,arg2:boolean):Promise<void>;
+
 export function SetMaxConcurrency(arg1:number):Promise<number>;
 
 export function SetOnboardingSeen(arg1:boolean):Promise<boolean>;
@@ -210,6 +220,8 @@ export function StopClaimsHost():Promise<void>;
 export function StopOrchestrator():Promise<boolean>;
 
 export function StopTask(arg1:string):Promise<boolean>;
+
+export function TestMCPServer(arg1:string):Promise<string>;
 
 export function ToggleAntiAccountKeyStatus(arg1:string):Promise<string>;
 

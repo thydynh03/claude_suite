@@ -10,6 +10,10 @@ export function AddAntiOAuthAccountKey(arg1, arg2) {
   return window['go']['main']['App']['AddAntiOAuthAccountKey'](arg1, arg2);
 }
 
+export function AddMCPServer(arg1) {
+  return window['go']['main']['App']['AddMCPServer'](arg1);
+}
+
 export function AssignTask(arg1, arg2) {
   return window['go']['main']['App']['AssignTask'](arg1, arg2);
 }
@@ -162,6 +166,14 @@ export function GetJobKinds() {
   return window['go']['main']['App']['GetJobKinds']();
 }
 
+export function GetMCPCatalogue() {
+  return window['go']['main']['App']['GetMCPCatalogue']();
+}
+
+export function GetMCPServers() {
+  return window['go']['main']['App']['GetMCPServers']();
+}
+
 export function GetMaxConcurrency() {
   return window['go']['main']['App']['GetMaxConcurrency']();
 }
@@ -262,6 +274,10 @@ export function RefreshAccountTokens() {
   return window['go']['main']['App']['RefreshAccountTokens']();
 }
 
+export function RemoveMCPServer(arg1) {
+  return window['go']['main']['App']['RemoveMCPServer'](arg1);
+}
+
 export function ResetAgentsToDefaults() {
   return window['go']['main']['App']['ResetAgentsToDefaults']();
 }
@@ -358,6 +374,10 @@ export function SetDailyBudgetUSD(arg1) {
   return window['go']['main']['App']['SetDailyBudgetUSD'](arg1);
 }
 
+export function SetMCPServerEnabled(arg1, arg2) {
+  return window['go']['main']['App']['SetMCPServerEnabled'](arg1, arg2);
+}
+
 export function SetMaxConcurrency(arg1) {
   return window['go']['main']['App']['SetMaxConcurrency'](arg1);
 }
@@ -408,6 +428,10 @@ export function StopOrchestrator() {
 
 export function StopTask(arg1) {
   return window['go']['main']['App']['StopTask'](arg1);
+}
+
+export function TestMCPServer(arg1) {
+  return window['go']['main']['App']['TestMCPServer'](arg1);
 }
 
 export function ToggleAntiAccountKeyStatus(arg1) {

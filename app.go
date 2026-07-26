@@ -48,6 +48,7 @@ type App struct {
 	pipelineEngine  *pipeline.PipelineEngine
 	oauthListener   *services.OAuthListenerService
 	claimsHost      *services.ClaimsHostService
+	mcpStore        *services.MCPStore
 
 	workspaceConfig    models.WorkspaceConfig
 	integrationsConfig models.IntegrationsConfig
@@ -124,6 +125,10 @@ func (a *App) startup(ctx context.Context) {
 		fmt.Printf("Scheduler store warning: %v\n", err)
 	}
 	a.schedulerSvc.Start()
+
+	// Loaded here rather than in the constructor: the data directory is only
+	// settled once the runtime has started.
+	a.mcpStore = services.NewMCPStore(filepath.Dir(database.GetDBPath()))
 
 	// The day's spending is kept on disk too: a cap a restart clears is not a cap.
 	if err := a.orchestrator.UseBudgetStore(filepath.Join(filepath.Dir(database.GetDBPath()), "budget.json")); err != nil {
@@ -434,12 +439,28 @@ func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles
 		runner = a.cliRunner
 	}
 
+	// Stream the run instead of discarding it. onLog was nil here, so a prompt
+	// that takes three minutes produced nothing at all until it finished and then
+	// dumped the whole answer at once — indistinguishable from a button that does
+	// nothing. The runners already surface tool calls through this callback; the
+	// orchestrator has used it all along.
+	onLog := func(message, level string) {
+		a.emitLog(message, level)
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "quick_cli_log", map[string]string{
+				"message": message,
+				"level":   level,
+				"time":    time.Now().Format("15:04:05"),
+			})
+		}
+	}
+
 	sessionID := cli.GetGlobalSession(providerKey)
 	var result *cli.RunResult
 	if sessionID != "" {
-		result = runner.RunSession(fullPrompt, model, system, sessionID, nil, a.workspaceConfig.LastWorkspaceFolder)
+		result = runner.RunSession(fullPrompt, model, system, sessionID, onLog, a.workspaceConfig.LastWorkspaceFolder)
 	} else {
-		result = runner.RunOnce(fullPrompt, model, system, nil, a.workspaceConfig.LastWorkspaceFolder)
+		result = runner.RunOnce(fullPrompt, model, system, onLog, a.workspaceConfig.LastWorkspaceFolder)
 	}
 
 	if result != nil && result.SessionID != "" {
@@ -877,6 +898,47 @@ type WarmupResult struct {
 // SetAntiAccountTier labels an account FREE/PRO/ULTRA. Tiers are not fetched from
 // anywhere, so this is the only way one becomes true; accounts start UNKNOWN
 // rather than claiming a tier nobody checked.
+// ── MCP servers ────────────────────────────────────────────────────────
+
+// GetMCPCatalogue lists the servers offered without a web search.
+func (a *App) GetMCPCatalogue() []services.MCPServer {
+	return services.MCPCatalogue()
+}
+
+// mcp returns the store, creating it if startup has not run yet. A binding
+// called before startup would otherwise dereference a nil pointer and take the
+// app down — the data directory is resolvable at any point, so there is no
+// reason for the window to exist.
+func (a *App) mcp() *services.MCPStore {
+	if a.mcpStore == nil {
+		a.mcpStore = services.NewMCPStore(filepath.Dir(database.GetDBPath()))
+	}
+	return a.mcpStore
+}
+
+func (a *App) GetMCPServers() []services.MCPServer {
+	return a.mcp().List()
+}
+
+func (a *App) AddMCPServer(server services.MCPServer) (services.MCPServer, error) {
+	return a.mcp().Add(server)
+}
+
+func (a *App) RemoveMCPServer(id string) error {
+	return a.mcp().Remove(id)
+}
+
+func (a *App) SetMCPServerEnabled(id string, enabled bool) error {
+	return a.mcp().SetEnabled(id, enabled)
+}
+
+// TestMCPServer checks a configured server can be started before a task depends
+// on it. A misconfigured server used to fail silently: agents simply ran without
+// the tools the user believed they had.
+func (a *App) TestMCPServer(id string) (string, error) {
+	return a.mcp().TestServer(id)
+}
+
 func (a *App) SetAntiAccountTier(id, tier string) bool {
 	ok := cli.GlobalAntiPool.SetTier(id, tier)
 	if ok {

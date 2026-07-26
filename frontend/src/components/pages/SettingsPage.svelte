@@ -3,6 +3,7 @@
   import type { Agent } from '../../lib/types';
   import { logs, addLog, addToast, agentsStore } from '../../lib/stores/appState';
   import AgentFormModal from '../ui/AgentFormModal.svelte';
+  import MCPManager from '../ui/MCPManager.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import Dropdown from '../ui/Dropdown.svelte';
   import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
@@ -24,6 +25,9 @@
 
   // Integrations state
   let webhookUrl = '';
+  // No longer edited here — MCP servers are managed by MCPManager, which stores
+  // them properly. Kept so saving integrations round-trips any value an older
+  // build wrote instead of silently clearing it.
   let mcpConnectionString = '';
   let currentAppVersion = '';
   let isIntegrationsSaving = false;
@@ -743,16 +747,8 @@
         />
       </div>
 
-      <div class="space-y-2">
-        <label for="mcp-connection-string" class="text-sm font-bold text-on-surface">MCP Connection String</label>
-        <p class="text-xs text-on-surface-variant">Configure the Model Context Protocol endpoint for advanced external integrations and agent memories.</p>
-        <input 
-          id="mcp-connection-string"
-          type="text" 
-          bind:value={mcpConnectionString}
-          placeholder="mcp://localhost:8000/v1"
-          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary outline-none font-mono"
-        />
+      <div class="pt-4 border-t border-outline-variant">
+        <MCPManager />
       </div>
 
       <div class="pt-4 border-t border-outline-variant flex justify-end">
