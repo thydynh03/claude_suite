@@ -874,6 +874,17 @@ type WarmupResult struct {
 // button called "Làm Nóng" neither touched the network nor told anyone what
 // happened. An account whose refresh token had been revoked stayed marked
 // "active" until the next task failed on it.
+// SetAntiAccountTier labels an account FREE/PRO/ULTRA. Tiers are not fetched from
+// anywhere, so this is the only way one becomes true; accounts start UNKNOWN
+// rather than claiming a tier nobody checked.
+func (a *App) SetAntiAccountTier(id, tier string) bool {
+	ok := cli.GlobalAntiPool.SetTier(id, tier)
+	if ok {
+		a.saveAntiKeys()
+	}
+	return ok
+}
+
 func (a *App) WarmupAntiAccountKeys() WarmupResult {
 	// Clearing the rate-limit marks first is still right: an account parked for a
 	// 429 an hour ago deserves another try. Accounts the user switched off stay

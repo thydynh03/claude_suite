@@ -18,9 +18,25 @@ import (
 type ModelQuota struct {
 	Name      string `json:"name"`       // e.g. "Gemini 3.1 Pro (High)"
 	Category  string `json:"category"`   // "gemini" | "gpt" | "claude"
-	ResetTime string `json:"reset_time"` // e.g. "0h 0m", "1d 6h"
-	UsagePct  int    `json:"usage_pct"`  // e.g. 53, 100, 8
-	Status    string `json:"status"`     // "ok", "warning", "exceeded"
+	ResetTime string `json:"reset_time"` // e.g. "0h 0m", "1d 6h"; empty when unknown
+	UsagePct  int    `json:"usage_pct"`  // -1 when unknown; never guessed
+	Status    string `json:"status"`     // "ok", "warning", "exceeded", "unknown"
+}
+
+// UsageStats is what this app can honestly say about an account, because it
+// watched it happen: how many requests were sent through it and when it was last
+// turned away for exceeding a limit.
+//
+// It replaces the invented percentages that used to fill the quota table. Those
+// were compile-time constants — the same 53% and "0h 0m" for every account, on a
+// screen headed "Hạn Mức Model" — so the UI looked informative while nothing had
+// ever asked Google anything. A wrong number is worse than a blank: a blank
+// prompts a question, a number ends it.
+type UsageStats struct {
+	Requests        int       `json:"requests"`
+	RateLimitHits   int       `json:"rate_limit_hits"`
+	LastRateLimitAt time.Time `json:"last_rate_limit_at"`
+	LastRequestAt   time.Time `json:"last_request_at"`
 }
 
 type AntiAccountKey struct {
@@ -39,7 +55,17 @@ type AntiAccountKey struct {
 	IsCurrent      bool         `json:"is_current"`
 	LastUsed       string       `json:"last_used"`
 	ModelQuotas    []ModelQuota `json:"model_quotas"`
+	// Usage is measured, not guessed. ModelQuotas stays for the day a real quota
+	// endpoint is wired up; until then its entries carry status "unknown".
+	Usage UsageStats `json:"usage"`
+	// TierSource records where Tier came from: "user" when somebody labelled the
+	// account in the UI, "unknown" otherwise. Every account used to be born "PRO"
+	// with no evidence, which is why the PRO filter never matched anything real.
+	TierSource string `json:"tier_source"`
 }
+
+// tierUnknown is the honest starting state for an account nobody has labelled.
+const tierUnknown = "UNKNOWN"
 
 type AccountKeyPool struct {
 	mu      sync.Mutex
@@ -47,25 +73,27 @@ type AccountKeyPool struct {
 	current int
 }
 
-func defaultQuotas(tier string) []ModelQuota {
-	if tier == "FREE" {
-		return []ModelQuota{
-			{Name: "Gemini 3.1 Pro (Low)", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
-			{Name: "Gemini 3.5 Flash (Med)", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
-			{Name: "Gemini 3.6 Flash (High)", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
-			{Name: "Gemini 3.1 Flash Lite", Category: "gemini", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
-			{Name: "Claude Sonnet 4.6 (Th)", Category: "claude", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
-			{Name: "GPT-OSS 120B (Medium)", Category: "gpt", ResetTime: "6d 2h", UsagePct: 8, Status: "ok"},
-		}
+// unknownQuotas lists the models an account can be asked for, with no claim about
+// how much of each is left.
+//
+// It replaces defaultQuotas, which returned hardcoded percentages and reset times
+// — identical for every account, and never once fetched from anywhere. UsagePct
+// is -1 rather than 0 so the UI can tell "no data" apart from "nothing used".
+func unknownQuotas() []ModelQuota {
+	names := []struct{ name, category string }{
+		{"Gemini 3.1 Pro", "gemini"},
+		{"Gemini 3.5 Flash", "gemini"},
+		{"Gemini 3.6 Flash", "gemini"},
+		{"Gemini 3.1 Flash Lite", "gemini"},
+		{"Claude Sonnet 4.6 (Thinking)", "claude"},
+		{"GPT-OSS 120B", "gpt"},
 	}
-	return []ModelQuota{
-		{Name: "Gemini 3.1 Pro (High)", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
-		{Name: "Gemini 3.5 Flash (High)", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
-		{Name: "Gemini 3.6 Flash (High)", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
-		{Name: "Gemini 3.1 Flash Lite", Category: "gemini", ResetTime: "0h 0m", UsagePct: 53, Status: "ok"},
-		{Name: "Claude Sonnet 4.6 (Th)", Category: "claude", ResetTime: "1d 6h", UsagePct: 8, Status: "ok"},
-		{Name: "GPT-OSS 120B (Medium)", Category: "gpt", ResetTime: "1d 6h", UsagePct: 0, Status: "ok"},
+
+	out := make([]ModelQuota, 0, len(names))
+	for _, n := range names {
+		out = append(out, ModelQuota{Name: n.name, Category: n.category, UsagePct: -1, Status: "unknown"})
 	}
+	return out
 }
 
 var GlobalAntiPool = &AccountKeyPool{
@@ -146,9 +174,10 @@ func (p *AccountKeyPool) AddKey(name, apiKey string) {
 		Type:        "api_key",
 		APIKey:      apiKey,
 		Status:      "active",
-		Tier:        "PRO",
+		Tier:        tierUnknown,
+		TierSource:  "unknown",
 		LastUsed:    time.Now().Format("1/2/2006 03:04 PM"),
-		ModelQuotas: defaultQuotas("PRO"),
+		ModelQuotas: unknownQuotas(),
 	})
 }
 
@@ -169,9 +198,10 @@ func (p *AccountKeyPool) AddOAuthKey(name, oauthToken string) {
 		Type:        "oauth_token",
 		OAuthToken:  oauthToken,
 		Status:      "active",
-		Tier:        "PRO",
+		Tier:        tierUnknown,
+		TierSource:  "unknown",
 		LastUsed:    time.Now().Format("1/2/2006 03:04 PM"),
-		ModelQuotas: defaultQuotas("PRO"),
+		ModelQuotas: unknownQuotas(),
 	})
 }
 
@@ -273,8 +303,37 @@ func (p *AccountKeyPool) GetCurrentAccount() *AntiAccountKey {
 		return nil
 	}
 	p.current = i
+	// Every caller of GetCurrentAccount is about to send a request as this
+	// account, so this is the honest place to count one.
+	p.keys[i].Usage.Requests++
+	p.keys[i].Usage.LastRequestAt = time.Now()
 	acc := p.keys[i]
 	return &acc
+}
+
+// SetTier records a tier the user vouched for, and says so via TierSource.
+// Nothing else may write Tier: guessing it is what made the PRO filter meaningless.
+func (p *AccountKeyPool) SetTier(id, tier string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	switch tier {
+	case "FREE", "PRO", "ULTRA", tierUnknown:
+	default:
+		return false
+	}
+
+	for i := range p.keys {
+		if p.keys[i].ID == id {
+			p.keys[i].Tier = tier
+			p.keys[i].TierSource = "user"
+			if tier == tierUnknown {
+				p.keys[i].TierSource = "unknown"
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func (p *AccountKeyPool) GetCurrentKey() string {
@@ -297,6 +356,11 @@ func (p *AccountKeyPool) RotateNextKey() string {
 
 	current := p.current % len(p.keys)
 	p.keys[current].Status = "rate_limited_429"
+	// Counted, because it is one of the few things about an account's limits this
+	// app observes first-hand. The quota table shows it in place of the invented
+	// percentages it used to display.
+	p.keys[current].Usage.RateLimitHits++
+	p.keys[current].Usage.LastRateLimitAt = time.Now()
 
 	// Move to the next account the user has not disabled. Rotating into an
 	// account is a decision to try it again, so a stale rate-limit mark is
@@ -564,9 +628,10 @@ func (p *AccountKeyPool) AddRefreshAccount(email, refreshToken string) string {
 		Type:         "oauth_token",
 		RefreshToken: refreshToken,
 		Status:       "active",
-		Tier:         "PRO",
+		Tier:         tierUnknown,
+		TierSource:   "unknown",
 		LastUsed:     time.Now().Format("1/2/2006 03:04 PM"),
-		ModelQuotas:  defaultQuotas("PRO"),
+		ModelQuotas:  unknownQuotas(),
 	})
 	return id
 }

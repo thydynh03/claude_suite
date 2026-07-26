@@ -338,6 +338,10 @@ export function SelectWorkspaceFolder() {
   return window['go']['main']['App']['SelectWorkspaceFolder']();
 }
 
+export function SetAntiAccountTier(arg1, arg2) {
+  return window['go']['main']['App']['SetAntiAccountTier'](arg1, arg2);
+}
+
 export function SetAutoApproveAll(arg1) {
   return window['go']['main']['App']['SetAutoApproveAll'](arg1);
 }

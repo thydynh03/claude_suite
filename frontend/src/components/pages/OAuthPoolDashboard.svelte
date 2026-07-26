@@ -1,36 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import { cli } from '../../../wailsjs/go/models';
   import { addLog, addToast } from '../../lib/stores/appState';
 
   export let onOpenGoogleLogin: () => void = () => {};
 
-  interface ModelQuota {
-    name: string;
-    category: string;
-    reset_time: string;
-    usage_pct: number;
-    status: string;
-  }
-
-  interface AntiAccountKey {
-    id: string;
-    name: string;
-    email: string;
-    type: string;
-    api_key: string;
-    oauth_token: string;
-    refresh_token: string;
-    status: string;
-    tier: string;
-    is_current: boolean;
-    last_used: string;
-    model_quotas: ModelQuota[];
-  }
+  // The generated binding type, not a hand-copied one. This file used to declare
+  // its own AntiAccountKey interface alongside the Go struct; the two drifted the
+  // moment a field was added on the backend, and the missing field was invisible
+  // until a value silently read as undefined at runtime.
+  type AntiAccountKey = cli.AntiAccountKey;
 
   let accounts: AntiAccountKey[] = [];
   let searchQuery = '';
-  let activeFilter: 'all' | 'PRO' | 'ULTRA' | 'FREE' = 'all';
+  let activeFilter: 'all' | 'PRO' | 'ULTRA' | 'FREE' | 'UNKNOWN' = 'all';
   let isLoading = false;
   let selectedIds: string[] = [];
   let isWarming = false;
@@ -228,6 +212,18 @@
     }
   }
 
+  async function handleSetTier(id: string, tier: string) {
+    try {
+      const ok = await (AppBindings as any).SetAntiAccountTier(id, tier);
+      if (!ok) throw new Error('gói không hợp lệ');
+      await loadAccounts();
+      addToast(`Đã gán gói ${tier === 'UNKNOWN' ? 'chưa rõ' : tier} cho tài khoản.`, 'SUCCESS');
+    } catch (e) {
+      addToast(`Không gán được gói: ${e}`, 'ERROR');
+      await loadAccounts();
+    }
+  }
+
   async function handleManualRefresh() {
     await loadAccounts();
     addToast(`Đã tải lại — ${accounts.length} tài khoản trong pool.`, 'INFO');
@@ -279,7 +275,10 @@
   }
 
   $: filteredAccounts = accounts.filter(acc => {
-    if (activeFilter !== 'all' && acc.tier !== activeFilter) return false;
+    // An account with no tier set counts as UNKNOWN rather than falling through
+    // every filter and appearing only under "Tất cả".
+    const tier = acc.tier || 'UNKNOWN';
+    if (activeFilter !== 'all' && tier !== activeFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchEmail = acc.email?.toLowerCase().includes(q);
@@ -292,6 +291,7 @@
   $: proCount = accounts.filter(a => a.tier === 'PRO').length;
   $: ultraCount = accounts.filter(a => a.tier === 'ULTRA').length;
   $: freeCount = accounts.filter(a => a.tier === 'FREE').length;
+  $: unknownTierCount = accounts.filter(a => !a.tier || a.tier === 'UNKNOWN').length;
 </script>
 
 <div class="space-y-4">
@@ -423,6 +423,13 @@
         >
           MIỄN PHÍ <span class="ml-1 opacity-80 font-mono">({freeCount})</span>
         </button>
+        <button
+          type="button"
+          on:click={() => activeFilter = 'UNKNOWN'}
+          class="px-3 py-1 rounded-lg font-bold transition-all cursor-pointer {activeFilter === 'UNKNOWN' ? 'bg-amber-600 text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}"
+        >
+          CHƯA RÕ <span class="ml-1 opacity-80 font-mono">({unknownTierCount})</span>
+        </button>
       </div>
 
       <div class="relative min-w-[240px]">
@@ -526,9 +533,28 @@
                       HIỆN TẠI
                     </span>
                   {/if}
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase {acc.tier === 'PRO' ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' : acc.tier === 'ULTRA' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' : 'bg-slate-500/20 text-slate-400'}">
-                    {acc.tier || 'FREE'}
-                  </span>
+                  <!-- Editable, because the tier is not fetched from anywhere.
+                       Showing "PRO" for every account made the tier filters count
+                       a label this code had invented. -->
+                  <select
+                    value={acc.tier || 'UNKNOWN'}
+                    on:click|stopPropagation
+                    on:change={(e) => handleSetTier(acc.id, (e.target as HTMLSelectElement).value)}
+                    title={acc.tier_source === 'user' ? 'Bạn đã gán gói này' : 'Chưa xác định — chọn để gán'}
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border cursor-pointer bg-transparent
+                    {acc.tier === 'PRO'
+                      ? 'border-purple-500/30 bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                      : acc.tier === 'ULTRA'
+                        ? 'border-blue-500/30 bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                        : acc.tier === 'FREE'
+                          ? 'border-slate-500/30 bg-slate-500/20 text-slate-400'
+                          : 'border-outline-variant text-on-surface-variant'}"
+                  >
+                    <option value="UNKNOWN">CHƯA RÕ</option>
+                    <option value="FREE">FREE</option>
+                    <option value="PRO">PRO</option>
+                    <option value="ULTRA">ULTRA</option>
+                  </select>
                 </div>
 
                 <div class="flex items-center gap-2 text-[11px] text-on-surface-variant font-mono">
@@ -541,31 +567,33 @@
                 </div>
               </td>
 
-              <!-- Model Quotas Grid -->
+              <!-- Usage this app measured, and an explicit blank for what it
+                   does not know. The progress bars here used to be filled from a
+                   compile-time constant: every account showed the same 53%, and
+                   nothing had ever asked Google for a quota. -->
               <td class="p-3 align-top">
-                <div class="grid grid-cols-2 gap-2 text-[10px]">
-                  {#each (acc.model_quotas || []) as q}
-                    <div class="bg-surface-container-low/80 p-1.5 rounded-lg border border-outline-variant/50 space-y-1">
-                      <div class="flex items-center justify-between">
-                        <span class="font-bold text-on-surface truncate max-w-[120px]" title={q.name}>
-                          ⚡ {q.name}
-                        </span>
-                        <span class="text-slate-400 text-[9px] font-mono">⏱ {q.reset_time}</span>
-                      </div>
-                      <!-- Percentage Progress Bar -->
-                      <div class="flex items-center gap-1.5">
-                        <div class="flex-1 bg-surface-container-high h-1.5 rounded-full overflow-hidden">
-                          <div
-                            class="h-full rounded-full transition-all {q.usage_pct > 80 ? 'bg-rose-500' : q.usage_pct > 30 ? 'bg-emerald-500' : 'bg-amber-500'}"
-                            style="width: {q.usage_pct}%"
-                          ></div>
-                        </div>
-                        <span class="font-bold text-[9px] {q.usage_pct > 80 ? 'text-rose-500' : 'text-emerald-500'}">
-                          {q.usage_pct}%
-                        </span>
-                      </div>
-                    </div>
-                  {/each}
+                <div class="flex flex-wrap items-center gap-2 text-[10px] mb-2">
+                  <span class="px-2 py-1 rounded-lg bg-surface-container-low border border-outline-variant/50 font-mono">
+                    <span class="text-on-surface-variant">Request đã gửi:</span>
+                    <span class="font-bold text-on-surface">{acc.usage?.requests ?? 0}</span>
+                  </span>
+                  <span class="px-2 py-1 rounded-lg border font-mono
+                    {(acc.usage?.rate_limit_hits ?? 0) > 0
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                      : 'bg-surface-container-low border-outline-variant/50 text-on-surface-variant'}">
+                    Dính 429: <span class="font-bold">{acc.usage?.rate_limit_hits ?? 0}</span>
+                    {#if acc.usage?.last_rate_limit_at && !String(acc.usage.last_rate_limit_at).startsWith('0001')}
+                      <span class="opacity-70">· {new Date(acc.usage.last_rate_limit_at).toLocaleString('vi-VN')}</span>
+                    {/if}
+                  </span>
+                </div>
+
+                <div class="flex items-start gap-1.5 text-[10px] text-on-surface-variant">
+                  <span class="material-symbols-outlined text-[13px] mt-px">info</span>
+                  <span>
+                    Hạn mức từng model chưa lấy được — app chưa có API quota của Google.
+                    Số ở trên là do app tự đo trong lúc chạy.
+                  </span>
                 </div>
               </td>
 

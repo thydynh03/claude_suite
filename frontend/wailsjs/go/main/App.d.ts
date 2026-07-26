@@ -175,6 +175,8 @@ export function SelectGoogleAccountsFile():Promise<string>;
 
 export function SelectWorkspaceFolder():Promise<string>;
 
+export function SetAntiAccountTier(arg1:string,arg2:string):Promise<boolean>;
+
 export function SetAutoApproveAll(arg1:boolean):Promise<boolean>;
 
 export function SetCurrentAntiAccountKey(arg1:string):Promise<boolean>;
