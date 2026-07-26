@@ -198,11 +198,11 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
         <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 2</kbd>
       </div>
       <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang Settings:</span>
+        <span class="text-on-surface-variant">Chuyển sang Code Studio:</span>
         <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 3</kbd>
       </div>
       <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang Virtual Office:</span>
+        <span class="text-on-surface-variant">Chuyển sang Source Control:</span>
         <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 4</kbd>
       </div>
       <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
@@ -210,8 +210,8 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
         <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 5</kbd>
       </div>
       <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Đóng Modal / Popup:</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Esc</kbd>
+        <span class="text-on-surface-variant">Bảng lệnh (Command Palette):</span>
+        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + K</kbd>
       </div>
     </div>
   </div>

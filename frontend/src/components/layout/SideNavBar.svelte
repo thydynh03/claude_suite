@@ -6,6 +6,41 @@
   // Reports what the orchestrator actually did rather than assuming it started.
   // Setting this true unconditionally left the sidebar claiming a run that never
   // began, which then disagreed with the board.
+  // Ctrl+1..9 across the whole list, in the order shown. Announced in each
+  // button's tooltip so the shortcut is discoverable rather than documented.
+  const navGroups = [
+    {
+      title: 'Làm việc',
+      items: [
+        { id: 'cockpit', label: $t('cockpit'), title: 'AI Cockpit', icon: 'rocket_launch', color: 'text-primary', shortcut: 'Ctrl+1' },
+        { id: 'kanban', label: $t('kanban'), title: 'Task Board & Planning', icon: 'assignment', color: 'text-secondary', shortcut: 'Ctrl+2' },
+        { id: 'editor', label: $t('code_studio'), title: 'Agent IDE & Code Studio', icon: 'code', color: 'text-primary', shortcut: 'Ctrl+3' },
+        { id: 'git', label: 'Source Control', title: 'Source Control', icon: 'account_tree', color: 'text-primary', shortcut: 'Ctrl+4' },
+      ],
+    },
+    {
+      title: 'Tự động hoá',
+      items: [
+        { id: 'scheduler', label: 'Scheduler', title: 'Scheduler & Jobs', icon: 'schedule', color: 'text-tertiary', shortcut: 'Ctrl+5' },
+        { id: 'browser', label: 'Browser Agent', title: 'Browser Agent', icon: 'travel_explore', color: 'text-secondary', shortcut: 'Ctrl+6' },
+        { id: 'claims', label: 'Phân xử', title: 'Claims & Adjudication', icon: 'gavel', color: 'text-tertiary', shortcut: 'Ctrl+7' },
+      ],
+    },
+    {
+      title: 'Giám sát',
+      items: [
+        { id: 'office', label: 'Virtual Office', title: 'Virtual Office 3D', icon: 'meeting_room', color: 'text-secondary', shortcut: 'Ctrl+8' },
+      ],
+    },
+    {
+      title: 'Cấu hình',
+      items: [
+        { id: 'roles', label: 'Agent Roles', title: 'Agent Roles', icon: 'group', color: 'text-tertiary', shortcut: 'Ctrl+9' },
+        { id: 'settings', label: $t('settings'), title: 'Studio & Settings', icon: 'settings', color: 'text-secondary', shortcut: 'Ctrl+0' },
+      ],
+    },
+  ];
+
   async function handleExecutePlan() {
     const started = await AppBindings.StartOrchestrator();
     orchestratorRunning.set(started === true);
@@ -33,136 +68,41 @@
     </button>
   </div>
 
-  <!-- Navigation Items -->
-  <nav class="flex-1 space-y-1">
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('cockpit')}
-      title="AI Cockpit"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'cockpit' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">rocket_launch</span>
+  <!-- Navigation Items
+       Grouped by what the user is doing, because a flat list of eleven items put
+       Settings fourth — between Code Studio and the 3D office — and left Agent
+       Roles at the bottom, far from the Settings page that configures the same
+       agents. Order within a group is by how often it is opened. -->
+  <nav class="flex-1 overflow-y-auto">
+    {#each navGroups as group}
       {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('cockpit')}</span>
+        <p class="px-5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-outline">
+          {group.title}
+        </p>
+      {:else}
+        <div class="mx-4 my-2 border-t border-outline-variant/40"></div>
       {/if}
-    </button>
 
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('kanban')}
-      title="Task Board & Planning"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'kanban' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">assignment</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('kanban')}</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('editor')}
-      title="Agent IDE & Code Studio"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'editor' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">code</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('code_studio')}</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('settings')}
-      title="Studio & Settings"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'settings' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">settings</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('settings')}</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('office')}
-      title="Virtual Office"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'office' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">apartment</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('virtual_office')}</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('scheduler')}
-      title="Scheduler"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'scheduler' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">schedule</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('scheduler')}</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('claims')}
-      title="Adjudication"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'claims' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">gavel</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">Phân xử Agent</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('browser')}
-      title="Browser Agent"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'browser' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-secondary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">language</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">{$t('browser_agent')}</span>
-      {/if}
-    </button>
-
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('git')}
-      title="Source Control"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'git' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-primary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">account_tree</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">SOURCE CONTROL</span>
-      {/if}
-    </button>
-    <button
-      type="button"
-      on:click|preventDefault={() => activeTab.set('roles')}
-      title="Agent Roles"
-      class="w-[calc(100%-16px)] mx-2 my-1 flex items-center p-3 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
-      {$activeTab === 'roles' ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
-    >
-      <span class="material-symbols-outlined text-tertiary flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">group</span>
-      {#if !$sidebarCollapsed}
-        <span class="truncate">AGENT ROLES</span>
-      {/if}
-    </button>
+      {#each group.items as item}
+        <button
+          type="button"
+          on:click|preventDefault={() => activeTab.set(item.id)}
+          title="{item.title} ({item.shortcut})"
+          class="w-[calc(100%-16px)] mx-2 my-0.5 flex items-center p-2.5 transition-all rounded-xl text-left font-medium text-[11px] uppercase tracking-wider cursor-pointer
+          {$activeTab === item.id
+            ? 'bg-secondary-container text-on-secondary-container shadow-sm font-bold'
+            : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'}"
+        >
+          <span class="material-symbols-outlined {item.color} flex-shrink-0 {$sidebarCollapsed ? 'mx-auto text-xl' : 'mr-3 text-lg'}">
+            {item.icon}
+          </span>
+          {#if !$sidebarCollapsed}
+            <span class="truncate flex-1">{item.label}</span>
+            <span class="text-[9px] font-mono text-outline">{item.shortcut}</span>
+          {/if}
+        </button>
+      {/each}
+    {/each}
   </nav>
 
   <!-- Bottom Execution Button & Links -->

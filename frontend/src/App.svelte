@@ -43,6 +43,33 @@
   let approvalTask = '';
   let approvalTaskId = '';
 
+  // The sidebar and the docs page both advertise Ctrl+1..0, and nothing
+  // implemented them — the tooltip promised a shortcut that did nothing.
+  // Order matches the sidebar exactly, so the number in the tooltip is the
+  // number that works.
+  const TAB_SHORTCUTS = [
+    'cockpit', 'kanban', 'editor', 'git',
+    'scheduler', 'browser', 'claims',
+    'office', 'roles', 'settings',
+  ];
+
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    if (e.altKey || e.shiftKey) return;
+
+    // Digits only, and not while typing into a field where Ctrl+number might
+    // mean something to the control itself.
+    const digit = /^[0-9]$/.test(e.key) ? Number(e.key) : -1;
+    if (digit < 0) return;
+
+    const index = digit === 0 ? 9 : digit - 1;
+    const tab = TAB_SHORTCUTS[index];
+    if (!tab) return;
+
+    e.preventDefault();
+    activeTab.set(tab);
+  }
+
   onMount(async () => {
     // Wait until Wails IPC & Go bindings are fully injected by WebView2
     await new Promise<void>((resolve) => {
@@ -163,6 +190,8 @@
     }
   }
 </script>
+
+<svelte:window on:keydown={handleGlobalKeydown} />
 
 <div class="flex flex-col h-screen font-body-md text-on-surface bg-background">
   <!-- Top Bar -->

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Agent } from '../../lib/types';
-  import { logs, addLog, agentsStore } from '../../lib/stores/appState';
+  import { logs, addLog, addToast, agentsStore } from '../../lib/stores/appState';
+  import AgentFormModal from '../ui/AgentFormModal.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import Dropdown from '../ui/Dropdown.svelte';
   import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
@@ -162,32 +163,46 @@
     }
   }
 
-  let newAgentName = '';
-  let newAgentRole = '';
-  async function handleAddAgent() {
-    const name = newAgentName.trim();
-    if (!name) return;
-    const agent: any = {
+  // The two-input inline form is gone: it let the user set name and role while
+  // the code decided provider, model, icon and system prompt — the fields that
+  // actually determine which engine runs the task and how the agent behaves.
+  let agentFormOpen = false;
+  let agentBeingEdited: Agent | null = null;
+
+  function openNewAgentForm() {
+    agentBeingEdited = null;
+    agentFormOpen = true;
+  }
+
+  function openEditAgentForm(agent: Agent) {
+    agentBeingEdited = agent;
+    agentFormOpen = true;
+  }
+
+  function duplicateAgent(agent: Agent) {
+    // A copy with no id is a new agent; clearing the counters stops the clone
+    // from inheriting the original's history.
+    agentBeingEdited = {
+      ...(agent as any),
       agent_id: '',
-      name,
-      role: newAgentRole.trim() || 'Custom Agent',
-      provider: 'claude_cli',
-      model: 'claude-sonnet-4-5',
-      system: `You are ${name}, ${newAgentRole.trim() || 'a specialized AI agent'}.`,
-      icon: 'smart_toy',
-      status: 'idle',
+      name: `${agent.name} (bản sao)`,
       tasks_done: 0,
       tokens_used: 0,
-      token_limit: 0,
-      token_remaining: 0,
-    };
+    } as Agent;
+    agentFormOpen = true;
+  }
+
+  async function handleAgentFormSave(e: CustomEvent<any>) {
+    const agent = e.detail;
     try {
       await AppBindings.SaveAgent(agent);
-      newAgentName = '';
-      newAgentRole = '';
-      addLog(`Đã tạo Agent mới: ${name}.`, 'SUCCESS');
-    } catch (e) {
-      addLog(`Lỗi tạo agent: ${e}`, 'ERROR');
+      agentFormOpen = false;
+      await loadAgents();
+      addLog(`Đã lưu Agent: ${agent.name}.`, 'SUCCESS');
+      addToast(`Đã lưu agent "${agent.name}".`, 'SUCCESS');
+    } catch (err) {
+      addLog(`Lỗi lưu agent: ${err}`, 'ERROR');
+      addToast(`Lưu agent thất bại: ${err}`, 'ERROR');
     }
   }
 
@@ -390,16 +405,13 @@
       </div>
 
       <!-- Add new agent (persists + syncs to 3D office, Kanban, Cockpit) -->
-      <div class="flex flex-wrap items-center gap-2 bg-surface-container-low/50 border border-outline-variant rounded-xl p-3">
-        <span class="material-symbols-outlined text-primary text-lg">person_add</span>
-        <input bind:value={newAgentName} placeholder="Tên agent mới..."
-          on:keydown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
-          class="flex-1 min-w-[140px] bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary" />
-        <input bind:value={newAgentRole} placeholder="Vai trò (role)..."
-          on:keydown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
-          class="flex-1 min-w-[140px] bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary" />
-        <button on:click={handleAddAgent} disabled={!newAgentName.trim()}
-          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1">
+      <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-container-low/50 border border-outline-variant rounded-xl p-3">
+        <span class="text-xs text-on-surface-variant flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-lg">person_add</span>
+          Tạo agent mới với đầy đủ provider, model, persona và giới hạn token.
+        </span>
+        <button on:click={openNewAgentForm}
+          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all cursor-pointer flex items-center gap-1">
           <span class="material-symbols-outlined text-sm">add</span> Tạo Agent
         </button>
       </div>
@@ -415,7 +427,25 @@
                   <p class="text-xs text-on-surface-variant line-clamp-1">{agent.role}</p>
                 </div>
               </div>
-              <span class="w-2.5 h-2.5 rounded-full {agent.status === 'running' ? 'bg-primary animate-pulse' : agent.status === 'error' ? 'bg-rose-500' : 'bg-slate-400'}"></span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  on:click={() => openEditAgentForm(agent)}
+                  title="Sửa đầy đủ"
+                  class="p-1 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high cursor-pointer"
+                >
+                  <span class="material-symbols-outlined text-base">edit</span>
+                </button>
+                <button
+                  type="button"
+                  on:click={() => duplicateAgent(agent)}
+                  title="Nhân bản agent này"
+                  class="p-1 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high cursor-pointer"
+                >
+                  <span class="material-symbols-outlined text-base">content_copy</span>
+                </button>
+                <span class="w-2.5 h-2.5 rounded-full {agent.status === 'running' ? 'bg-primary animate-pulse' : agent.status === 'error' ? 'bg-rose-500' : 'bg-slate-400'}"></span>
+              </div>
             </div>
 
             <div class="bg-surface-container-low/50 p-3 rounded-lg text-xs space-y-3 font-mono">
@@ -739,3 +769,11 @@
     </div>
   {/if}
 </div>
+
+<AgentFormModal
+  bind:open={agentFormOpen}
+  agent={agentBeingEdited}
+  existingNames={(agents || []).map((a) => a.name)}
+  on:save={handleAgentFormSave}
+  on:close={() => (agentFormOpen = false)}
+/>
