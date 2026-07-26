@@ -1,5 +1,11 @@
 # Kế hoạch sửa lỗi & nâng cấp — tháng 7/2026
 
+> **Trạng thái 26/07/2026: đã làm xong toàn bộ 19 hạng mục.** Xem
+> `git log --oneline` từ commit "fix(ui): make actions report what they did" trở
+> đi. Hai điểm trong tài liệu này về sau phát hiện là **sai**, đã đính chính tại
+> chỗ: §2.1 (Export Report vốn trả về đường dẫn đúng) và §9.1b/§9.1c (đường dẫn
+> công cụ không hardcode, nhưng địa chỉ `localhost` thì thật sự sai).
+
 Tài liệu này ghi lại **19 hạng mục** người dùng báo, kèm **trạng thái thực tế của source
 code hiện tại** (đã đọc code để kiểm chứng, không đoán). Nhiều nút bị báo là "không chạy"
 thực ra *có chạy* nhưng không phản hồi gì trên UI — phải phân biệt hai loại đó trước khi
@@ -130,7 +136,17 @@ Tắt / Làm nóng / Xoá / Kiểm tra quota**. Xoá hàng loạt phải hỏi x
 
 ## 2. Task Board
 
-### 2.1 🐛 "Export Report" — chạy nhưng thông báo sai
+### 2.1 ✅ "Export Report" — **kết luận ban đầu của tôi sai**
+
+`exporter.go:76` trả về **đường dẫn file**, không phải nội dung markdown, nên
+thông báo `Exported report to ...` vốn đã đúng. Phần dưới đây giữ lại làm ghi chú
+về việc đọc code không kỹ.
+
+Đọc lại chỗ đó thì tìm ra hai lỗi khác, và cả hai đã sửa: `t.TaskID[:8]` cắt theo
+byte nên panic với ID ngắn hơn 8 byte, và lỗi ghi bản HTML bị bỏ qua bằng `_ =`
+nên đĩa đầy vẫn báo thành công.
+
+### 2.1b 🐛 Nội dung gốc (đã sửa)
 
 `TaskBoardPage.svelte:329`:
 
