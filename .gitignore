@@ -1,4 +1,12 @@
-build/
+# build/ holds both output and source. Ignoring the whole directory hid
+# build/windows/installer/project.nsi from git, so every release built the
+# installer from wails' regenerated default template and shipped without the
+# companion CLI tools. Only the outputs are ignored now.
+build/bin/
+build/ClaudeAgentManager/
+build/ClaudeScheduler/
+build/ClaudeSuite/
+build/windows/installer/tmp/
 node_modules
 frontend/node_modules
 frontend/dist
