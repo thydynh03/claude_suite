@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import CodeEditor from '../ui/CodeEditor.svelte';
+  import FileTreeNode from '../ui/FileTreeNode.svelte';
+  import { buildTree, fuzzyMatch, matchScore } from '../../lib/fileTree';
   import { addLog } from '../../lib/stores/appState';
 
   interface OpenTab {
@@ -62,8 +65,6 @@
   // Cursor & Scroll synchronization
   let cursorLine = 1;
   let cursorCol = 1;
-  let lineNumbersElem: HTMLDivElement;
-  let textareaElem: HTMLTextAreaElement;
 
   // AI Assistant state & Conversation Turns with Revert
   let aiPrompt = '';
@@ -72,7 +73,31 @@
   let isAiRunning = false;
   let turnFeedContainer: HTMLDivElement;
 
-  $: filteredFiles = files.filter(f => f.toLowerCase().includes(fileQuery.toLowerCase().trim()));
+  // A tree, not 96 flat rows of full paths. Searching still flattens — see the
+  // markup for why.
+  $: fileTree = buildTree(files);
+  $: dirtyPaths = new Set(openTabs.filter((t) => t.isDirty).map((t) => t.path));
+
+  // Fuzzy, like an editor's quick-open: "bsx" finds backend/services/exporter.go.
+  // Substring matching meant knowing the path prefix before you could search it.
+  $: filteredFiles = (() => {
+    const q = fileQuery.trim();
+    if (!q) return [];
+    return files
+      .filter((f) => fuzzyMatch(q, f))
+      .sort((a, b) => matchScore(q, a) - matchScore(q, b) || a.localeCompare(b))
+      .slice(0, 200);
+  })();
+
+  let expandedDirs = new Set<string>();
+  function toggleDir(path: string) {
+    // Reassigned rather than mutated: a Set changed in place does not trigger
+    // Svelte's reactivity, so the tree would not redraw.
+    const next = new Set(expandedDirs);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    expandedDirs = next;
+  }
   $: currentTab = openTabs.find(t => t.path === activeTabPath);
   $: lineCount = fileContent.split('\n').length;
   $: charCount = fileContent.length;
@@ -172,56 +197,8 @@
     }
   }
 
-  function syncEditorScroll() {
-    if (lineNumbersElem && textareaElem) {
-      lineNumbersElem.scrollTop = textareaElem.scrollTop;
-    }
-  }
-
-  function handleEditorKeyDown(e: KeyboardEvent) {
-    const textarea = e.target as HTMLTextAreaElement;
-
-    // Ctrl+S -> Save
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      handleSaveFile();
-      return;
-    }
-
-    // Ctrl+F -> Search
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-      e.preventDefault();
-      showSearch = !showSearch;
-      return;
-    }
-
-    // Tab indentation
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-
-      if (e.shiftKey) {
-        if (fileContent.substring(start - 2, start) === '  ') {
-          fileContent = fileContent.substring(0, start - 2) + fileContent.substring(end);
-          textarea.selectionStart = textarea.selectionEnd = start - 2;
-        }
-      } else {
-        fileContent = fileContent.substring(0, start) + '  ' + fileContent.substring(end);
-        textarea.selectionStart = textarea.selectionEnd = start + 2;
-      }
-      handleContentChange();
-    }
-
-    updateCursorPos(textarea);
-  }
-
-  function updateCursorPos(textarea: HTMLTextAreaElement) {
-    const val = textarea.value.substring(0, textarea.selectionStart);
-    const lines = val.split('\n');
-    cursorLine = lines.length;
-    cursorCol = lines[lines.length - 1].length + 1;
-  }
+  // Ctrl+S, Ctrl+F, Tab indentation and cursor tracking are CodeMirror keymaps
+  // now; the hand-rolled versions that used to live here fought the editor.
 
   function handleSearchReplace() {
     if (!searchQuery) return;
@@ -611,25 +588,41 @@
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs">
-        {#each filteredFiles as file}
-          <button
-            type="button"
-            on:click={() => openFileInTab(file)}
-            class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 truncate transition-all cursor-pointer
-            {activeTabPath === file ? 'bg-primary-container text-on-primary-container font-bold shadow-xs' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}"
-          >
-            <span class="material-symbols-outlined text-sm flex-shrink-0 text-amber-500">
-              {file.endsWith('.go') ? 'data_object' : file.endsWith('.svelte') || file.endsWith('.html') ? 'web' : file.endsWith('.ts') || file.endsWith('.js') ? 'javascript' : 'description'}
-            </span>
-            <span class="truncate flex-1">{file}</span>
-            {#if openTabs.some(t => t.path === file && t.isDirty)}
-              <span class="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"></span>
-            {/if}
-          </button>
+      <div class="flex-1 overflow-y-auto p-2 font-mono text-xs">
+        {#if fileQuery.trim()}
+          <!-- Searching flattens back to a list: a tree of matches would hide
+               results behind collapsed folders, which is the opposite of what a
+               search is for. -->
+          {#each filteredFiles as file}
+            <button
+              type="button"
+              on:click={() => openFileInTab(file)}
+              class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 truncate transition-all cursor-pointer
+              {activeTabPath === file ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}"
+              title={file}
+            >
+              <span class="truncate flex-1">{file}</span>
+              {#if dirtyPaths.has(file)}
+                <span class="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"></span>
+              {/if}
+            </button>
+          {:else}
+            <div class="text-center py-10 text-on-surface-variant text-xs italic">Không tìm thấy file nào</div>
+          {/each}
         {:else}
-          <div class="text-center py-10 text-on-surface-variant text-xs italic">Không tìm thấy file nào</div>
-        {/each}
+          {#each fileTree as node (node.path + node.isDir)}
+            <FileTreeNode
+              {node}
+              {dirtyPaths}
+              activePath={activeTabPath}
+              expanded={expandedDirs}
+              onOpen={openFileInTab}
+              onToggle={toggleDir}
+            />
+          {:else}
+            <div class="text-center py-10 text-on-surface-variant text-xs italic">Workspace trống</div>
+          {/each}
+        {/if}
       </div>
     </div>
 
@@ -695,33 +688,19 @@
 
       <!-- Main Editor Container (Code vs Diff vs Markdown Preview) -->
       {#if viewMode === 'code'}
-        <!-- Native Synchronized Code Editor -->
-        <div class="flex-1 flex overflow-hidden font-mono {getThemeClasses(codeTheme)}">
-          <!-- Synchronized Line Numbers Column -->
-          <div
-            bind:this={lineNumbersElem}
-            class="bg-black/20 text-outline px-2 py-3 border-r border-white/10 select-none text-right font-mono min-w-[42px] overflow-hidden"
-            style="font-size: {fontSize}px"
-          >
-            {#each Array(lineCount) as _, i}
-              <div class={cursorLine === i + 1 ? 'text-primary font-bold bg-white/10 px-1 rounded' : ''}>{i + 1}</div>
-            {/each}
-          </div>
-
-          <!-- Native Textarea with Smooth Mouse Scroll -->
-          <textarea
-            bind:this={textareaElem}
-            bind:value={fileContent}
-            on:scroll={syncEditorScroll}
-            on:input={handleContentChange}
-            on:keydown={handleEditorKeyDown}
-            on:click={(e) => updateCursorPos(e.currentTarget)}
-            on:keyup={(e) => updateCursorPos(e.currentTarget)}
-            spellcheck="false"
-            style="font-size: {fontSize}px"
-            class="flex-1 bg-transparent text-inherit p-3 outline-none resize-none font-mono leading-relaxed border-none whitespace-pre overflow-auto"
-            placeholder="Mã nguồn sẽ hiển thị ở đây..."
-          ></textarea>
+        <!-- CodeMirror 6. This was a <textarea> with a hand-drawn line-number
+             column beside it, kept in sync by copying scrollTop: no syntax
+             highlighting, no folding, no real find, and Tab implemented by
+             rewriting the whole document and moving the caret by hand. -->
+        <div class="flex-1 overflow-hidden">
+          <CodeEditor
+            value={fileContent}
+            path={activeTabPath}
+            dark={codeTheme !== 'github-light'}
+            on:change={(e) => { fileContent = e.detail; handleContentChange(); }}
+            on:save={handleSaveFile}
+            on:cursor={(e) => { cursorLine = e.detail.line; cursorCol = e.detail.col; }}
+          />
         </div>
       {:else if viewMode === 'preview'}
         <!-- Markdown Live Preview View -->
