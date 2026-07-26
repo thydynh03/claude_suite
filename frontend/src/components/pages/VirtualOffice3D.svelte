@@ -3,6 +3,7 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { logs, agentsStore, tasksStore } from '../../lib/stores/appState';
+  import { taskTag, groupTasksIntoLevels, assignLevelToAvatars } from '../../lib/officeReplay';
 
   let container: HTMLDivElement;
   let scene: THREE.Scene;
@@ -53,11 +54,6 @@
     QA: { x: -9, z: 9, label: 'Khu kiểm thử' },
     E2E: { x: -9, z: 9, label: 'Khu kiểm thử' },
   };
-
-  function taskTag(title: string): string {
-    const m = /^\[([A-Z0-9]+)\]/.exec((title || '').trim());
-    return m ? m[1] : '';
-  }
 
   let homeSeats = new Map<string, { x: number; z: number; rotY: number }>();
 
@@ -158,6 +154,10 @@
     isAllSeatsPopulated = true;
     agents3D.forEach(a => scene.remove(a.mesh));
     agents3D = [];
+    // The avatar roster just changed wholesale: stale seat memory (old names)
+    // and stale bubble slots would both point at people who no longer exist.
+    homeSeats = new Map();
+    uiAgents = [];
 
     const corporateRoles = [
       "Sếp Tổng (CEO)", "VP Engineering", "Tech Lead Architect", "Lead Product Manager",
@@ -213,8 +213,6 @@
   // orchestrator dispatches in, so watching it tells you something true.
   async function handleRunFullOfficeScenario() {
     if (isSimulating) return;
-    if (agents3D.length < 5) handlePopulateAllSeats();
-    if (homeSeats.size === 0) rememberSeats();
 
     const tasks = ($tasksStore as any[]) || [];
     if (tasks.length === 0) {
@@ -222,35 +220,35 @@
       return;
     }
 
+    // Only populate demo personas when the stage is EMPTY. Replacing 1-4 real
+    // agents with 35 personas was how the button used to destroy the very
+    // names it then tried to match tasks against.
+    if (agents3D.length === 0) handlePopulateAllSeats();
+    if (agents3D.length === 0) {
+      globalBubble = 'Chưa có agent nào để diễn — mở tab Settings tạo agent trước.';
+      return;
+    }
+    if (homeSeats.size === 0) rememberSeats();
+
     isSimulating = true;
     $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'INFO', message: `Diễn lại quy trình với ${tasks.length} task theo thứ tự phụ thuộc` }];
 
-    // Group into dependency levels. A task whose blockers are not on the board —
-    // deleted, or outside this plan — is treated as ready rather than dropped,
-    // otherwise it would never be shown at all.
-    const byId = new Map(tasks.map((t) => [t.task_id, t]));
-    const placed = new Set<string>();
-    const levels: any[][] = [];
-
-    while (placed.size < tasks.length && levels.length < 20) {
-      const level = tasks.filter(
-        (t) =>
-          !placed.has(t.task_id) &&
-          (t.depends_on || []).every((d: string) => !byId.has(d) || placed.has(d))
-      );
-      // A cycle would otherwise spin here forever.
-      if (level.length === 0) break;
-      level.forEach((t) => placed.add(t.task_id));
-      levels.push(level);
-    }
+    // Dependency waves + casting live in lib/officeReplay (pure, unit-tested).
+    // Casting falls back from exact assignment to role keywords to
+    // round-robin, so a fresh, still-unassigned plan animates too — the old
+    // exact-name-only match made this button visibly do nothing.
+    const levels = groupTasksIntoLevels(tasks);
+    const avatarNames = agents3D.map((a) => a.name);
+    const rr = { i: 0 };
 
     for (let i = 0; i < levels.length; i++) {
       const level = levels[i];
       globalBubble = `Bước ${i + 1}/${levels.length}: ${level.map((t) => t.title).join(' · ')}`;
 
+      const cast = assignLevelToAvatars(level, avatarNames, rr);
       const zoneCounts = new Map<string, number>();
       for (const a of agents3D) {
-        const task = level.find((t) => t.assigned_to === a.name);
+        const task = cast.get(a.name);
         const seat = homeSeats.get(a.name);
 
         if (!task) {

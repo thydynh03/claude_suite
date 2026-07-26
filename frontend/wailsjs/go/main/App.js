@@ -138,6 +138,10 @@ export function GetAutoApproveAll() {
   return window['go']['main']['App']['GetAutoApproveAll']();
 }
 
+export function GetAvailableModels() {
+  return window['go']['main']['App']['GetAvailableModels']();
+}
+
 export function GetBudgetStatus() {
   return window['go']['main']['App']['GetBudgetStatus']();
 }
@@ -320,6 +324,10 @@ export function RebuildProjectMap() {
 
 export function RefreshAccountTokens() {
   return window['go']['main']['App']['RefreshAccountTokens']();
+}
+
+export function RefreshGeminiModels() {
+  return window['go']['main']['App']['RefreshGeminiModels']();
 }
 
 export function RefreshProjectSummaries() {

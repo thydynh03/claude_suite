@@ -22,24 +22,16 @@ import (
 // --dangerously-skip-permissions after Stop or timeout — while the inherited
 // pipe handles kept cmd.Wait() blocked far past the timeout, holding the
 // worker slot with it.
-func newCLICommand(ctx context.Context, executable string, args []string, show bool) *exec.Cmd {
+func newCLICommand(ctx context.Context, executable string, args []string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, executable, args...)
-	if show {
-		// The executable runs directly in its own console — no `cmd.exe /c`
-		// wrapper. The wrapper displayed nothing (stdout/stderr go to our
-		// pipes either way) and it re-parsed Go's MSVCRT-quoted argv with
-		// cmd's rules, so one double quote in a task prompt flipped the quote
-		// state and made `&`, `|`, `>` live metacharacters: prompt text could
-		// truncate the command or execute as commands.
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    false,
-			CreationFlags: 0x00000010, // CREATE_NEW_CONSOLE
-		}
-	} else {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-		}
+	// Always hidden. A CREATE_NEW_CONSOLE on the agent used to serve the
+	// "show console" toggle, but stdout/stderr are piped to the app, so that
+	// window was EMPTY and closed with the process before anyone could read
+	// it. The visible window is now the detached tail viewer (viewer.go) —
+	// it shows the streamed output and outlives the run.
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
 	}
 
 	// taskkill /T walks the descendant tree, so a shim's grandchild dies with

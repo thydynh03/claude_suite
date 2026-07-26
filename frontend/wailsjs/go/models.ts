@@ -1,6 +1,7 @@
 export namespace claims {
 	
 	export class ChatMessage {
+	    seq: number;
 	    author: string;
 	    text: string;
 	    // Go type: time
@@ -12,6 +13,7 @@ export namespace claims {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seq = source["seq"];
 	        this.author = source["author"];
 	        this.text = source["text"];
 	        this.at = this.convertValues(source["at"], null);
@@ -349,6 +351,7 @@ export namespace cli {
 	    duration_sec: number;
 	    account_id: string;
 	    usage_estimated: boolean;
+	    model_used: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -365,6 +368,7 @@ export namespace cli {
 	        this.duration_sec = source["duration_sec"];
 	        this.account_id = source["account_id"];
 	        this.usage_estimated = source["usage_estimated"];
+	        this.model_used = source["model_used"];
 	    }
 	}
 
@@ -532,6 +536,31 @@ export namespace main {
 	        this.failed = source["failed"];
 	        this.skipped = source["skipped"];
 	        this.errors = source["errors"];
+	    }
+	}
+
+}
+
+export namespace modelcatalog {
+	
+	export class Model {
+	    id: string;
+	    label: string;
+	    provider: string;
+	    source: string;
+	    token_limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Model(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.provider = source["provider"];
+	        this.source = source["source"];
+	        this.token_limit = source["token_limit"];
 	    }
 	}
 

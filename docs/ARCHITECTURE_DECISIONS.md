@@ -80,15 +80,25 @@ between opening the database and failing to find it.
 
 ---
 
-## 3. Spawning a visible console uses `/c`, never `/k`
+## 3. The visible console is a detached tail viewer, never the agent's own window
 
-`backend/cli/process_windows.go` already says it, and it is worth repeating
-because `/k` is what most examples on the internet use:
+The "show console" toggle does NOT give the agent process a console. Two dead
+ends prove why, both lived:
 
-> `/k` leaves the shell alive after the tool exits, so `cmd.Wait()` would block
-> until the user closes the console by hand and the task would never complete.
+- A `cmd /k` wrapper keeps the shell alive after the tool exits, so
+  `cmd.Wait()` blocks until the user closes the window by hand and the task
+  never completes.
+- `CREATE_NEW_CONSOLE` on the agent process itself opened an EMPTY window:
+  stdout/stderr are piped to the app either way, and the window died with the
+  process — before a human could read anything.
 
-The new console still shows the output with `/c`.
+So the agent always runs hidden (`process_windows.go`), and
+`backend/cli/viewer.go` opens a separate PowerShell `Get-Content -Wait`
+console tailing that run's log file. The viewer is started and then
+**released, never Wait()ed on** — its lifetime belongs to the user's hand,
+which is exactly the property that made `/k` poison for the agent process.
+If you attach any app-side wait to the viewer, you have rebuilt the `/k` bug
+with extra steps.
 
 ---
 

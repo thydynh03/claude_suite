@@ -449,6 +449,12 @@ func (a *AntigravityCLI) executeWithRotation(ctx context.Context, model, prompt,
 func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system string, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
+	// Same viewer contract as the Claude runner: the agent process is hidden,
+	// the visible window is a detached tail that outlives the run (viewer.go).
+	viewer := startRunViewer("Antigravity/Gemini · model: " + orDefault(model, "(mặc định CLI)"))
+	onLog = viewer.logSink(onLog)
+	defer viewer.Finish("RUN KẾT THÚC")
+
 	// The Antigravity CLI has no system-prompt flag, so the system prompt is
 	// inlined into the prompt text — the same convention as the Claude runner.
 	// It used to be accepted and silently dropped, which meant every role
@@ -470,7 +476,7 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
-	cmd := newCLICommand(ctx, a.executablePath, args, ShowCLIConsole)
+	cmd := newCLICommand(ctx, a.executablePath, args)
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}

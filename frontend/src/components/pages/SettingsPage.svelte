@@ -6,6 +6,7 @@
   import MCPManager from '../ui/MCPManager.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import Dropdown from '../ui/Dropdown.svelte';
+  import ModelSelect, { loadModelCatalog } from '../ui/ModelSelect.svelte';
   import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
 
   let subTab: 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' | 'memory' = 'oauth_pool';
@@ -58,6 +59,20 @@
         if (cfg) memoryCfg = cfg;
       }
     } catch (e) {}
+  }
+
+  let isRefreshingModels = false;
+  async function handleRefreshGeminiModels() {
+    isRefreshingModels = true;
+    try {
+      const n = await (AppBindings as any).RefreshGeminiModels();
+      await loadModelCatalog(true);
+      addToast(`Đã tải danh sách model Gemini từ API: ${n} model.`, 'SUCCESS');
+    } catch (e: any) {
+      addToast('Tải danh sách Gemini thất bại: ' + String(e?.message ?? e), 'ERROR');
+    } finally {
+      isRefreshingModels = false;
+    }
   }
 
   async function handleSaveMemoryCfg() {
@@ -572,15 +587,11 @@
 
               <div class="flex justify-between items-center text-on-surface-variant gap-2">
                 <span>Model:</span>
-                <div class="w-32">
-                  <Dropdown
-                    options={[
-                      { value: 'claude-opus-4-8', label: 'Opus 4.8' },
-                      { value: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
-                      { value: 'gemini-3.6-flash-high', label: 'Gemini Flash' }
-                    ]}
-                    value={agent.model}
-                    on:change={(e) => agent.model = e.detail}
+                <div class="w-40">
+                  <ModelSelect
+                    bind:value={agent.model}
+                    provider={agent.provider === 'anti_cli' ? 'anti' : 'claude'}
+                    selectClass="w-full bg-surface-container-low border border-outline-variant p-1.5 rounded-lg text-xs outline-none focus:border-primary"
                   />
                 </div>
               </div>
@@ -609,28 +620,19 @@
         <div class="flex items-center gap-4">
           <label for="agent-model-select" class="text-xs font-bold text-on-surface whitespace-nowrap">Agent & Model:</label>
           <div class="flex gap-2 w-full max-w-sm">
-            <select id="agent-model-select" bind:value={selectedAgentType} 
+            <select id="agent-model-select" bind:value={selectedAgentType}
               on:change={() => selectedModel = selectedAgentType === 'claude' ? 'claude-opus-4-8' : 'gemini-3.1-pro-high'}
               class="w-1/2 bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary">
               <option value="claude">Claude</option>
               <option value="antigravity">Antigravity</option>
             </select>
-            <select bind:value={selectedModel} 
-              class="w-1/2 bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary">
-              {#if selectedAgentType === 'claude'}
-                <option value="claude-opus-4-8">Opus 4.8</option>
-                <option value="claude-sonnet-4-5">Sonnet 4.5</option>
-                <option value="claude-haiku-4-5">Haiku 4.5</option>
-                <option value="fable-5">Fable 5</option>
-              {:else}
-                <option value="gemini-3.6-flash-high">Gemini 3.6 Flash (High)</option>
-                <option value="gemini-3.6-flash-medium">Gemini 3.6 Flash (Medium)</option>
-                <option value="gemini-3.6-flash-low">Gemini 3.6 Flash (Low)</option>
-                <option value="gemini-3.5-flash-high">Gemini 3.5 Flash (High)</option>
-                <option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High)</option>
-                <option value="gpt-oss-120b">GPT-OSS 120B (Medium)</option>
-              {/if}
-            </select>
+            <div class="w-1/2">
+              <ModelSelect
+                bind:value={selectedModel}
+                provider={selectedAgentType === 'claude' ? 'claude' : 'anti'}
+                selectClass="w-full bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary"
+              />
+            </div>
           </div>
         </div>
 
@@ -892,7 +894,16 @@
         </span>
       </label>
 
-      <div class="pt-4 border-t border-outline-variant flex justify-end">
+      <div class="pt-4 border-t border-outline-variant flex items-center justify-between gap-2">
+        <button
+          on:click={handleRefreshGeminiModels}
+          disabled={isRefreshingModels}
+          title="Gọi Generative Language API bằng API key trong pool để lấy danh sách model Gemini mới nhất"
+          class="bg-surface-container-highest text-on-surface-variant border border-outline-variant px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1 hover:bg-surface-container-high transition-all"
+        >
+          {#if isRefreshingModels}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{:else}<span class="material-symbols-outlined text-base">cloud_sync</span>{/if}
+          Tải model Gemini từ API
+        </button>
         <button
           on:click={handleSaveMemoryCfg}
           disabled={isSavingMemoryCfg}

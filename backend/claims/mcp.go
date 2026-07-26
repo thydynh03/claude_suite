@@ -50,6 +50,10 @@ type toolArgs struct {
 	Falsifier string `json:"falsifier"`
 	Text      string `json:"text"`
 	ClaimID   string `json:"claim_id"`
+	// AfterSeq and WaitSeconds drive wait_for_chat: return only messages newer
+	// than AfterSeq, blocking up to WaitSeconds for one to arrive.
+	AfterSeq    int `json:"after_seq"`
+	WaitSeconds int `json:"wait_seconds"`
 	// ParticipantKey is issued by join_session and required on every later
 	// call. The session token in the URL is shared by the whole roster, so it
 	// proves membership, not identity — without this key any participant
@@ -110,7 +114,13 @@ func (h *Host) serveMCP(w http.ResponseWriter, r *http.Request) {
 				"later call needs it with your author) → list_checks → investigate the subject in " +
 				"your own workspace → submit_claim (one per finding; omit falsifier for an opinion, " +
 				"which cannot block) → finish_reporting → poll get_session_state for verdicts and the " +
-				"outcome. A falsifier PASSES when the claim is WRONG, so a failing check confirms the defect.",
+				"outcome. A falsifier PASSES when the claim is WRONG, so a failing check confirms the defect. " +
+				"The session also carries free-form chat between the agents and the human arbiter. After " +
+				"finish_reporting, stay in the conversation: call wait_for_chat with after_seq set to the " +
+				"highest seq you have seen (0 at first) — it blocks until someone speaks. Reply with say " +
+				"only when a message names you, asks you a question, or disputes one of your findings; " +
+				"answer briefly and cite file:line. Never reply to your own messages, and stop once the " +
+				"phase is record. Talk is not evidence — nothing said in chat changes a verdict.",
 		})
 	case "ping":
 		writeMCPResult(w, req.ID, map[string]any{})
@@ -254,6 +264,54 @@ func (h *Host) callMCPTool(hs *hosted, name string, args toolArgs) (string, erro
 		hs.session.Say(args.Author, args.Text)
 		return "Sent.", nil
 
+	case "wait_for_chat":
+		if err := h.requireMCPJoin(hs, args.Author, args.ParticipantKey); err != nil {
+			return "", err
+		}
+		// The long poll that turns polling into conversation: block until
+		// someone speaks, then hand back only what the caller has not seen.
+		// The default stays under common MCP client timeouts; the cap keeps a
+		// stateless HTTP handler from being parked for minutes.
+		wait := time.Duration(args.WaitSeconds) * time.Second
+		if wait <= 0 {
+			wait = 20 * time.Second
+		}
+		if wait > 55*time.Second {
+			wait = 55 * time.Second
+		}
+		timeout := time.NewTimer(wait)
+		defer timeout.Stop()
+		for {
+			if msgs := hs.session.ChatAfter(args.AfterSeq); len(msgs) > 0 {
+				data, err := json.MarshalIndent(map[string]any{
+					"phase":    hs.session.Phase(),
+					"messages": msgs,
+					"last_seq": msgs[len(msgs)-1].Seq,
+				}, "", "  ")
+				if err != nil {
+					return "", err
+				}
+				return "New chat. Reply with say only if a message names you, asks you something, or " +
+					"disputes your claim — otherwise call wait_for_chat again with after_seq=last_seq.\n\n" +
+					string(data), nil
+			}
+			hs.mu.Lock()
+			sessionClosed := hs.outcome != nil
+			hs.mu.Unlock()
+			if sessionClosed {
+				return "The session is closed; nothing more will be said. Read the outcome with " +
+					"get_session_state and stop listening.", nil
+			}
+			select {
+			case <-hs.session.ChatSignal():
+				// Someone spoke; loop around and collect it.
+			case <-timeout.C:
+				return fmt.Sprintf("No new chat after seq %d (phase: %s). Call wait_for_chat again "+
+					"with the same after_seq to keep listening, or stop once the phase is record.",
+					args.AfterSeq, hs.session.Phase()), nil
+			}
+		}
+
 	case "remark":
 		if err := h.requireMCPJoin(hs, args.Author, args.ParticipantKey); err != nil {
 			return "", err
@@ -339,10 +397,11 @@ func mcpPhaseGuidance(p Phase, closed bool) string {
 		return "Falsifiers are running. Poll get_session_state until the phase moves to reveal."
 	case PhaseReveal:
 		return "All claims are revealed with their evidence. Confirmed verifiable claims block; " +
-			"opinions may move to a debate round."
+			"opinions may move to a debate round. Stay reachable: wait_for_chat blocks until someone " +
+			"speaks, and say answers them."
 	case PhaseDebate:
 		return "Debate round open, opinions only — use remark with the claim_id you are answering. " +
-			"Nothing the checks settled is reopened."
+			"Nothing the checks settled is reopened. Free-form talk continues via wait_for_chat and say."
 	default:
 		return "Session is in phase " + string(p) + "."
 	}
@@ -401,13 +460,30 @@ func mcpTools() []map[string]any {
 			"inputSchema": obj(map[string]any{"author": author, "participant_key": pkey}, "author", "participant_key"),
 		},
 		{
-			"name":        "say",
-			"description": "Free-form discussion visible to everyone. Talk is not evidence and never changes a verdict.",
+			"name": "say",
+			"description": "Free-form discussion visible to everyone, including the human arbiter. Talk is " +
+				"not evidence and never changes a verdict. Reply when a chat message names you, asks you " +
+				"something, or disputes your claim — briefly, citing file:line.",
 			"inputSchema": obj(map[string]any{
 				"author":          author,
 				"participant_key": pkey,
 				"text":            map[string]any{"type": "string"},
 			}, "author", "participant_key", "text"),
+		},
+		{
+			"name": "wait_for_chat",
+			"description": "Block until someone says something newer than after_seq, then return those " +
+				"messages with their seq numbers. The conversation loop: wait_for_chat → maybe say → " +
+				"wait_for_chat again with after_seq set to the last_seq you received. Times out quietly " +
+				"(default 20s, max 55s) — just call it again. Stop once the phase is record.",
+			"inputSchema": obj(map[string]any{
+				"author":          author,
+				"participant_key": pkey,
+				"after_seq": map[string]any{"type": "integer", "description": "Highest chat seq you have " +
+					"already seen; 0 for everything"},
+				"wait_seconds": map[string]any{"type": "integer", "description": "How long to block " +
+					"waiting for a new message (default 20, max 55)"},
+			}, "author", "participant_key"),
 		},
 		{
 			"name":        "remark",

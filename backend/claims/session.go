@@ -71,7 +71,14 @@ type Session struct {
 	claims       []*Claim
 	remarks      []Remark
 	chat         []ChatMessage
-	debateRound  int
+	// chatSeq numbers messages across the whole session, surviving the cap on
+	// s.chat: a reader that remembers the last seq it saw can ask for "newer
+	// than N" without diffing the full transcript.
+	chatSeq int
+	// chatNotify is closed and replaced on every Say. A waiter grabs the
+	// current channel and selects on it — the long-poll behind wait_for_chat.
+	chatNotify  chan struct{}
+	debateRound int
 
 	// warnings surface conditions that weaken a session's result without
 	// stopping it — the caller decides what to do about them.
@@ -86,6 +93,7 @@ func NewSession(id, subject string) *Session {
 		phase:        PhaseCollect,
 		Opened:       time.Now(),
 		participants: map[string]*Participant{},
+		chatNotify:   make(chan struct{}),
 	}
 }
 
@@ -148,6 +156,13 @@ func (s *Session) Warnings() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.warnings...)
+}
+
+// ParticipantCount reports how many agents have joined so far.
+func (s *Session) ParticipantCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.participants)
 }
 
 // Homogeneous reports whether every participant runs the same provider.
@@ -369,6 +384,10 @@ func (s *Session) DebateRound() int {
 // the problem is upstream, checking now", which is most of what a review between
 // two agents consists of.
 type ChatMessage struct {
+	// Seq numbers this message within the session, strictly increasing. It is
+	// the cursor for "what have I not seen yet": remember the last seq and ask
+	// for anything newer.
+	Seq    int       `json:"seq"`
 	Author string    `json:"author"`
 	Text   string    `json:"text"`
 	At     time.Time `json:"at"`
@@ -390,7 +409,14 @@ func (s *Session) Say(author, text string) {
 	if len(s.chat) >= 500 {
 		s.chat = s.chat[1:]
 	}
-	s.chat = append(s.chat, ChatMessage{Author: author, Text: text, At: time.Now()})
+	s.chatSeq++
+	s.chat = append(s.chat, ChatMessage{Seq: s.chatSeq, Author: author, Text: text, At: time.Now()})
+
+	// Wake everyone blocked in ChatSignal. Close-and-replace rather than a
+	// broadcast condvar: a waiter can select on the channel with a timeout,
+	// which sync.Cond cannot do.
+	close(s.chatNotify)
+	s.chatNotify = make(chan struct{})
 }
 
 // Chat returns a copy of the discussion so far.
@@ -398,4 +424,27 @@ func (s *Session) Chat() []ChatMessage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]ChatMessage(nil), s.chat...)
+}
+
+// ChatAfter returns the messages newer than seq — the incremental read behind
+// a conversation loop, so a polling agent does not re-diff the whole
+// transcript on every turn.
+func (s *Session) ChatAfter(seq int) []ChatMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []ChatMessage
+	for _, m := range s.chat {
+		if m.Seq > seq {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// ChatSignal returns a channel that is closed the next time anyone speaks.
+// Grab it, then select on it alongside a timer: that is a long poll.
+func (s *Session) ChatSignal() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.chatNotify
 }

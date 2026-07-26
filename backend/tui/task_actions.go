@@ -14,6 +14,7 @@ import (
 	"claude_suite/backend/core"
 	"claude_suite/backend/database"
 	"claude_suite/backend/defaults"
+	"claude_suite/backend/modelcatalog"
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
@@ -48,6 +49,7 @@ type RepositoryTaskActions struct {
 	lessons   *database.LessonRepository
 	regress   *database.RegressionRepository
 	learner   *services.Learner
+	catalog   *modelcatalog.Catalog
 	orch      *orchestrator.Orchestrator
 	git       *services.GitService
 	webhook   *services.WebhookService
@@ -106,6 +108,8 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 	orch.SetMemoryStores(wsRepo, obsRepo)
 	orch.SetProjectMapper(mapper)
 	orch.SetLearner(learner)
+	catalog := modelcatalog.New(filepath.Dir(absolute))
+	orch.SetModelCatalog(catalog)
 	learner.Start()
 	orch.SetWorkspaceDir(workspace)
 	// Same stored knobs as the desktop app — one config file, two frontends.
@@ -137,7 +141,7 @@ func OpenRepositoryTaskActions(path, workspace string) (*RepositoryTaskActions, 
 		plan: planBuilder, pipe: pipeline.NewPipelineEngine(agentRepo, runner),
 		exporter: services.NewExporterService(),
 		runner:   runner, context: contextManager, mapper: mapper,
-		lessons: lessonRepo, regress: regressionRepo, learner: learner,
+		lessons: lessonRepo, regress: regressionRepo, learner: learner, catalog: catalog,
 		orch: orch, git: gitSvc, webhook: services.NewWebhookService(taskRepo),
 		browser: services.NewBrowserAgentService(),
 		events:  make(chan RuntimeEvent, 128), workspace: workspace,
@@ -234,10 +238,12 @@ func (a *RepositoryTaskActions) ExportKanbanReport() (string, error) {
 }
 
 func (a *RepositoryTaskActions) RunQuickCLI(prompt, providerName, model string, files []string) (string, error) {
+	// Same rule as the desktop app: context only with attached files, and the
+	// user's request labeled so it cannot read as one more line of context.
 	fullPrompt := prompt
-	if a.workspace != "" {
+	if a.workspace != "" && len(files) > 0 {
 		if contextPrompt := a.context.BuildContextPrompt(a.workspace, files); contextPrompt != "" {
-			fullPrompt = contextPrompt + "\n\n" + prompt
+			fullPrompt = contextPrompt + "\n--- YÊU CẦU CỦA NGƯỜI DÙNG (trả lời phần này) ---\n" + prompt
 		}
 	}
 	if model == "" {
@@ -382,6 +388,20 @@ func (a *RepositoryTaskActions) ApproveRegressionGuard(regressionID, checkName s
 		return err
 	}
 	return a.regress.SetGuard(regressionID, checkName, "approved")
+}
+
+func (a *RepositoryTaskActions) GetAvailableModels() []modelcatalog.Model {
+	return a.catalog.List()
+}
+
+func (a *RepositoryTaskActions) RefreshGeminiModels() (int, error) {
+	var keys []string
+	for _, k := range cli.GlobalAntiPool.GetKeys() {
+		if k.APIKey != "" {
+			keys = append(keys, k.APIKey)
+		}
+	}
+	return a.catalog.RefreshGemini(keys)
 }
 
 func (a *RepositoryTaskActions) GetMemoryConfig() models.MemoryConfig {

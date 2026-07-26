@@ -31,6 +31,11 @@ var skippedDirs = map[string]bool{
 	"venv": true, "dist": true, "build": true, ".wails": true, ".idea": true,
 	".vscode": true, ".next": true, "coverage": true, "wailsjs": true,
 	".claude-suite": true, ".ua": true, "bin": true, "obj": true,
+	// .claude holds agent-tool state INCLUDING nested git worktrees
+	// (.claude/worktrees/<name> is a full copy of the repo while a background
+	// task runs). Scanning it doubles every node under a path nothing else
+	// references, and the duplicates crowd the real files out of the pack.
+	".claude": true,
 }
 
 // maxScannedFileSize skips generated monsters (lockfiles, bundles): they cost

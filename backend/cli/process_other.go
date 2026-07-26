@@ -7,6 +7,6 @@ import (
 	"os/exec"
 )
 
-func newCLICommand(ctx context.Context, executable string, args []string, _ bool) *exec.Cmd {
+func newCLICommand(ctx context.Context, executable string, args []string) *exec.Cmd {
 	return exec.CommandContext(ctx, executable, args...)
 }

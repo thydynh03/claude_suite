@@ -1,7 +1,9 @@
 package claims
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -25,10 +27,26 @@ type Client struct {
 	OutDir string
 
 	ws *websocket.Conn
+	// pending holds the chat history from the watch acknowledgement, so
+	// Listen can print what was said before it connected.
+	pending []ChatMessage
 }
 
 // Connect joins the session.
 func (c *Client) Connect() error {
+	return c.attach(MsgJoin)
+}
+
+// Watch attaches as an observer: token-authenticated, receiving state and
+// chat, but never a participant. This is the mode for looking or speaking
+// without taking a seat — joining is single-shot per author, so a --ping or a
+// --say from an agent that already joined used to fail with "has already
+// joined", and adjudication never waits for a watcher.
+func (c *Client) Watch() error {
+	return c.attach(MsgWatch)
+}
+
+func (c *Client) attach(mode string) error {
 	if c.HostURL == "" || c.SessionID == "" || c.Token == "" {
 		return fmt.Errorf("host, session and token are all required")
 	}
@@ -48,8 +66,8 @@ func (c *Client) Connect() error {
 	}
 	c.ws = ws
 
-	if err := ws.WriteJSON(Message{Type: MsgJoin, Author: c.Author, Provider: c.Provider}); err != nil {
-		return fmt.Errorf("join: %w", err)
+	if err := ws.WriteJSON(Message{Type: mode, Author: c.Author, Provider: c.Provider}); err != nil {
+		return fmt.Errorf("%s: %w", mode, err)
 	}
 	state, err := c.readUntil(MsgState, 30*time.Second)
 	if err != nil {
@@ -61,6 +79,7 @@ func (c *Client) Connect() error {
 	if state.Note != "" {
 		fmt.Fprintln(os.Stderr, "note: "+state.Note)
 	}
+	c.pending = state.Chat
 	return nil
 }
 
@@ -78,6 +97,55 @@ func (c *Client) Submit(subject, assertion, falsifier string) error {
 // evidence: only a falsifier settles a claim.
 func (c *Client) Say(text string) error {
 	return c.ws.WriteJSON(Message{Type: MsgChat, Text: text})
+}
+
+// Listen streams the session's chat to w — one JSON object per line, oldest
+// first, each carrying the seq an agent needs to know what it has answered —
+// until the session closes or the timeout passes. Attach with Watch first.
+//
+// JSONL on stdout is the whole interface: an IDE agent runs the command in
+// the background and reads lines as the other side speaks.
+func (c *Client) Listen(w io.Writer, timeout time.Duration) error {
+	enc := json.NewEncoder(w)
+	lastSeq := 0
+	emit := func(msgs []ChatMessage) error {
+		for _, m := range msgs {
+			// Every broadcast carries the full transcript; seq is what keeps
+			// this from printing the same message once per broadcast.
+			if m.Seq > lastSeq {
+				lastSeq = m.Seq
+				if err := enc.Encode(m); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := emit(c.pending); err != nil {
+		return err
+	}
+	c.pending = nil
+
+	deadline := time.Now().Add(timeout)
+	_ = c.ws.SetReadDeadline(deadline)
+	for {
+		var m Message
+		if err := c.ws.ReadJSON(&m); err != nil {
+			if time.Now().After(deadline) {
+				return nil // listened for the agreed time; a quiet end, not a failure
+			}
+			return fmt.Errorf("listening: %w", err)
+		}
+		switch m.Type {
+		case MsgState:
+			if err := emit(m.Chat); err != nil {
+				return err
+			}
+		case MsgOutcome:
+			// A closing line, so a reader knows silence means "over", not "quiet".
+			return enc.Encode(map[string]any{"session_closed": true, "session_id": c.SessionID})
+		}
+	}
 }
 
 // Done reports that this agent has nothing further, which lets the host close

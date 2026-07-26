@@ -299,3 +299,76 @@ func TestClaimBeforeJoinIsRefused(t *testing.T) {
 		t.Fatalf("error = %q, want it to say join first", got.Error)
 	}
 }
+
+// A lone agent that joins, submits and finishes within a second must not slam
+// the collect window shut: the second side of the dispute is usually still
+// pasting the join command. The window stays open, the late agent joins, and
+// the session adjudicates with both claims.
+func TestSoloFinishHoldsCollectOpenForALateJoiner(t *testing.T) {
+	h, srv := hostFixture(t, shellCheck("reproduces", 1), shellCheck("clean", 0))
+	id, token, err := h.Open("subject", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	an, _, err := dial(t, srv, id, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	an.send(Message{Type: MsgJoin, Author: "an", Provider: "claude"})
+	an.await(MsgState)
+	an.send(Message{Type: MsgClaim, Claim: &Claim{
+		ID: "c1", Subject: "x", Assertion: "the defect is real", Falsifier: "reproduces",
+	}})
+	an.await(MsgState)
+	an.send(Message{Type: MsgDone})
+
+	// The hold is what keeps this from closing instantly.
+	time.Sleep(300 * time.Millisecond)
+	if s, ok := h.Session(id); !ok || s.Phase() != PhaseCollect {
+		t.Fatalf("collect closed with one participant finished")
+	}
+
+	binh, _, err := dial(t, srv, id, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binh.send(Message{Type: MsgJoin, Author: "binh", Provider: "gemini"})
+	binh.await(MsgState)
+	binh.send(Message{Type: MsgClaim, Claim: &Claim{
+		ID: "c2", Subject: "x", Assertion: "no it is not", Falsifier: "clean",
+	}})
+	binh.await(MsgState)
+	binh.send(Message{Type: MsgDone})
+
+	if revealed := an.awaitPhase(PhaseReveal); len(revealed.Claims) != 2 {
+		t.Fatalf("after reveal an sees %d claims, want both", len(revealed.Claims))
+	}
+}
+
+// When nobody else arrives, the hold expires and a single-agent session still
+// adjudicates on its own — solo use works, just not instantly.
+func TestSoloHoldExpiresAndAdjudicatesAlone(t *testing.T) {
+	h, srv := hostFixture(t, shellCheck("reproduces", 1))
+	h.SoloHold = 100 * time.Millisecond // the test cares that it expires, not how long it is
+	id, token, err := h.Open("subject", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	an, _, err := dial(t, srv, id, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	an.send(Message{Type: MsgJoin, Author: "an", Provider: "claude"})
+	an.await(MsgState)
+	an.send(Message{Type: MsgClaim, Claim: &Claim{
+		ID: "c1", Subject: "x", Assertion: "the defect is real", Falsifier: "reproduces",
+	}})
+	an.await(MsgState)
+	an.send(Message{Type: MsgDone})
+
+	if revealed := an.awaitPhase(PhaseReveal); len(revealed.Claims) != 1 {
+		t.Fatalf("after the hold expired an sees %d claims, want its own", len(revealed.Claims))
+	}
+}

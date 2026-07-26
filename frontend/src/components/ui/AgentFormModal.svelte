@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { Agent } from '../../lib/types';
+  import ModelSelect, { providerOfModel } from './ModelSelect.svelte';
 
   /**
    * Full agent editor.
@@ -26,20 +27,14 @@
     { value: 'anti_cli', label: 'Antigravity / Gemini CLI' },
   ];
 
-  // Kept next to the provider they belong to: routing is by model name, so a
-  // Gemini model under claude_cli sends the task to the wrong engine.
-  const MODELS: Record<string, { value: string; label: string }[]> = {
-    claude_cli: [
-      { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
-      { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    ],
-    anti_cli: [
-      { value: 'gemini-3.6-flash-high', label: 'Gemini 3.6 Flash (High)' },
-      { value: 'gemini-3.6-flash-medium', label: 'Gemini 3.6 Flash (Medium)' },
-      { value: 'gemini-3.1-pro-high', label: 'Gemini 3.1 Pro (High)' },
-      { value: 'claude-sonnet-4.6-thinking', label: 'Claude Sonnet 4.6 (Thinking)' },
-    ],
+  // Model choices come from the shared catalog (backend/modelcatalog) via
+  // ModelSelect — the hand-copied per-dialog list is the bug class this
+  // replaced. Only the per-provider default remains local: switching engine
+  // must switch the model too, or the agent ends up pointed at a model its
+  // provider cannot run.
+  const DEFAULT_MODEL: Record<string, string> = {
+    claude_cli: 'claude-sonnet-4-5',
+    anti_cli: 'gemini-3.6-flash-high',
   };
 
   const ICONS = [
@@ -87,7 +82,7 @@
       name = agent?.name || '';
       role = (agent as any)?.role || '';
       provider = (agent as any)?.provider || 'claude_cli';
-      model = (agent as any)?.model || MODELS[provider][0].value;
+      model = (agent as any)?.model || DEFAULT_MODEL[provider] || DEFAULT_MODEL.claude_cli;
       system = (agent as any)?.system || '';
       icon = (agent as any)?.icon || 'smart_toy';
       tokenLimit = (agent as any)?.token_limit || 0;
@@ -102,8 +97,9 @@
   // model its provider cannot run.
   function onProviderChange(next: string) {
     provider = next;
-    if (!MODELS[next].some((m) => m.value === model)) {
-      model = MODELS[next][0].value;
+    const expected = next === 'anti_cli' ? 'anti' : 'claude';
+    if (providerOfModel([], model) !== expected) {
+      model = DEFAULT_MODEL[next] || DEFAULT_MODEL.claude_cli;
     }
   }
 
@@ -242,15 +238,11 @@
             </div>
             <div>
               <label for="agent-model" class="text-[10px] font-bold text-on-surface block mb-1">Model</label>
-              <select
-                id="agent-model"
+              <ModelSelect
                 bind:value={model}
-                class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs cursor-pointer"
-              >
-                {#each MODELS[provider] as m}
-                  <option value={m.value}>{m.label}</option>
-                {/each}
-              </select>
+                provider={provider === 'anti_cli' ? 'anti' : 'claude'}
+                selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs cursor-pointer"
+              />
             </div>
             <div>
               <label for="agent-token-limit" class="text-[10px] font-bold text-on-surface block mb-1">

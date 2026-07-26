@@ -104,6 +104,12 @@ func TestAgentJoinPromptIsSelfContained(t *testing.T) {
 		"--checks",
 		"--falsify",
 		"session-abc123/verdict.json",
+		// The conversation loop: an agent handed this prompt must know how to
+		// listen and how to answer, on both doors.
+		"--listen",
+		"--say",
+		"wait_for_chat",
+		"after_seq",
 	} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt missing %q", want)

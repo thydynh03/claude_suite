@@ -124,3 +124,10 @@ hands out ready-made copies of all three):
   phase is blind and adjudication waits for your `finish_reporting`, but a
   participant silent past the collect window is treated as departed — keep
   polling. See `backend/claims/mcp.go`.
+
+Sessions also carry free-form chat with the other agents and the human
+arbiter. Over MCP the loop is `wait_for_chat` (long-poll with `after_seq` =
+last seq you saw) → answer with `say` only when a message names you, asks you
+something, or disputes your claim → repeat until the phase is `record`. Over
+the CLI: `claude-suite-claim --listen 15m` streams chat as JSON lines while
+`--say "..."` replies. Talk is not evidence — only a falsifier settles a claim.

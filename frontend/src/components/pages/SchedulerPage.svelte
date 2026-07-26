@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import ModelSelect from '../ui/ModelSelect.svelte';
   import { addToast } from '../../lib/stores/appState';
 
   type Job = {
@@ -29,13 +30,13 @@
     { id: 'digest', icon: 'summarize', label: 'Tổng kết', blurb: 'Gửi tóm tắt trong ngày qua webhook.' },
   ];
 
-  const MODELS = [
-    { value: 'claude:claude-sonnet-4-5', label: 'Claude 4.5 Sonnet' },
-    { value: 'claude:claude-opus-4-8', label: 'Claude 4.8 Opus' },
-    { value: 'claude:claude-haiku-4-5', label: 'Claude 4.5 Haiku' },
-    { value: 'anti:gemini-3.6-flash-high', label: 'Gemini 3.6 Flash' },
-    { value: 'anti:gemini-3.1-pro-high', label: 'Gemini 3.1 Pro' },
-  ];
+  // Composite "provider:model" consumed by ScheduleKind; the visible picker
+  // is the shared ModelSelect (plain model id), kept in sync below.
+  let modelChoice = 'claude:claude-sonnet-4-5';
+  let schedulerModel = 'claude-sonnet-4-5';
+  function onSchedulerModelChange(e: CustomEvent<{ value: string; provider: 'claude' | 'anti' }>) {
+    modelChoice = `${e.detail.provider}:${e.detail.value}`;
+  }
 
   let kind = 'prompt';
   let mode: 'time' | 'countdown' = 'time';
@@ -46,7 +47,6 @@
   let cdSec = '00';
   let prompt = '';
   let repeat = true;
-  let modelChoice = MODELS[0].value;
   // Hold a due job until the anti pool has measured-usable quota — the way to
   // land heavy work on the moment a Gemini quota cycle resets.
   let waitForQuota = false;
@@ -254,14 +254,11 @@
       {#if needsModel}
         <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
           <span class="text-xs font-bold uppercase text-on-surface-variant">Chạy bằng</span>
-          <select
-            bind:value={modelChoice}
-            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-semibold text-on-surface outline-none focus:border-primary cursor-pointer"
-          >
-            {#each MODELS as m}
-              <option value={m.value}>{m.label}</option>
-            {/each}
-          </select>
+          <ModelSelect
+            value={schedulerModel}
+            on:change={onSchedulerModelChange}
+            selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-semibold text-on-surface outline-none focus:border-primary cursor-pointer"
+          />
           <p class="text-[11px] text-on-surface-variant">
             Hai nhà cung cấp có hạn mức riêng — hẹn việc nặng vào bên vừa reset quota.
           </p>

@@ -17,6 +17,7 @@ import (
 	"claude_suite/backend/core"
 	"claude_suite/backend/database"
 	"claude_suite/backend/defaults"
+	"claude_suite/backend/modelcatalog"
 	"claude_suite/backend/models"
 	"claude_suite/backend/orchestrator"
 	"claude_suite/backend/pipeline"
@@ -41,6 +42,7 @@ type App struct {
 	lessonRepo      *database.LessonRepository
 	regressionRepo  *database.RegressionRepository
 	learner         *services.Learner
+	modelCatalog    *modelcatalog.Catalog
 	cliRunner       cli.CLIRunner
 	contextMgr      *services.ContextManager
 	gitService      *services.GitService
@@ -113,11 +115,14 @@ func NewApp() *App {
 
 	learner := services.NewLearner(lessonRepo, obsRepo, wsRepo, attemptRepo, regressionRepo, gitSvc, cliRunner, memoryCheapModel)
 
+	catalog := modelcatalog.New(filepath.Dir(database.GetDBPath()))
+
 	orch := orchestrator.NewOrchestrator(agentRepo, taskRepo, memoryRepo, cliRunner, contextMgr, gitSvc, browserSvc)
 	orch.SetAttemptRepo(attemptRepo)
 	orch.SetMemoryStores(wsRepo, obsRepo)
 	orch.SetProjectMapper(mapper)
 	orch.SetLearner(learner)
+	orch.SetModelCatalog(catalog)
 	planBuilder := pipeline.NewPlanBuilder(cliRunner)
 	planBuilder.AttachBoard(taskRepo)
 	planBuilder.AttachRegressions(regressionRepo)
@@ -131,6 +136,7 @@ func NewApp() *App {
 		lessonRepo:      lessonRepo,
 		regressionRepo:  regressionRepo,
 		learner:         learner,
+		modelCatalog:    catalog,
 		cliRunner:       cliRunner,
 		contextMgr:      contextMgr,
 		gitService:      gitSvc,
@@ -531,14 +537,20 @@ func (a *App) GetShowCLIConsole() bool {
 }
 
 func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles []string) (*cli.RunResult, error) {
+	// Context only when the user actually attached files. Building it on a
+	// bare workspace produced a header-only block that framed the whole
+	// message as context — the model then reported "no question or task in
+	// your message" to a perfectly clear question.
 	ctxPrompt := ""
-	if len(localFiles) > 0 || a.workspaceConfig.LastWorkspaceFolder != "" {
+	if len(localFiles) > 0 {
 		ctxPrompt = a.contextMgr.BuildContextPrompt(a.workspaceConfig.LastWorkspaceFolder, localFiles)
 	}
 
 	fullPrompt := prompt
 	if ctxPrompt != "" {
-		fullPrompt = fmt.Sprintf("%s\n\n%s", ctxPrompt, prompt)
+		// The label separates data from task, so the question cannot read as
+		// one more line of context.
+		fullPrompt = fmt.Sprintf("%s\n--- YÊU CẦU CỦA NGƯỜI DÙNG (trả lời phần này) ---\n%s", ctxPrompt, prompt)
 	}
 
 	var runner cli.CLIRunner
@@ -576,7 +588,33 @@ func (a *App) RunQuickCLI(prompt string, model string, system string, localFiles
 	if result != nil && result.SessionID != "" {
 		cli.SetGlobalSession(providerKey, result.SessionID)
 	}
+	// Surface (and learn) the model the CLI actually ran — the answer to
+	// "agent này đang dùng model nào" as a fact, not a configured wish.
+	if result != nil && result.ModelUsed != "" {
+		onLog("🤖 Model thực tế: "+result.ModelUsed, "INFO")
+		a.modelCatalog.RecordObserved(result.ModelUsed)
+	}
 	return result, nil
+}
+
+// ── Model catalog ───────────────────────────────────────────────────────
+
+// GetAvailableModels returns the merged model catalog: aliases (always-newest),
+// builtin, observed-in-runs, and API-discovered Gemini models.
+func (a *App) GetAvailableModels() []modelcatalog.Model {
+	return a.modelCatalog.List()
+}
+
+// RefreshGeminiModels fetches the live Gemini model list using the key pool's
+// API keys. Returns how many models the API reported.
+func (a *App) RefreshGeminiModels() (int, error) {
+	var keys []string
+	for _, k := range cli.GlobalAntiPool.GetKeys() {
+		if k.APIKey != "" {
+			keys = append(keys, k.APIKey)
+		}
+	}
+	return a.modelCatalog.RefreshGemini(keys)
 }
 
 func (a *App) GetActiveSession(provider string) string {
@@ -1794,8 +1832,7 @@ func firstLine(s string) string {
 }
 
 // ScheduleKind schedules a job of a given kind (prompt, plan, e2e, git-commit,
-// digest). waitForQuota holds the job past its due time until the anti pool
-// reports usable quota — scheduling work for the moment a quota resets.
+// digest).
 func (a *App) ScheduleKind(kind, prompt, targetTime string, repeat bool, provider, model string, waitForQuota bool) (string, error) {
 	// One atomic creation: the flag lands with the row. Patching it on after
 	// insert left a gap the one-second scan ticker could fire through.
@@ -2074,18 +2111,19 @@ func (a *App) CreateChecksFile() (string, error) {
 
 // SayInClaimSession posts a chat message from the person running the app, so the
 // arbiter is a participant in the discussion rather than a spectator to it.
+// It goes through Host.Say so the message is also pushed to every connected
+// agent — written straight into the session it sat unread until the next
+// broadcast, which for a quiet session was never.
 func (a *App) SayInClaimSession(sessionID, author, text string) error {
-	session, ok := a.claimsHost.Session(sessionID)
-	if !ok {
-		return fmt.Errorf("không tìm thấy phiên %q", sessionID)
-	}
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("tin nhắn trống")
 	}
 	if author == "" {
 		author = "trọng tài"
 	}
-	session.Say(author, text)
+	if err := a.claimsHost.Say(sessionID, author, text); err != nil {
+		return fmt.Errorf("không gửi được vào phiên %q: %w", sessionID, err)
+	}
 	return nil
 }
 

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { workspaceFolder, logs, addLog, addToast, tasksStore, agentsStore, orchestratorRunning } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import ModelSelect from '../ui/ModelSelect.svelte';
 
   // Aggregated live metrics derived from real task/agent state.
   $: tAll = ($tasksStore || []) as any[];
@@ -31,7 +32,10 @@
   let selectedFiles: string[] = [];
   let isRunning = false;
   let selectedModel = 'claude-sonnet-4-5';
-  $: activeAgent = selectedModel.includes('gemini') ? 'Antigravity (Gemini 3.6 Flash)' : selectedModel.includes('opus') ? 'Claude 4.8 Opus' : 'Claude 4.5 Sonnet';
+  // Show the actual selected id — a hardcoded label map here mislabeled every
+  // model it didn't know about.
+  $: activeAgent = (selectedModel.includes('gemini') || selectedModel.includes('thinking')
+    ? 'Antigravity · ' : 'Claude · ') + selectedModel;
   let topTab = 'active'; // 'active' | 'history'
   let cliOutput = '';
   // Lines the CLI emits while it is still working. Kept apart from cliOutput so
@@ -289,17 +293,10 @@
           <div class="flex items-center gap-3">
             <span class="material-symbols-outlined text-primary text-sm">smart_toy</span>
             <label for="cockpit-model-select" class="text-on-surface font-bold whitespace-nowrap">Model AI thực thi:</label>
-            <select id="cockpit-model-select" bind:value={selectedModel} class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface font-mono outline-none">
-              <optgroup label="Claude Agent">
-                <option value="claude-sonnet-4-5">Claude 4.5 Sonnet</option>
-                <option value="claude-opus-4-8">Claude 4.8 Opus</option>
-                <option value="claude-haiku-4-5">Claude 4.5 Haiku</option>
-              </optgroup>
-              <optgroup label="Antigravity Agent (Gemini)">
-                <option value="gemini-3.6-flash-high">Gemini 3.6 Flash (High)</option>
-                <option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High)</option>
-              </optgroup>
-            </select>
+            <ModelSelect
+              bind:value={selectedModel}
+              selectClass="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface font-mono outline-none"
+            />
           </div>
 
           <!-- CLI Console Toggle Switch -->

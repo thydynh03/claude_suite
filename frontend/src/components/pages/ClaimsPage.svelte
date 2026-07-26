@@ -29,6 +29,33 @@
   let joinTargets: { scope: string; label: string; host: string; command: string; bootstrap: string; mcp: string; prompt: string }[] = [];
   let toolInstalled = true;
 
+  // The three doors into a session used to be one visible command plus two
+  // copy-only buttons — the MCP door existed but nobody could see what it
+  // copied. A picker that shows the actual command for each door replaces it.
+  type JoinMode = 'cli' | 'bootstrap' | 'mcp';
+  let joinMode: JoinMode = 'cli';
+  const JOIN_MODES: { id: JoinMode; label: string; hint: string }[] = [
+    {
+      id: 'cli',
+      label: 'Đã cài app',
+      hint: 'Máy đó đã cài Claude Suite nên có sẵn công cụ claude-suite-claim. Dán lệnh cho agent chạy — nó nộp claim rồi tự chờ kết quả check.',
+    },
+    {
+      id: 'bootstrap',
+      label: 'Chưa cài — tự tải',
+      hint: 'Một lệnh PowerShell (Windows): tự tải claude-suite-claim.exe từ GitHub về thư mục tạm rồi vào phiên. Không cần cài app.',
+    },
+    {
+      id: 'mcp',
+      label: 'MCP — không tải gì',
+      hint: 'Đăng ký phiên này làm MCP server cho agent (Claude Code, Gemini CLI…). Agent nhận ngay các tool join_session, submit_claim, say, wait_for_chat. Chạy lệnh xong mà chưa thấy tool thì khởi động lại agent.',
+    },
+  ];
+
+  function shortHost(h: string) {
+    return h.replace(/^ws:\/\//, '');
+  }
+
   let chat: { author: string; text: string; at: string }[] = [];
   let chatDraft = '';
   let arbiterName = 'trọng tài';
@@ -160,6 +187,9 @@
         joinCommand = res.join_command || '';
         joinTargets = res.targets || [];
         toolInstalled = res.tool_installed !== false;
+        // Open on the door that will actually work here: without the CLI tool
+        // the main command only produces "not found".
+        joinMode = toolInstalled ? 'cli' : 'mcp';
         await refreshStatus();
         await refreshSession();
       } else {
@@ -341,76 +371,109 @@
     </div>
 
     {#if joinTargets.length}
-      <!-- One command per case, because the single localhost line was only ever
-           correct for a second agent on this same machine: on a teammate's
-           computer "localhost" is their computer, where no session is listening. -->
-      <div class="space-y-2">
-        {#if !toolInstalled}
-          <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
-            <span class="material-symbols-outlined text-sm">warning</span>
-            <span>
-              Không tìm thấy <b>claude-suite-claim</b> trên máy này. Lệnh chính bên dưới chỉ chạy được
-              trên máy đã cài app bằng file installer (công cụ được cài kèm), hoặc đã thêm nó vào PATH —
-              máy chưa cài thì dùng nút <b>Chưa cài app</b> hoặc <b>Prompt cho AI</b>.
-            </span>
-          </div>
-        {/if}
-
-        {#each joinTargets as target}
-          <div class="space-y-1">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[11px] font-semibold text-on-surface-variant">
-                {target.label}
-                <span class="font-mono opacity-70">({target.host})</span>
-              </span>
-              <button
-                type="button"
-                on:click={() => copyCommand(target.command)}
-                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
-              >
-                Sao chép
-              </button>
-            </div>
-            <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{target.command}</pre>
-            <!-- The hand-off variants for a machine that never installed the
-                 app. Copy-only (no pre block): the command is long and the
-                 person pasting it does not need to read it, only to deliver it. -->
-            <div class="flex items-center gap-3 flex-wrap">
-              <button
-                type="button"
-                on:click={() => copyText(target.bootstrap, 'lệnh PowerShell tự tải công cụ')}
-                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
-                title="Một lệnh PowerShell: tự tải claude-suite-claim.exe từ GitHub release rồi vào phiên — không cần cài app"
-              >
-                ⬇ Chưa cài app (tải công cụ)
-              </button>
-              <button
-                type="button"
-                on:click={() => copyText(target.mcp, 'lệnh kết nối MCP')}
-                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
-                title="Không tải gì cả: đăng ký phiên này làm MCP server cho agent của đồng đội (claude mcp add). Agent nhận được tool join/submit/finish ngay."
-              >
-                🔌 MCP (không cần tải)
-              </button>
+      <div class="space-y-3">
+        <!-- The fastest door: one prompt that makes the agent do everything,
+             including talking back in the discussion box below. -->
+        <div class="bg-primary/5 border border-primary/25 rounded-xl p-3 space-y-2">
+          <span class="text-[11px] font-bold text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base text-primary">smart_toy</span>
+            Nhanh nhất: dán một prompt cho AI agent
+          </span>
+          <p class="text-[11px] text-on-surface-variant">
+            Sao chép prompt rồi dán nguyên văn cho agent (Claude Code, Gemini CLI…). Trong prompt
+            có sẵn địa chỉ, token và toàn bộ các bước: kết nối → điều tra → nộp claim → <b>tham gia
+            thảo luận</b>. Agent sẽ tự làm từ đầu đến cuối, kể cả trả lời tin nhắn bạn gõ ở ô
+            "Thảo luận trong phiên" bên dưới.
+          </p>
+          <div class="flex items-center gap-2 flex-wrap">
+            {#each joinTargets as target}
               <button
                 type="button"
                 on:click={() => copyText(target.prompt, 'prompt cho AI agent')}
-                class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
-                title="Dán cho AI agent của đồng đội (Claude Code, Gemini CLI...): nó tự chọn cách vào phiên — có app dùng luôn, không thì hỏi người dùng tải hay kết nối MCP"
+                class="px-2.5 py-1.5 rounded-lg bg-primary text-on-primary text-[11px] font-bold hover:opacity-90 cursor-pointer whitespace-nowrap"
               >
-                🤖 Prompt cho AI
+                📋 {target.scope === 'local' ? 'Agent trên máy này' : `Agent máy khác — ${shortHost(target.host)}`}
               </button>
-            </div>
+            {/each}
           </div>
-        {/each}
+          <details class="text-[10px] text-on-surface-variant">
+            <summary class="cursor-pointer font-semibold">Xem nội dung prompt</summary>
+            <pre class="mt-1.5 bg-surface-container-high border border-outline-variant rounded-lg p-3 font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{joinTargets[0].prompt}</pre>
+          </details>
+        </div>
 
-        <p class="text-[10px] text-on-surface-variant">
-          Đồng đội có 3 cách vào phiên: <b>đã cài app</b> → dùng lệnh chính;
-          <b>chưa cài, chịu tải</b> → lệnh PowerShell tự tải công cụ từ GitHub (Windows);
-          <b>không muốn tải</b> → lệnh MCP nối agent của họ thẳng vào app này, không cần file nào.
-          <b>Prompt cho AI</b> gói cả ba lựa chọn — dán nguyên văn cho agent là nó tự hỏi và tự làm.
-          Máy khác trong LAN: lần đầu Windows Firewall sẽ hỏi cho phép — phải chọn Allow thì đồng đội mới kết nối được.
-        </p>
+        <!-- The manual doors, one visible command per door instead of the old
+             copy-only buttons: the MCP command existed but nobody ever saw it. -->
+        <div class="space-y-2">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[11px] font-semibold text-on-surface-variant">Hoặc tự chạy lệnh — máy của agent thuộc trường hợp nào?</span>
+            {#each JOIN_MODES as mode}
+              <button
+                type="button"
+                on:click={() => (joinMode = mode.id)}
+                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer border {joinMode === mode.id
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'}"
+              >
+                {mode.label}
+              </button>
+            {/each}
+          </div>
+
+          {#each JOIN_MODES as mode}
+            {#if joinMode === mode.id}
+              <p class="text-[11px] text-on-surface-variant">{mode.hint}</p>
+            {/if}
+          {/each}
+
+          {#if joinMode === 'cli' && !toolInstalled}
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
+              <span class="material-symbols-outlined text-sm">warning</span>
+              <span>
+                Máy này chưa có <b>claude-suite-claim</b> trên PATH, nên lệnh dưới sẽ báo "not found".
+                Chuyển sang <b>Chưa cài — tự tải</b> hoặc <b>MCP — không tải gì</b>.
+              </span>
+            </div>
+          {/if}
+
+          <!-- One address per case: on a teammate's machine "localhost" is their
+               machine, where no session is listening. -->
+          {#each joinTargets as target}
+            {@const cmd = joinMode === 'cli' ? target.command : joinMode === 'bootstrap' ? target.bootstrap : target.mcp}
+            <div class="space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] font-semibold text-on-surface-variant">
+                  {target.label}
+                  <span class="font-mono opacity-70">({target.host})</span>
+                </span>
+                <button
+                  type="button"
+                  on:click={() => copyCommand(cmd)}
+                  class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                >
+                  Sao chép
+                </button>
+              </div>
+              <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{cmd}</pre>
+            </div>
+          {/each}
+
+          {#if joinMode === 'mcp'}
+            <p class="text-[10px] text-on-surface-variant">
+              Sau khi đăng ký, agent làm theo thứ tự: <span class="font-mono">join_session</span> (giữ lại
+              participant_key) → <span class="font-mono">submit_claim</span> → <span class="font-mono">finish_reporting</span> →
+              nghe và trả lời chat bằng <span class="font-mono">wait_for_chat</span> / <span class="font-mono">say</span>.
+              Với Gemini CLI, thay <span class="font-mono">claude mcp add</span> bằng <span class="font-mono">gemini mcp add</span>.
+            </p>
+          {/if}
+
+          {#if joinTargets.some((t) => t.scope === 'lan')}
+            <p class="text-[10px] text-on-surface-variant">
+              Máy khác trong LAN: lần đầu kết nối, Windows Firewall trên máy này sẽ hỏi — phải chọn
+              <b>Allow</b> thì đồng đội mới vào được.
+            </p>
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -468,6 +531,8 @@
         <p class="text-[11px] text-on-surface-variant">
           Đang thu thập <b>mù</b>: agent chưa thấy claim của nhau. Chỉ sau khi chạy xong check
           chúng mới được đối chiếu — đảo thứ tự này là biến review thành cuộc thi ai tự tin hơn.
+          Nếu mới có <b>một</b> agent nộp xong, phiên vẫn được giữ mở thêm ~90 giây cho agent
+          còn lại kịp join — bấm "Chạy kiểm chứng ngay" nếu không muốn chờ.
         </p>
       {:else if phase === 'reveal' && opinions.length > 0}
         <p class="text-[11px] text-on-surface-variant">
@@ -571,8 +636,10 @@
           </div>
         {:else}
           <p class="text-[11px] text-on-surface-variant italic py-3 text-center">
-            Chưa có tin nhắn nào. Agent ở máy khác gửi bằng <span class="font-mono">claude-suite-claim</span>,
-            bạn nhắn trực tiếp ở ô dưới.
+            Chưa có tin nhắn nào. Bạn nhắn ở ô dưới; agent nghe bằng tool
+            <span class="font-mono">wait_for_chat</span> (MCP) hoặc
+            <span class="font-mono">claude-suite-claim --listen</span>, và trả lời bằng
+            <span class="font-mono">say</span> / <span class="font-mono">--say</span>.
           </p>
         {/each}
       </div>
@@ -595,6 +662,8 @@
       </div>
       <p class="text-[10px] text-on-surface-variant">
         Thảo luận không phải bằng chứng — chỉ falsifier mới kết luận được một claim.
+        Agent được dặn chỉ trả lời khi bị gọi tên, bị hỏi, hoặc bị phản bác — muốn agent
+        nào đáp thì nhắc thẳng tên nó trong tin nhắn.
       </p>
     </div>
   {/if}

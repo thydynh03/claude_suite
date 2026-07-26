@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { Task } from '../../lib/types';
   import KanbanView from './KanbanView.svelte';
+  import ModelSelect from '../ui/ModelSelect.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog, addToast, orchestratorRunning, tasksStore, agentsStore } from '../../lib/stores/appState';
 
@@ -18,7 +19,16 @@
   let lastReportPath = '';
   let readiness: { ready?: number; blocked?: any[]; running?: number } | null = null;
 
+  // Composite "provider:model" consumed by handleDecompose; the visible
+  // picker is the shared ModelSelect (plain model id), kept in sync below.
   let planModelChoice = 'claude:claude-opus-4-8';
+  let planModel = 'claude-opus-4-8';
+  function onPlanModelChange(e: CustomEvent<{ value: string; provider: 'claude' | 'anti' }>) {
+    planModelChoice = `${e.detail.provider}:${e.detail.value}`;
+  }
+  // The quota-fallback path rewrites planModelChoice directly — mirror it back
+  // into the picker so the UI shows the model that will actually be used.
+  $: planModel = planModelChoice.includes(':') ? planModelChoice.split(':')[1] : planModelChoice;
   let showQuotaModal = false;
   let failedAgentName = '';
   let fallbackAgentName = '';
@@ -317,16 +327,13 @@
           <div class="p-3 bg-surface-container flex flex-col gap-2 border-t border-outline-variant">
             <div class="flex items-center gap-2">
               <label for="plan-model-select" class="text-[11px] font-bold text-on-surface-variant whitespace-nowrap">Plan Agent & Model:</label>
-              <select
-                id="plan-model-select"
-                bind:value={planModelChoice}
-                class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface font-semibold outline-none focus:border-primary"
-              >
-                <option value="claude:claude-opus-4-8">🤖 Claude Agent (Claude 4.8 Opus)</option>
-                <option value="claude:claude-sonnet-4-5">🤖 Claude Agent (Claude 4.5 Sonnet)</option>
-                <option value="anti:gemini-3.6-flash-high">⚡ Antigravity Agent (Gemini 3.6 Flash)</option>
-                <option value="anti:gemini-3.1-pro-high">⚡ Antigravity Agent (Gemini 3.1 Pro)</option>
-              </select>
+              <div class="flex-1">
+                <ModelSelect
+                  value={planModel}
+                  on:change={onPlanModelChange}
+                  selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface font-semibold outline-none focus:border-primary"
+                />
+              </div>
             </div>
             <button
               type="button"

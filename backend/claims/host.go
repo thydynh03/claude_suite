@@ -44,7 +44,14 @@ const (
 	// MsgChat is free-form talk between the agents in a session, not tied to a
 	// claim. Remarks require a claim id and are only accepted during debate; a
 	// teammate's agent that simply wants to say something had nowhere to put it.
-	MsgChat    = "chat"
+	MsgChat = "chat"
+	// MsgWatch attaches as an observer: authenticated by the session token,
+	// receiving broadcasts and allowed to chat, but never a participant.
+	// Joining is permanent and single-shot per author — which made every
+	// second connection from the same agent (--ping before a claim run, --say
+	// after one) fail with "has already joined". Watching is what those
+	// actually needed: presence without a seat at the table.
+	MsgWatch   = "watch"
 	MsgDone    = "done" // "I have nothing further to submit"
 	MsgState   = "state"
 	MsgOutcome = "outcome"
@@ -54,17 +61,25 @@ const (
 // Timeouts. The collect window matters: a session cannot wait forever for an
 // agent whose IDE was closed, but closing it early loses that agent's claims.
 const (
-	CollectWindow  = 5 * time.Minute
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingInterval   = (pongWait * 9) / 10
-	maxMessageSize = 1 << 20
+	CollectWindow = 5 * time.Minute
+	// DefaultSoloHold is how long a one-agent session lingers in collect after
+	// that agent finishes. The first agent typically joins, submits and
+	// finishes within a second; without the hold it slams the window shut
+	// before the second side of the dispute has even pasted its join command.
+	DefaultSoloHold = 90 * time.Second
+	writeWait       = 10 * time.Second
+	pongWait        = 60 * time.Second
+	pingInterval    = (pongWait * 9) / 10
+	maxMessageSize  = 1 << 20
 )
 
 type connection struct {
 	author string
-	ws     *websocket.Conn
-	mu     sync.Mutex // serialises writes; gorilla forbids concurrent writers
+	// watcher marks an observer connection: it may chat but not claim or
+	// finish, and adjudication never waits for it.
+	watcher bool
+	ws      *websocket.Conn
+	mu      sync.Mutex // serialises writes; gorilla forbids concurrent writers
 }
 
 func (c *connection) send(m Message) error {
@@ -82,6 +97,10 @@ type hosted struct {
 	mu        sync.Mutex
 	conns     map[string]*connection
 	submitted map[string]bool // authors who said they are finished
+	// watchers receive every broadcast but hold no seat: they are not in
+	// conns (which is what adjudication waits on) and several may share an
+	// author name, so a slice rather than a map.
+	watchers []*connection
 	// remote holds authors who joined over the MCP endpoint, by last-seen
 	// time. They have no connection to drop and no way to be pushed to — they
 	// poll. Adjudication must wait for their finish_reporting exactly as it
@@ -99,7 +118,10 @@ type hosted struct {
 	// it broadcast, but an MCP agent that asks a second later would otherwise
 	// find nothing.
 	outcome *Outcome
-	closed  bool
+	// holdUntil, once set, keeps a one-participant session in collect until
+	// the deadline passes, so the other side of the dispute can still join.
+	holdUntil time.Time
+	closed    bool
 }
 
 // Host accepts agents from other machines into adjudication sessions.
@@ -117,6 +139,10 @@ type Host struct {
 
 	// OnEvent, if set, receives human-readable progress for the UI.
 	OnEvent func(sessionID, message string)
+
+	// SoloHold keeps collect open this long after a lone participant finishes,
+	// so the other side of the dispute can still join. Zero disables the hold.
+	SoloHold time.Duration
 }
 
 // NewHost builds a host bound to a workspace's check catalogue.
@@ -124,6 +150,7 @@ func NewHost(runner *Runner) *Host {
 	return &Host{
 		sessions: map[string]*hosted{},
 		Runner:   runner,
+		SoloHold: DefaultSoloHold,
 		Upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -284,6 +311,19 @@ func (h *Host) keepAlive(c *connection, stop <-chan struct{}) {
 // dropConnection removes a disconnected agent. Its already-submitted claims stay:
 // an IDE closing is not a retraction.
 func (h *Host) dropConnection(hs *hosted, c *connection) {
+	if c.watcher {
+		hs.mu.Lock()
+		for i, w := range hs.watchers {
+			if w == c {
+				hs.watchers = append(hs.watchers[:i], hs.watchers[i+1:]...)
+				break
+			}
+		}
+		hs.mu.Unlock()
+		// No emit and no adjudication nudge: an observer leaving changes
+		// nothing anyone is waiting on.
+		return
+	}
 	hs.mu.Lock()
 	if c.author != "" && hs.conns[c.author] == c {
 		delete(hs.conns, c.author)
@@ -299,13 +339,26 @@ func (h *Host) handle(hs *hosted, c *connection, msg Message) error {
 	switch msg.Type {
 	case MsgJoin:
 		return h.handleJoin(hs, c, msg)
+	case MsgWatch:
+		return h.handleWatch(hs, c, msg)
 	case MsgClaim:
 		return h.handleClaim(hs, c, msg)
 	case MsgDone:
+		if c.watcher {
+			return fmt.Errorf("a watcher has nothing to finish — join to take part")
+		}
 		return h.handleDone(hs, c)
 	case MsgRemark:
 		if c.author == "" {
 			return fmt.Errorf("join before speaking")
+		}
+		// Remarks land in the durable transcript under the connection's author.
+		// A watcher names its own author freely, so letting one remark would
+		// let anyone holding the session URL write debate turns as any
+		// participant. Chat does not have this guard on purpose: talk is not
+		// evidence, and the arbiter UI already posts chat under a chosen name.
+		if c.watcher {
+			return fmt.Errorf("watchers may chat but not remark — join to take part in debate")
 		}
 		// A remark with no claim attached used to dereference a nil pointer and
 		// take down the host, which every connected agent then lost.
@@ -354,12 +407,49 @@ func (h *Host) handleJoin(hs *hosted, c *connection, msg Message) error {
 	return c.send(Message{
 		Type: MsgState, Phase: hs.session.Phase(),
 		Claims: hs.session.VisibleTo(msg.Author), Warnings: warnings, Note: note,
+		// History up front, so a joiner does not wait for the next broadcast
+		// to know what has already been said.
+		Chat: hs.session.Chat(),
+	})
+}
+
+// handleWatch attaches an observer: it receives every broadcast and may chat,
+// but holds no seat — adjudication never waits for it, and it cannot claim,
+// finish, or remark. This is what --ping, --say and --listen ride on: joining
+// is single-shot per author, so a second connection from the same agent used
+// to die with "has already joined" when all it wanted was to look or speak.
+func (h *Host) handleWatch(hs *hosted, c *connection, msg Message) error {
+	if c.author != "" && !c.watcher {
+		return fmt.Errorf("%s has already joined on this connection", c.author)
+	}
+	c.watcher = true
+	c.author = strings.TrimSpace(msg.Author)
+	if c.author == "" {
+		c.author = "observer"
+	}
+
+	hs.mu.Lock()
+	hs.watchers = append(hs.watchers, c)
+	hs.mu.Unlock()
+
+	// VisibleTo with an empty author: nothing during the blind collect phase,
+	// everything after reveal. A watcher naming a participant's author must
+	// not read that participant's blind claims — the MCP door needs a
+	// participant_key for exactly this, and the websocket door has none.
+	return c.send(Message{
+		Type: MsgState, Phase: hs.session.Phase(),
+		Claims: hs.session.VisibleTo(""), Chat: hs.session.Chat(),
 	})
 }
 
 func (h *Host) handleClaim(hs *hosted, c *connection, msg Message) error {
 	if c.author == "" {
 		return fmt.Errorf("join before submitting")
+	}
+	// A watcher's author is self-declared; without this it could submit a
+	// claim under the name of a participant who really joined.
+	if c.watcher {
+		return fmt.Errorf("watchers may chat but not claim — join to take part")
 	}
 	if msg.Claim == nil {
 		return fmt.Errorf("empty claim")
@@ -399,6 +489,10 @@ func (h *Host) handleDone(hs *hosted, c *connection) error {
 // maybeAdjudicate moves the session on once every participant — connected or
 // polling over MCP — has finished.
 //
+// A session whose only participant has finished is held in collect for
+// SoloHold first: sessions are opened to settle disputes, and the second
+// agent is usually seconds behind the first, not absent.
+//
 // An MCP participant silent for longer than CollectWindow no longer counts:
 // that is its version of a socket disconnect, and without it a laptop closed
 // mid-review would hold every other agent's verdict hostage until someone
@@ -428,9 +522,35 @@ func (h *Host) maybeAdjudicate(hs *hosted) {
 		hs.mu.Unlock()
 		return
 	}
+
+	// A roster of one that finished is usually not a completed review — it is
+	// a dispute whose other side is still pasting the join command into a
+	// terminal. Adjudicating "between agents" must not require winning a race
+	// against the first agent's startup time, so the window stays open a
+	// little longer. ForceAdjudicate skips the wait.
+	soloHeld := false
+	if h.SoloHold > 0 && hs.session.ParticipantCount() < 2 {
+		if hs.holdUntil.IsZero() {
+			hs.holdUntil = time.Now().Add(h.SoloHold)
+			hs.mu.Unlock()
+			h.emit(hs.session.ID, fmt.Sprintf(
+				"one agent finished; holding collect open %s for others to join (force-run to skip)",
+				h.SoloHold))
+			time.AfterFunc(h.SoloHold+250*time.Millisecond, func() { h.maybeAdjudicate(hs) })
+			return
+		}
+		if time.Now().Before(hs.holdUntil) {
+			hs.mu.Unlock()
+			return
+		}
+		soloHeld = true
+	}
 	hs.closed = true
 	hs.mu.Unlock()
 
+	if soloHeld {
+		h.emit(hs.session.ID, "nobody else joined; adjudicating with one agent")
+	}
 	go h.adjudicate(hs)
 }
 
@@ -480,6 +600,26 @@ func (h *Host) adjudicate(hs *hosted) {
 	h.broadcastState(hs)
 }
 
+// Say posts a chat message on behalf of the host's own user — the arbiter in
+// the app — and pushes it to every connected agent and watcher at once.
+// Writing straight into the session was not enough: websocket listeners only
+// hear what is broadcast, so the arbiter's messages sat unread until some
+// other event happened to trigger one.
+func (h *Host) Say(sessionID, author, text string) error {
+	h.mu.Lock()
+	hs, ok := h.sessions[sessionID]
+	h.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("no session %s", sessionID)
+	}
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("empty message")
+	}
+	hs.session.Say(author, text)
+	h.broadcastState(hs)
+	return nil
+}
+
 // OpenDebateRound moves a revealed session into discussion.
 //
 // Only opinions can be discussed. Everything the checks settled stays settled,
@@ -525,6 +665,7 @@ func (h *Host) broadcastState(hs *hosted) {
 	for _, c := range hs.conns {
 		conns = append(conns, c)
 	}
+	watchers := append([]*connection(nil), hs.watchers...)
 	hs.mu.Unlock()
 
 	for _, c := range conns {
@@ -536,14 +677,23 @@ func (h *Host) broadcastState(hs *hosted) {
 			Chat: hs.session.Chat(),
 		})
 	}
+	for _, c := range watchers {
+		// Empty author on purpose: a watcher's name is self-declared, so it
+		// earns no view into anyone's blind claims.
+		_ = c.send(Message{
+			Type: MsgState, Phase: hs.session.Phase(), Claims: hs.session.VisibleTo(""),
+			Chat: hs.session.Chat(),
+		})
+	}
 }
 
 func (h *Host) broadcast(hs *hosted, m Message) {
 	hs.mu.Lock()
-	conns := make([]*connection, 0, len(hs.conns))
+	conns := make([]*connection, 0, len(hs.conns)+len(hs.watchers))
 	for _, c := range hs.conns {
 		conns = append(conns, c)
 	}
+	conns = append(conns, hs.watchers...)
 	hs.mu.Unlock()
 
 	for _, c := range conns {

@@ -12,6 +12,7 @@ import (
 
 	"claude_suite/backend/cli"
 	"claude_suite/backend/database"
+	"claude_suite/backend/modelcatalog"
 	"claude_suite/backend/models"
 	"claude_suite/backend/services"
 	"claude_suite/backend/services/projectmap"
@@ -39,6 +40,7 @@ type Orchestrator struct {
 	obsW           *obsWriter
 	learner        *services.Learner
 	mapper         *projectmap.Mapper
+	modelCatalog   *modelcatalog.Catalog
 	cliRunner      cli.CLIRunner
 	contextMgr     *services.ContextManager
 	gitService     *services.GitService
@@ -162,6 +164,12 @@ func (o *Orchestrator) SetMemoryStores(ws *database.WorkspaceRepository, obs *da
 // lessons, regression recording, and distillation nudges.
 func (o *Orchestrator) SetLearner(l *services.Learner) {
 	o.learner = l
+}
+
+// SetModelCatalog lets runs teach the catalog which model ids actually exist —
+// the CLI reports the real model per run, including ids newer than the app.
+func (o *Orchestrator) SetModelCatalog(c *modelcatalog.Catalog) {
+	o.modelCatalog = c
 }
 
 // SetProjectMapper enables the post-task freshness hook: after each run, the
@@ -777,6 +785,21 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 		}
 	}
 
+	// Surface the model the CLI REPORTED running — a measured fact the
+	// configured model cannot promise (aliases resolve, CLIs fall back). New
+	// ids feed the catalog, which is how the app learns about models that
+	// shipped after this build.
+	if result.ModelUsed != "" {
+		if result.ModelUsed != runAgent.Model {
+			onLog(fmt.Sprintf("🤖 Model thực tế: %s (cấu hình: %s)", result.ModelUsed, orDash(runAgent.Model)), "INFO")
+		} else {
+			onLog("🤖 Model thực tế: "+result.ModelUsed, "INFO")
+		}
+		if o.modelCatalog != nil {
+			o.modelCatalog.RecordObserved(result.ModelUsed)
+		}
+	}
+
 	// Build verification: an agent's task is only "done" if the workspace still
 	// builds. A failed build is turned into a task failure so the retry loop makes
 	// the agent fix it.
@@ -866,6 +889,13 @@ func (o *Orchestrator) runTask(ctx context.Context, task *models.Task, agent *mo
 
 	o.emitBoard()
 	o.emitAgents()
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
 }
 
 // adjustEstimatedUsage subtracts the injected pack from a len/4-estimated

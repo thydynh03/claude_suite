@@ -12,3 +12,11 @@ func inlineSystemPrompt(system, prompt string) string {
 	}
 	return fmt.Sprintf("[SYSTEM PROMPT: %s]\n\n%s", system, prompt)
 }
+
+// orDefault returns s, or fallback when s is empty.
+func orDefault(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}

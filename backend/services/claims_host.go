@@ -159,6 +159,19 @@ func (s *ClaimsHostService) Session(id string) (*claims.Session, bool) {
 	return host.Session(id)
 }
 
+// Say posts a chat message into a session and broadcasts it, so agents
+// listening over a websocket hear the arbiter immediately instead of at the
+// next unrelated event.
+func (s *ClaimsHostService) Say(sessionID, author, text string) error {
+	s.mu.Lock()
+	host := s.host
+	s.mu.Unlock()
+	if host == nil {
+		return fmt.Errorf("the claims host is not running")
+	}
+	return host.Say(sessionID, author, text)
+}
+
 // ForceAdjudicate ends a collect window that is waiting on an agent that will
 // not report finished.
 func (s *ClaimsHostService) ForceAdjudicate(sessionID string) error {

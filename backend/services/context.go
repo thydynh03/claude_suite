@@ -99,6 +99,7 @@ func (c *ContextManager) BuildContextPrompt(root string, paths []string) string 
 		sb.WriteString(fmt.Sprintf("Project Root Directory: %s\n\n", root))
 	}
 
+	included := 0
 	for _, p := range paths {
 		fullPath := p
 		if !filepath.IsAbs(p) && root != "" {
@@ -118,7 +119,15 @@ func (c *ContextManager) BuildContextPrompt(root string, paths []string) string 
 		}
 
 		sb.WriteString(fmt.Sprintf("File: %s\n```\n%s\n```\n\n", relPath, string(content)))
+		included++
 	}
 
+	// No files made it in → return nothing. A header-only block is worse than
+	// empty: prepended to a short question, the "WORKSPACE CONTEXT" heading
+	// frames the WHOLE message as context, and the model answers "I don't see
+	// a question or task in your message" — observed live from the Cockpit.
+	if included == 0 {
+		return ""
+	}
 	return sb.String()
 }

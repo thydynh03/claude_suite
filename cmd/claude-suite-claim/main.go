@@ -45,6 +45,7 @@ func main() {
 		wsPath   = flag.String("workspace", ".", "workspace root, for --checks")
 		say      = flag.String("say", "", "post a message to the session and exit (discussion, not a claim)")
 		ping     = flag.Bool("ping", false, "check the session can be reached, then exit")
+		listen   = flag.Duration("listen", 0, "follow the session's chat for this long (e.g. 10m), printing each message as one JSON line, then exit")
 	)
 
 	var c claimFlag
@@ -87,6 +88,14 @@ func main() {
 		return
 	}
 
+	if *listen > 0 {
+		if err := listenToSession(*host, *session, *token, who, *provider, *listen); err != nil {
+			fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := run(*host, *session, *token, who, *provider, *outDir, *wait, c); err != nil {
 		fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
 		os.Exit(1)
@@ -116,14 +125,17 @@ func listChecks(workspace string) {
 	}
 }
 
-// newClient builds a connected client, which --ping, --say and a claim run all
-// need identically.
-func newClient(host, session, token, author, provider string) (*claims.Client, error) {
+// watchClient attaches as an observer, which is all --ping, --say and --listen
+// need. Watching rather than joining matters: joining is permanent and
+// single-shot per author, so a ping before a claim run — or a say after one —
+// used to fail with "has already joined" under the very author name the
+// commands share by default.
+func watchClient(host, session, token, author, provider string) (*claims.Client, error) {
 	client := &claims.Client{
 		HostURL: strings.TrimRight(host, "/"), SessionID: session, Token: token,
 		Author: author, Provider: provider,
 	}
-	if err := client.Connect(); err != nil {
+	if err := client.Watch(); err != nil {
 		return nil, err
 	}
 	return client, nil
@@ -133,7 +145,7 @@ func newClient(host, session, token, author, provider string) (*claims.Client, e
 // firewall — used to surface only when an agent tried to submit, halfway through
 // a review, with an error that named none of those causes.
 func pingSession(host, session, token, author, provider string) error {
-	client, err := newClient(host, session, token, author, provider)
+	client, err := watchClient(host, session, token, author, provider)
 	if err != nil {
 		return err
 	}
@@ -142,12 +154,25 @@ func pingSession(host, session, token, author, provider string) error {
 }
 
 func sayInSession(host, session, token, author, provider, text string) error {
-	client, err := newClient(host, session, token, author, provider)
+	client, err := watchClient(host, session, token, author, provider)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 	return client.Say(text)
+}
+
+// listenToSession follows the chat, one JSON line per message on stdout. An
+// agent runs this in the background and reads lines as the others speak;
+// paired with --say it is the conversation loop for tools that cannot hold an
+// MCP connection.
+func listenToSession(host, session, token, author, provider string, howLong time.Duration) error {
+	client, err := watchClient(host, session, token, author, provider)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	return client.Listen(os.Stdout, howLong)
 }
 
 func run(host, session, token, author, provider, outDir string, wait time.Duration, c claimFlag) error {

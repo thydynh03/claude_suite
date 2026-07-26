@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
+  import ModelSelect from '../ui/ModelSelect.svelte';
   import { addLog, addToast } from '../../lib/stores/appState';
 
   interface BrowserActionResult {
@@ -294,17 +295,10 @@
 
       <div class="flex items-center gap-1.5">
         <label for="browser-model-select" class="font-semibold">Model</label>
-        <select id="browser-model-select" bind:value={selectedModel} class="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] text-on-surface font-mono outline-none focus:border-primary">
-          <optgroup label="Claude Agent">
-            <option value="claude-sonnet-4-5">Claude 4.5 Sonnet</option>
-            <option value="claude-opus-4-8">Claude 4.8 Opus</option>
-            <option value="claude-haiku-4-5">Claude 4.5 Haiku</option>
-          </optgroup>
-          <optgroup label="Antigravity Agent (Gemini)">
-            <option value="gemini-3.6-flash-high">Gemini 3.6 Flash (High)</option>
-            <option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High)</option>
-          </optgroup>
-        </select>
+        <ModelSelect
+          bind:value={selectedModel}
+          selectClass="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] text-on-surface font-mono outline-none focus:border-primary"
+        />
       </div>
 
       <div class="flex items-center gap-1.5">

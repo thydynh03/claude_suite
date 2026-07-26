@@ -4,6 +4,7 @@
   import CodeEditor from '../ui/CodeEditor.svelte';
   import DiffView from '../ui/DiffView.svelte';
   import FileTreeNode from '../ui/FileTreeNode.svelte';
+  import ModelSelect from '../ui/ModelSelect.svelte';
   import { buildTree, fuzzyMatch, matchScore } from '../../lib/fileTree';
   import { countDiffChunks } from '../../lib/diffStats';
   import { addLog, addToast } from '../../lib/stores/appState';
@@ -212,11 +213,51 @@
     addLog(`Đã thay thế tất cả '${searchQuery}' bằng '${replaceQuery}'`, 'INFO');
   }
 
+  // largestCodeBlock returns the biggest fenced block in a response. The
+  // first block is the wrong one to take: models often lead with a small
+  // "before/after" excerpt and put the full file later — grabbing the first
+  // is how a 727-line stylesheet became its own 12-line snippet on disk.
+  function largestCodeBlock(s: string): string | null {
+    const re = /```[^\n]*\n([\s\S]*?)```/g;
+    let best: string | null = null;
+    for (let m; (m = re.exec(s)); ) {
+      if (best === null || m[1].length > best.length) best = m[1];
+    }
+    return best;
+  }
+
+  // snippetSuspicion answers "is this a fragment rather than the whole
+  // file?" before the content is allowed to overwrite the real file.
+  // Returns a human-readable reason, or null when the content looks whole.
+  function snippetSuspicion(candidate: string, original: string): string | null {
+    const oldN = original.split('\n').length;
+    const newN = candidate.split('\n').length;
+    // A refactor can legitimately shrink a file, but halving a large one is
+    // almost always an excerpt.
+    if (oldN >= 40 && newN < oldN * 0.5) {
+      return `AI chỉ trả về ${newN} dòng cho tệp gốc ${oldN} dòng`;
+    }
+    // Ellipsis-as-omission: a bare "..." line, or a comment starting with
+    // "..." — as opposed to legitimate spread syntax inside an expression.
+    if (newN < oldN && /^\s*(\.\.\.|…)\s*$|^\s*(\/\/|#|\/\*|<!--)\s*(\.\.\.|…)/m.test(candidate)) {
+      return 'nội dung chứa dấu "..." thay cho phần bị lược bỏ';
+    }
+    return null;
+  }
+
   async function handleAskAI(presetType?: 'refactor' | 'explain' | 'test') {
     if (!activeTabPath) {
       addLog('Vui lòng chọn một file để AI phân tích', 'WARN');
       return;
     }
+
+    // Two very different contracts: an edit turn may overwrite the file, an
+    // analysis turn must never touch it. "Giải thích logic" used to run
+    // through the edit path — any code excerpt in the explanation replaced
+    // the whole file on disk. "Viết Unit Test" likewise overwrote the SOURCE
+    // file with test code, so both are analysis now.
+    const mode: 'edit' | 'analyze' =
+      presetType === 'explain' || presetType === 'test' ? 'analyze' : 'edit';
 
     let finalPrompt = aiPrompt.trim();
     if (presetType === 'refactor') {
@@ -224,7 +265,7 @@
     } else if (presetType === 'explain') {
       finalPrompt = 'Giải thích chi tiết luồng xử lý và kiến trúc logic của tệp tin này.';
     } else if (presetType === 'test') {
-      finalPrompt = 'Viết bộ Unit Tests hoàn chỉnh để kiểm thử tất cả trường hợp cho tệp tin này.';
+      finalPrompt = 'Viết bộ Unit Tests hoàn chỉnh để kiểm thử tất cả trường hợp cho tệp tin này. Ghi rõ tên tệp test nên đặt là gì.';
     }
 
     if (!finalPrompt) return;
@@ -269,75 +310,102 @@
       }
     };
 
-    addTurnLog('thinking', `Agent bắt đầu đọc & phân tích AST tệp ${activeTabPath}...`);
-    addTurnLog('thinking', `Thinking: Đang suy luận phương án refactor tối ưu...`);
+    addTurnLog('thinking', `Agent bắt đầu đọc & phân tích tệp ${activeTabPath}...`);
 
     try {
-      const systemInstruction = 'Bạn là Antigravity Senior AI Code Engineer. Khi chỉnh sửa code, hãy trả về mã nguồn đã sửa trong khối ```codeblock```.';
+      // The contract in the system prompt is what the save path then verifies:
+      // an edit must come back as the COMPLETE file, because whatever is in
+      // that block replaces the file verbatim.
+      const systemInstruction =
+        mode === 'edit'
+          ? 'Bạn là Antigravity Senior AI Code Engineer. Khi chỉnh sửa, bạn PHẢI trả về TOÀN BỘ nội dung tệp sau khi sửa — từ dòng đầu đến dòng cuối — trong đúng MỘT khối ```...```. Nội dung khối đó sẽ GHI ĐÈ NGUYÊN VĂN lên tệp, nên tuyệt đối không rút gọn, không bỏ sót phần chưa sửa, không dùng "..." hay ghi chú kiểu "phần còn lại giữ nguyên". Giải thích ngắn (nếu cần) đặt bên ngoài khối code.'
+          : 'Bạn là Antigravity Senior AI Code Engineer. Đây là yêu cầu phân tích: trả lời bằng văn bản, KHÔNG chỉnh sửa tệp. Cứ dùng khối code để minh hoạ — hệ thống sẽ không ghi đè tệp trong chế độ này.';
       const userPrompt = `Tệp tin: ${activeTabPath}\n\nNội dung mã nguồn hiện tại:\n\`\`\`\n${fileContent}\n\`\`\`\n\nYêu cầu:\n${finalPrompt}`;
 
       const res = await AppBindings.RunQuickCLI(userPrompt, aiModel, systemInstruction, [activeTabPath]);
 
       const targetTurn = turns.find(t => t.id === turnId);
       if (res && res.output) {
-        let newContent = res.output;
-        const match = res.output.match(/```(?:\w+)?\n([\s\S]*?)```/);
-        if (match && match[1]) {
-          newContent = match[1];
-        }
+        if (targetTurn) targetTurn.output = res.output;
 
-        const oldLines = initialOriginal.split('\n');
-        const newLines = newContent.split('\n');
-        const added = Math.max(0, newLines.length - oldLines.length);
-        const removed = Math.max(0, oldLines.length - newLines.length);
+        const block = mode === 'edit' ? largestCodeBlock(res.output) : null;
 
-        // DIRECT AUTO-SAVE TO FILE ON DISK
-        addTurnLog('edit', `Đang ghi trực tiếp vào tệp ${activeTabPath}...`);
-        await (AppBindings as any).SaveFileContent(activeTabPath, newContent);
+        if (mode === 'analyze' || block === null) {
+          // Nothing gets written: either the user asked for analysis, or the
+          // model answered an edit request with prose only.
+          if (mode === 'edit') {
+            addTurnLog('error', 'AI không trả về khối code nào — tệp được giữ nguyên. Đọc câu trả lời bên dưới rồi thử lại với yêu cầu cụ thể hơn.');
+          } else {
+            addTurnLog('success', `Phân tích xong. Tệp ${activeTabPath} không bị thay đổi.`);
+          }
+          if (targetTurn) targetTurn.status = 'completed';
+          addLog(`AI đã trả lời về ${activeTabPath} (không sửa tệp)`, 'SUCCESS');
+        } else {
+          const newContent = block;
+          const reason = snippetSuspicion(newContent, initialOriginal);
+          if (reason) {
+            // The defect this guard exists for: the model suggested a few
+            // spots, the app replaced the whole file with the suggestion.
+            // Refuse the write and hand the user the suggestion instead.
+            addTurnLog('error', `KHÔNG ghi đè ${activeTabPath}: ${reason}. Đề xuất của AI nằm trong output của lượt này — áp dụng tay từng đoạn, hoặc chạy lại và yêu cầu "trả về toàn bộ file".`);
+            if (targetTurn) targetTurn.status = 'error';
+            addToast(`Đã chặn ghi đè ${activeTabPath}: AI trả về đoạn trích, không phải cả file.`, 'WARN', 9000);
+          } else {
+            const oldLines = initialOriginal.split('\n');
+            const newLines = newContent.split('\n');
+            const added = Math.max(0, newLines.length - oldLines.length);
+            const removed = Math.max(0, oldLines.length - newLines.length);
 
-        // Update editor state & original vs current for Visual Diff
-        originalContent = initialOriginal;
-        fileContent = newContent;
-        if (currentTab) {
-          currentTab.content = newContent;
-          currentTab.originalContent = initialOriginal;
-          currentTab.isDirty = false;
-        }
+            // DIRECT AUTO-SAVE TO FILE ON DISK
+            addTurnLog('edit', `Đang ghi trực tiếp vào tệp ${activeTabPath}...`);
+            await (AppBindings as any).SaveFileContent(activeTabPath, newContent);
 
-        addTurnLog('diff', `Sửa file ${activeTabPath}`, added > 0 ? added : 12, removed > 0 ? removed : 4);
-        addTurnLog('success', `Hoàn thành! File ${activeTabPath} đã được cập nhật trực tiếp.`);
+            // Update editor state & original vs current for Visual Diff
+            originalContent = initialOriginal;
+            fileContent = newContent;
+            if (currentTab) {
+              currentTab.content = newContent;
+              currentTab.originalContent = initialOriginal;
+              currentTab.isDirty = false;
+            }
 
-        // Automated Chrome CDP Web Verification Test
-        if (autoWebTest && webTestUrl) {
-          addTurnLog('thinking', `🌐 Kích hoạt Chrome CDP Agent tự động mở & chụp ảnh kiểm thử tại ${webTestUrl}...`);
-          try {
-            if ((AppBindings as any).RunBrowserTask) {
-              const bRes = await (AppBindings as any).RunBrowserTask(webTestUrl, true);
-              if (bRes && bRes.success) {
-                addTurnLog('success', `📸 Chrome CDP đã tự động kiểm thử & chụp ảnh Web thành công!`);
-                if (targetTurn) {
-                  targetTurn.webScreenshot = bRes.screenshot_base64;
-                  targetTurn.webTitle = bRes.title;
+            // Real numbers only — this line used to invent "+12 −4" whenever
+            // the file length happened not to change.
+            addTurnLog('diff', `Sửa file ${activeTabPath} — ${countDiffChunks(initialOriginal, newContent)} vùng thay đổi`, added, removed);
+            addTurnLog('success', `Hoàn thành! File ${activeTabPath} đã được cập nhật trực tiếp.`);
+
+            // Automated Chrome CDP Web Verification Test
+            if (autoWebTest && webTestUrl) {
+              addTurnLog('thinking', `🌐 Kích hoạt Chrome CDP Agent tự động mở & chụp ảnh kiểm thử tại ${webTestUrl}...`);
+              try {
+                if ((AppBindings as any).RunBrowserTask) {
+                  const bRes = await (AppBindings as any).RunBrowserTask(webTestUrl, true);
+                  if (bRes && bRes.success) {
+                    addTurnLog('success', `📸 Chrome CDP đã tự động kiểm thử & chụp ảnh Web thành công!`);
+                    if (targetTurn) {
+                      targetTurn.webScreenshot = bRes.screenshot_base64;
+                      targetTurn.webTitle = bRes.title;
+                    }
+                  } else {
+                    addTurnLog('error', `⚠️ Không thể kiểm thử ${webTestUrl}: ${bRes?.error || 'Chưa bật dev server'}`);
+                  }
                 }
-              } else {
-                addTurnLog('error', `⚠️ Không thể kiểm thử ${webTestUrl}: ${bRes?.error || 'Chưa bật dev server'}`);
+              } catch (bErr: any) {
+                console.warn('Auto Chrome CDP test warning:', bErr);
               }
             }
-          } catch (bErr: any) {
-            console.warn('Auto Chrome CDP test warning:', bErr);
+
+            if (targetTurn) {
+              targetTurn.linesAdded = added;
+              targetTurn.linesRemoved = removed;
+              targetTurn.status = 'completed';
+            }
+
+            addLog(`AI đã sửa & lưu trực tiếp tệp ${activeTabPath}`, 'SUCCESS');
+            addToast(`AI đã sửa & lưu trực tiếp tệp ${activeTabPath}`, 'SUCCESS');
+            viewMode = 'diff';
           }
         }
-
-        if (targetTurn) {
-          targetTurn.output = res.output;
-          targetTurn.linesAdded = added > 0 ? added : 12;
-          targetTurn.linesRemoved = removed > 0 ? removed : 4;
-          targetTurn.status = 'completed';
-        }
-
-        addLog(`AI đã sửa & lưu trực tiếp tệp ${activeTabPath}`, 'SUCCESS');
-        addToast(`AI đã sửa & lưu trực tiếp tệp ${activeTabPath}`, 'SUCCESS');
-        viewMode = 'diff';
       } else if (res && res.error) {
         if (targetTurn) {
           targetTurn.status = 'error';
@@ -394,11 +462,10 @@
     }
   }
 
-  // The badge on the Visual Diff button. Counted with the same chunk
-  // computation the MergeView draws — the old positional line comparison
-  // counted every line below an insertion as changed. (Derived reactively
-  // rather than called from the markup: Svelte reads a template function
-  // call untracked.)
+  // The badge on the Visual Diff button. Counted with the same diff the
+  // MergeView draws — the old positional line comparison counted every line
+  // below an insertion as changed. (Derived reactively rather than called
+  // from the markup: Svelte reads a template function call untracked.)
   $: changedChunkCount = countDiffChunks(originalContent, fileContent);
 
   function getThemeClasses(theme: string) {
@@ -751,14 +818,10 @@
           <span class="material-symbols-outlined text-sm text-primary">auto_awesome</span>
           AI Agent Conversation Turns ({turns.length})
         </span>
-        <select
+        <ModelSelect
           bind:value={aiModel}
-          class="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-[11px] font-mono text-on-surface outline-none"
-        >
-          <option value="claude-sonnet-4-5">Sonnet 4.5</option>
-          <option value="claude-opus-4-8">Opus 4.8</option>
-          <option value="gemini-3.6-flash-high">Gemini 3.6 Flash</option>
-        </select>
+          selectClass="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-[11px] font-mono text-on-surface outline-none"
+        />
       </div>
 
       <div class="p-3 flex-1 flex flex-col gap-3 overflow-hidden">

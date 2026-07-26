@@ -67,6 +67,12 @@ func (c *ClaudeCLI) execute(model, prompt, system, sessionID string, onLog LogCa
 func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, sessionID string, onLog LogCallback, cwd string) *RunResult {
 	startTime := time.Now()
 
+	// The "show console" toggle opens a detached viewer window tailing this
+	// run's log — the agent process itself always runs hidden (viewer.go).
+	viewer := startRunViewer("Claude Agent · model: " + orDefault(model, "(mặc định CLI)"))
+	onLog = viewer.logSink(onLog)
+	defer viewer.Finish("RUN KẾT THÚC")
+
 	fullPrompt := inlineSystemPrompt(system, prompt)
 
 	// stream-json emits newline-delimited JSON events so we can surface tool calls
@@ -82,7 +88,7 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	ctx, cancel := context.WithTimeout(parent, TaskTimeout())
 	defer cancel()
 
-	cmd := newCLICommand(ctx, c.executablePath, args, ShowCLIConsole)
+	cmd := newCLICommand(ctx, c.executablePath, args)
 	if cwd != "" && dirExists(cwd) {
 		cmd.Dir = cwd
 	}
@@ -165,6 +171,7 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 			TokensUsed:  parsed.totalTokens(),
 			CostUSD:     parsed.costUSD,
 			DurationSec: duration,
+			ModelUsed:   parsed.modelUsed,
 		}
 	}
 
@@ -188,6 +195,7 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 			TokensUsed:  parsed.totalTokens(),
 			CostUSD:     parsed.costUSD,
 			DurationSec: duration,
+			ModelUsed:   parsed.modelUsed,
 		}
 	}
 
@@ -212,6 +220,7 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 		CostUSD:        parsed.costUSD,
 		DurationSec:    duration,
 		UsageEstimated: estimated,
+		ModelUsed:      parsed.modelUsed,
 	}
 }
 
@@ -220,6 +229,7 @@ type streamParse struct {
 	assistantText strings.Builder
 	result        string
 	sessionID     string
+	modelUsed     string
 	inputTokens   int64
 	outputTokens  int64
 	costUSD       float64
@@ -243,10 +253,20 @@ func parseStreamEvent(line string, s *streamParse, onLog LogCallback) {
 	if sid, ok := ev["session_id"].(string); ok && sid != "" {
 		s.sessionID = sid
 	}
+	// The CLI reports the model it ACTUALLY runs — in the system:init event
+	// and on every assistant message. This is what lets the app answer "which
+	// model is this agent using" with a measured fact instead of the
+	// configured wish (the CLI can resolve aliases or fall back on its own).
+	if mdl, ok := ev["model"].(string); ok && mdl != "" {
+		s.modelUsed = mdl
+	}
 
 	switch ev["type"] {
 	case "assistant":
 		msg, _ := ev["message"].(map[string]interface{})
+		if mdl, ok := msg["model"].(string); ok && mdl != "" {
+			s.modelUsed = mdl
+		}
 		content, _ := msg["content"].([]interface{})
 		for _, c := range content {
 			block, _ := c.(map[string]interface{})

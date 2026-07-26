@@ -44,6 +44,12 @@ type RunResult struct {
 	// estimated counts — otherwise the context pack inflates every estimated
 	// run and pushes quota fallback into firing on fiction.
 	UsageEstimated bool `json:"usage_estimated"`
+	// ModelUsed is the model the CLI REPORTED running (stream-json carries it
+	// on init and on every assistant message) — a measured fact, unlike the
+	// requested model, which the CLI may resolve from an alias or fall back
+	// from. Empty when the CLI did not say (the Antigravity output has no
+	// reliable model echo).
+	ModelUsed string `json:"model_used"`
 }
 
 // LogCallback functions report real-time output line-by-line

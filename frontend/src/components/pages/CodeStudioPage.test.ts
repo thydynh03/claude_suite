@@ -16,19 +16,23 @@ const scanWorkspaceFiles = vi.fn(async () => [
   'backend/services/updater.go',
   'README.md',
 ])
+const runQuickCLI = vi.fn(async () => ({ output: '', error: '' }))
 
 vi.mock('../../../wailsjs/go/main/App', () => ({
   ScanWorkspaceFiles: (...a: unknown[]) => scanWorkspaceFiles(...(a as [])),
   ReadFileContent: (...a: unknown[]) => readFileContent(...(a as [string])),
   SaveFileContent: (...a: unknown[]) => saveFileContent(...(a as [])),
+  RunQuickCLI: (...a: unknown[]) => runQuickCLI(...(a as [])),
 }))
 
 import CodeStudioPage from './CodeStudioPage.svelte'
 
 beforeEach(() => {
   readFileContent.mockClear()
+  readFileContent.mockImplementation(async (path: string) => `// contents of ${path}\n`)
   saveFileContent.mockClear()
   scanWorkspaceFiles.mockClear()
+  runQuickCLI.mockClear()
 })
 
 describe('CodeStudioPage file tree and tabs', () => {
@@ -103,5 +107,60 @@ describe('CodeStudioPage editing', () => {
     )
     // Saved: the tab is clean again, so the button re-disables.
     await waitFor(() => expect(screen.getByText(/Lưu File \(Ctrl\+S\)/).closest('button')).toBeDisabled())
+  })
+})
+
+// The AI edit path. The defect these tests pin: the model suggests a few
+// spots as a short code block, and the page used to write that block over
+// the whole file — a 727-line stylesheet became its own 12-line excerpt.
+describe('CodeStudioPage AI edits', () => {
+  it('refuses to overwrite the file when the model returns an excerpt', async () => {
+    // A file big enough for the half-size guard to mean something.
+    const bigFile = Array.from({ length: 100 }, (_, i) => `.rule-${i} { color: red; }`).join('\n')
+    readFileContent.mockImplementation(async () => bigFile)
+    runQuickCLI.mockResolvedValueOnce({
+      output: 'Tôi đề xuất sửa hai chỗ:\n```css\n.rule-1 { color: blue; }\n.rule-2 { color: green; }\n```\n',
+      error: '',
+    })
+
+    render(CodeStudioPage)
+    await waitFor(() => expect(readFileContent).toHaveBeenCalledWith('backend/main.go'))
+
+    await fireEvent.click(await screen.findByText(/Refactor Code/))
+
+    expect(await screen.findByText(/KHÔNG ghi đè/)).toBeInTheDocument()
+    expect(saveFileContent).not.toHaveBeenCalled()
+  })
+
+  it('applies a full-file result, picking the largest code block over the excerpt', async () => {
+    const fullFile = '// refactored contents of backend/main.go\nfunc main() {}\n'
+    runQuickCLI.mockResolvedValueOnce({
+      // A small before/after excerpt first — the old code took the FIRST
+      // block, which is exactly how files got truncated.
+      output: 'Chỗ sửa chính:\n```go\n// x\n```\nToàn bộ file sau khi sửa:\n```go\n' + fullFile + '```\n',
+      error: '',
+    })
+
+    render(CodeStudioPage)
+    await waitFor(() => expect(readFileContent).toHaveBeenCalledWith('backend/main.go'))
+
+    await fireEvent.click(await screen.findByText(/Refactor Code/))
+
+    await waitFor(() => expect(saveFileContent).toHaveBeenCalledWith('backend/main.go', fullFile))
+  })
+
+  it('never writes the file for an explain turn, even when the answer contains code', async () => {
+    runQuickCLI.mockResolvedValueOnce({
+      output: 'Luồng xử lý như sau:\n```go\nfunc main() {} // trích dẫn minh hoạ\n```\n',
+      error: '',
+    })
+
+    render(CodeStudioPage)
+    await waitFor(() => expect(readFileContent).toHaveBeenCalledWith('backend/main.go'))
+
+    await fireEvent.click(await screen.findByText(/Giải thích Logic/))
+
+    expect(await screen.findByText(/không bị thay đổi/)).toBeInTheDocument()
+    expect(saveFileContent).not.toHaveBeenCalled()
   })
 })

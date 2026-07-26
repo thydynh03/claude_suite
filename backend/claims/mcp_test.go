@@ -131,6 +131,9 @@ func TestMCPInitializeAndToolListing(t *testing.T) {
 // claim, finish — and its finish is what lets adjudication run.
 func TestMCPFullSessionFlow(t *testing.T) {
 	h, url, id := openMCPSession(t)
+	// A lone participant's finish is held in collect for SoloHold before the
+	// session moves on; the test only cares that it eventually does.
+	h.SoloHold = 100 * time.Millisecond
 
 	if _, isErr := callTool(t, url, "submit_claim", map[string]any{
 		"author": "mai@laptop/claude-code", "subject": "x.go:1", "assertion": "broken",
@@ -287,6 +290,9 @@ func TestMCPSilentParticipantStopsBlockingAdjudication(t *testing.T) {
 // so a session cannot close over a reviewer's head.
 func TestMCPParticipantHoldsAdjudicationOpen(t *testing.T) {
 	h, url, id := openMCPSession(t)
+	// Shortened so the solo hold does not dominate the 5s adjudication wait —
+	// this test is about the unfinished participant, not the hold.
+	h.SoloHold = 100 * time.Millisecond
 
 	key := joinMCP(t, url, "slow@pc/agent")
 
@@ -360,7 +366,7 @@ func TestAgentJoinPromptNamesTheRealMCPTools(t *testing.T) {
 	for _, tool := range mcpTools() {
 		toolNames[tool["name"].(string)] = true
 	}
-	for _, named := range []string{"join_session", "list_checks", "submit_claim", "finish_reporting", "get_session_state"} {
+	for _, named := range []string{"join_session", "list_checks", "submit_claim", "finish_reporting", "get_session_state", "say", "wait_for_chat"} {
 		if !toolNames[named] {
 			t.Errorf("prompt references tool %q which the endpoint does not serve", named)
 		}

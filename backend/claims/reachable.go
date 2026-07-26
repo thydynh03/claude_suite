@@ -107,11 +107,13 @@ const claimToolURL = "https://github.com/thydynh03/claude_suite/releases/latest/
 const projectRepoURL = "https://github.com/thydynh03/claude_suite"
 
 // claimArgs is the part of a join line that is identical however the tool got
-// onto the recipient's machine.
+// onto the recipient's machine. The placeholders describe themselves in the
+// reader's language: "what is wrong" looked like literal input to paste, and
+// was pasted.
 func claimArgs(host, sessionID, token string) string {
 	return fmt.Sprintf("--host %s --session %s --token %s "+
-		`--provider claude --subject "file.go:12" `+
-		`--assert "what is wrong" --falsify "check-name"`,
+		`--provider claude --subject "duong-dan/file.go:12" `+
+		`--assert "loi la gi, mot cau" --falsify "ten-check"`,
 		host, sessionID, token)
 }
 
@@ -165,42 +167,71 @@ func MCPJoinCommand(host, sessionID, token string) string {
 // exe on someone's machine is their call, not their agent's.
 func AgentJoinPrompt(host, sessionID, token, subject string) string {
 	conn := fmt.Sprintf("--host %s --session %s --token %s --provider claude", host, sessionID, token)
-	return fmt.Sprintf(`Bạn được mời tham gia một phiên tranh luận (adjudication session) của Claude Suite với vai trò reviewer.
+	return fmt.Sprintf(`Bạn được mời làm reviewer trong một phiên phân xử (adjudication session) của Claude Suite.
 
-Chủ đề phiên: %s
+Chủ đề: %s
 
-BƯỚC 1 — chọn cách kết nối theo đúng thứ tự sau:
+Cách phiên hoạt động: mỗi agent tự điều tra rồi nộp phát hiện dưới dạng claim kèm cách
+kiểm chứng (falsifier). Host chạy check — kết quả check quyết định đúng sai, không ai
+thắng nhờ lý lẽ. Falsifier PASS khi claim SAI, nên check FAIL nghĩa là lỗi có thật.
+Claim không kèm falsifier chỉ là ý kiến: được ghi lại nhưng không chặn được merge.
 
-A. Máy đã có claude-suite-claim trên PATH (đã cài app Claude Suite bằng installer):
-   dùng luôn, sang bước 2.
+=== BƯỚC 1 — KẾT NỐI (chọn một, theo thứ tự ưu tiên) ===
 
-B. Chưa có công cụ: HỎI người dùng của bạn muốn tải công cụ về hay không (đừng tự quyết).
-   - Đồng ý tải — Windows (PowerShell):
+A. Máy đã cài app Claude Suite: công cụ claude-suite-claim có sẵn trên PATH — sang BƯỚC 2A.
+
+B. Chưa có công cụ: HỎI người dùng của bạn trước, đừng tự quyết.
+   - Họ đồng ý tải (Windows, PowerShell):
      $c = "$env:TEMP\claude-suite-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c %s }
-     rồi thay "claude-suite-claim" trong các lệnh dưới bằng $c.
-     (macOS/Linux hoặc tải thất bại: git clone %s rồi chạy "go run ./cmd/claude-suite-claim" — cần Go.)
-   - KHÔNG muốn tải — kết nối MCP thẳng vào app của người mở phiên:
+     rồi dùng $c thay cho "claude-suite-claim" trong mọi lệnh bên dưới. Sang BƯỚC 2A.
+     (macOS/Linux: git clone %s rồi chạy "go run ./cmd/claude-suite-claim" — cần Go.)
+   - Họ KHÔNG muốn tải: kết nối MCP, không tải gì cả —
      claude mcp add --transport http claude-suite-debate "%s"
      (Gemini CLI: gemini mcp add --transport http claude-suite-debate "%s")
-     Khởi động lại agent nếu cần để nhận tool mới, rồi làm theo BƯỚC 2-MCP bên dưới; bỏ qua phần CLI.
+     Khởi động lại agent nếu chưa thấy tool mới, rồi làm BƯỚC 2B và 3B; bỏ qua 2A/3A.
 
-BƯỚC 2 — với công cụ CLI:
-1. Kiểm tra kết nối trước khi bỏ công review: claude-suite-claim %s --ping
-2. Xem các check mà claim được phép trỏ tới (chạy trong thư mục dự án đang xét): claude-suite-claim --checks
-   Falsifier PASS khi claim SAI, nên check FAIL là xác nhận lỗi có thật. Claim không có --falsify chỉ là ý kiến, không chặn được merge.
-3. Tự xem xét mã nguồn liên quan chủ đề, rồi nộp nhận định:
-   claude-suite-claim %s --subject "duong/dan/file.go:12" --assert "lỗi là gì, trong một câu" --falsify "ten-check"
-   (--subject/--assert/--falsify lặp lại được cho nhiều claim; --say "..." để thảo luận thêm.)
-4. Lệnh nộp claim tự chờ kết quả; verdict đầy đủ nằm ở .claude-suite/session-%s/verdict.json.
+=== BƯỚC 2A — NỘP PHÁT HIỆN, bằng công cụ CLI ===
 
-BƯỚC 2-MCP — với kết nối MCP (tool trên server claude-suite-debate):
-1. join_session với author dạng "ten-ban@may/agent". Kết quả trả về một participant_key —
-   GIỮ LẠI và gửi kèm (cùng author) trong MỌI tool sau; thiếu nó call sẽ bị từ chối.
-2. list_checks để biết claim được trỏ tới check nào (quy tắc falsifier như trên).
-3. Tự xem xét mã nguồn, rồi submit_claim cho từng nhận định; bỏ trống falsifier nếu chỉ là ý kiến.
-4. finish_reporting khi hết claim, sau đó gọi get_session_state định kỳ để xem verdict và kết quả phiên.
-   Đừng im lặng quá lâu giữa các call: participant vắng mặt quá cửa sổ thu thập bị coi là đã rời phiên.`,
+1. Thử kết nối trước khi bỏ công review:
+   claude-suite-claim %s --ping
+2. Xem danh sách check mà claim được phép trỏ tới (chạy trong thư mục dự án đang xét):
+   claude-suite-claim --checks
+3. Tự đọc mã nguồn liên quan chủ đề, rồi nộp mỗi phát hiện một bộ ba:
+   claude-suite-claim %s --subject "duong-dan/file.go:12" --assert "loi la gi, mot cau" --falsify "ten-check"
+   (ba cờ này lặp lại được để nộp nhiều claim trong một lần chạy)
+4. Lệnh trên tự chờ các agent khác nộp xong và chờ check chạy; kết quả đầy đủ nằm ở
+   .claude-suite/session-%s/verdict.json
+
+=== BƯỚC 3A — THẢO LUẬN, bằng công cụ CLI ===
+
+Phiên có một kênh chat chung giữa các agent và người trọng tài (chủ phiên).
+- NGHE (chạy nền, in mỗi tin nhắn thành một dòng JSON có seq/author/text):
+  claude-suite-claim %s --listen 15m
+- NÓI:
+  claude-suite-claim %s --say "noi dung"
+Luật hội thoại: chỉ trả lời khi tin nhắn gọi tên bạn, hỏi bạn, hoặc phản bác claim của
+bạn. Trả lời ngắn, dẫn file:dòng. Không trả lời tin của chính mình. Chat không phải
+bằng chứng — chỉ falsifier mới kết luận được một claim.
+
+=== BƯỚC 2B — NỘP PHÁT HIỆN, qua MCP (tool trên server claude-suite-debate) ===
+
+1. join_session với author dạng "ten-ban@ten-may/agent". Nó trả về participant_key —
+   LƯU LẠI: mọi tool sau đều phải gửi kèm key này cùng đúng author đó.
+2. list_checks — xem claim được trỏ tới những check nào.
+3. Tự đọc mã nguồn rồi submit_claim cho từng phát hiện; bỏ trống falsifier nếu chỉ là ý kiến.
+4. finish_reporting khi không còn gì để nộp.
+
+=== BƯỚC 3B — THẢO LUẬN, qua MCP ===
+
+Sau finish_reporting, vào vòng hội thoại và lặp cho đến khi phase là "record":
+1. wait_for_chat với after_seq = seq lớn nhất bạn đã thấy (lần đầu: 0). Tool tự block
+   chờ tin mới; hết giờ thì gọi lại y nguyên — không cần ngủ giữa các lần gọi.
+2. Tin mới gọi tên bạn / hỏi bạn / phản bác claim của bạn thì dùng say trả lời ngắn, dẫn
+   file:dòng. Tin khác thì chỉ cập nhật after_seq rồi wait_for_chat tiếp.
+3. Không trả lời tin của chính mình. Khi phase thành "record" thì dừng và đọc kết quả
+   cuối bằng get_session_state.
+Gọi tool đều đặn cũng là nhịp tim của bạn: im lặng quá lâu bị coi là đã rời phiên.`,
 		subject, claimToolURL, projectRepoURL,
 		MCPJoinURL(host, sessionID, token), MCPJoinURL(host, sessionID, token),
-		conn, conn, sessionID)
+		conn, conn, sessionID, conn, conn)
 }

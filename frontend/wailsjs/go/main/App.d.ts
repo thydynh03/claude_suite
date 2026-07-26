@@ -5,6 +5,7 @@ import {models} from '../models';
 import {main} from '../models';
 import {claims} from '../models';
 import {cli} from '../models';
+import {modelcatalog} from '../models';
 import {database} from '../models';
 import {projectmap} from '../models';
 
@@ -75,6 +76,8 @@ export function GetAntiAccountKeys():Promise<Array<cli.AntiAccountKey>>;
 export function GetAppVersion():Promise<string>;
 
 export function GetAutoApproveAll():Promise<boolean>;
+
+export function GetAvailableModels():Promise<Array<modelcatalog.Model>>;
 
 export function GetBudgetStatus():Promise<main.BudgetStatus>;
 
@@ -167,6 +170,8 @@ export function ReadFileContent(arg1:string):Promise<string>;
 export function RebuildProjectMap():Promise<projectmap.BuildReport>;
 
 export function RefreshAccountTokens():Promise<number|number>;
+
+export function RefreshGeminiModels():Promise<number>;
 
 export function RefreshProjectSummaries():Promise<number>;
 
