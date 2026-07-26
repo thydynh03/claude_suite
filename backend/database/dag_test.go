@@ -1,7 +1,7 @@
 package database
 
 import (
-	"database/sql"
+	"path/filepath"
 	"testing"
 
 	"claude_suite/backend/models"
@@ -9,14 +9,16 @@ import (
 
 func newTestTaskRepo(t *testing.T) *TaskRepository {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	// A temp file, never ":memory:": database/sql pools connections and each
+	// NEW pool connection to ":memory:" is its own empty database — the
+	// tables vanish mid-test whenever the pool decides to open a second
+	// connection, which is timing-dependent and therefore a flake. db.go
+	// documents this; OpenAt is the sanctioned way in.
+	db, err := OpenAt(filepath.Join(t.TempDir(), "dag_test.db"))
 	if err != nil {
-		t.Fatalf("failed to open in-memory db: %v", err)
+		t.Fatalf("failed to open test db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := migrateSchema(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
 	return NewTaskRepository(db)
 }
 

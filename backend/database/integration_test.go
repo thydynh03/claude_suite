@@ -1,22 +1,22 @@
 package database
 
 import (
-	"database/sql"
+	"path/filepath"
 	"testing"
 
 	"claude_suite/backend/models"
 )
 
 func TestFullDatabaseLifecycleIntegration(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	// A temp file, never ":memory:" — each new pool connection to ":memory:"
+	// is its own empty database, so the tables vanish whenever database/sql
+	// opens a second connection mid-test. This is the flake that failed CI
+	// with "no such table: tasks"; db.go documents the pitfall.
+	db, err := OpenAt(filepath.Join(t.TempDir(), "integration_test.db"))
 	if err != nil {
-		t.Fatalf("failed to open in-memory db: %v", err)
+		t.Fatalf("failed to open test db: %v", err)
 	}
 	defer db.Close()
-
-	if err := migrateSchema(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
 
 	taskRepo := NewTaskRepository(db)
 	agentRepo := NewAgentRepository(db)
