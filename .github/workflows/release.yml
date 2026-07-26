@@ -138,6 +138,20 @@ jobs:
           go build -o build/bin/claude-suite-tui.exe ./cmd/claude-suite-tui
           wails build -platform windows/amd64 -nsis -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
 
+      # Wails shells out to makensis itself and reports "Building 'amd64'
+      # installer: Done." without showing its output, so a `File` line that
+      # resolves to nothing is invisible — two releases shipped an installer
+      # missing the companion tools that way. The wails run above is still what
+      # generates wails_tools.nsh and fetches the WebView2 bootstrapper; this
+      # rebuilds the same script with the working directory pinned and -V4 on, so
+      # any path that fails to resolve appears in the log and fails the job.
+      - name: Rebuild the installer with makensis output visible
+        shell: pwsh
+        working-directory: build/windows/installer
+        run: |
+          makensis -V4 -DARG_WAILS_AMD64_BINARY="$(Resolve-Path ../../bin/ClaudeSuite.exe)" project.nsi
+          if ($LASTEXITCODE -ne 0) { Write-Error "makensis failed"; exit 1 }
+
       - name: Verify the companion tools were packaged
         shell: pwsh
         run: |
@@ -162,11 +176,11 @@ jobs:
       # makensis's working directory, and the first version of this silently
       # produced an installer with none of the tools in it.
       #
-      # This runs the installer instead of inspecting it. Reading the archive with
-      # `7z l` was the obvious check and it was tried first, but it reported the
-      # tools missing from an installer built without /nonfatal — which cannot
-      # skip a file — so the listing, not the packaging, was wrong. A silent
-      # install asserts the only thing that actually matters: what lands on a
+      # This runs the installer instead of inspecting it. A `7z l` listing was
+      # tried first and was doubted, because it reported the tools missing from an
+      # installer built without /nonfatal, which cannot skip a file. Installing
+      # for real confirmed the listing: only claude_suite.exe and uninstall.exe
+      # arrive. So the assertion stays on the thing that matters — what lands on a
       # user's disk. The runner is a throwaway VM, so installing on it is free.
       - name: The installer really delivers the companion tools
         shell: pwsh
@@ -181,7 +195,7 @@ jobs:
           }
           Start-Sleep -Seconds 5
           Get-ChildItem $target -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "installed: $($_.Name)" }
-          foreach ($tool in 'claude-suite-claim.exe','claude-suite-tui.exe','ClaudeSuite.exe') {
+          foreach ($tool in 'claude-suite-claim.exe','claude-suite-tui.exe','claude_suite.exe') {
             if (-not (Test-Path "$target\$tool")) {
               Write-Error "$tool was not installed — the installer does not carry it"
               exit 1
