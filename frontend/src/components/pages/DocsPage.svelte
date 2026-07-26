@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { renderMarkdown } from '../../lib/markdown';
   import { activeTab } from '../../lib/stores/appState';
 
   let searchQuery = '';
@@ -7,7 +8,7 @@
   const docSections = [
     {
       id: 'quickstart',
-      title: '🚀 Hướng Dẫn Nhanh & Workspace Setup',
+      title: 'Hướng Dẫn Nhanh & Workspace Setup',
       category: 'quickstart',
       icon: 'rocket_launch',
       content: `
@@ -24,7 +25,7 @@ Nhấn **Execute Plan** hoặc **Start Orchestrator**. Các Corporate Agent sẽ
     },
     {
       id: 'agents',
-      title: '🤖 Quản Lý Corporate Agent Roles & Custom Personas',
+      title: 'Quản Lý Corporate Agent Roles & Custom Personas',
       category: 'agents',
       icon: 'smart_toy',
       content: `
@@ -42,7 +43,7 @@ Vào tab **Studio & Settings** -> **Agents Registry**, chọn agent và chỉnh 
     },
     {
       id: 'kanban',
-      title: '📋 Kanban Board, Ưu Tiên & Phụ Thuộc (Depends On)',
+      title: 'Kanban Board, Ưu Tiên & Phụ Thuộc (Depends On)',
       category: 'kanban',
       icon: 'assignment',
       content: `
@@ -62,7 +63,7 @@ Click trực tiếp vào thẻ Task trên bảng Kanban để mở cửa sổ mo
     },
     {
       id: 'cli',
-      title: '⚡ CLI Engines: Claude CLI & Antigravity CLI',
+      title: 'CLI Engines: Claude CLI & Antigravity CLI',
       category: 'cli',
       icon: 'terminal',
       content: `
@@ -76,7 +77,7 @@ Nếu Agent gặp lỗi hết Quota/Token limit 429 trên Claude, hệ thống s
     },
     {
       id: 'mcp',
-      title: '🔗 Webhook & MCP (Model Context Protocol) API',
+      title: 'Webhook & MCP (Model Context Protocol) API',
       category: 'mcp',
       icon: 'hub',
       content: `
@@ -166,8 +167,11 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
           <h2 class="text-lg font-bold text-on-surface">{doc.title}</h2>
         </div>
 
-        <div class="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap font-sans">
-          {doc.content}
+        <!-- Rendered, not printed. This block used to be whitespace-pre-wrap
+             around raw markdown, so readers saw the ### and ** characters
+             themselves. renderMarkdown escapes the source before formatting it. -->
+        <div class="text-xs text-on-surface-variant leading-relaxed font-sans">
+          {@html renderMarkdown(doc.content)}
         </div>
       </div>
     {:else}

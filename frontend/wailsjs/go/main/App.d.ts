@@ -5,6 +5,7 @@ import {models} from '../models';
 import {main} from '../models';
 import {claims} from '../models';
 import {cli} from '../models';
+import {database} from '../models';
 
 export function AddAntiAccountKey(arg1:string,arg2:string):Promise<void>;
 
@@ -71,6 +72,8 @@ export function GetAutoApproveAll():Promise<boolean>;
 export function GetBudgetStatus():Promise<main.BudgetStatus>;
 
 export function GetClaimSession(arg1:string):Promise<Record<string, any>>;
+
+export function GetDispatchReadiness():Promise<database.DispatchReadiness>;
 
 export function GetGCPOAuthCredentials():Promise<Record<string, string>>;
 
@@ -210,4 +213,4 @@ export function ToggleWebhook(arg1:number):Promise<boolean>;
 
 export function UpdateTaskStatus(arg1:string,arg2:string):Promise<void>;
 
-export function WarmupAntiAccountKeys():Promise<void>;
+export function WarmupAntiAccountKeys():Promise<main.WarmupResult>;

@@ -134,6 +134,10 @@ export function GetClaimSession(arg1) {
   return window['go']['main']['App']['GetClaimSession'](arg1);
 }
 
+export function GetDispatchReadiness() {
+  return window['go']['main']['App']['GetDispatchReadiness']();
+}
+
 export function GetGCPOAuthCredentials() {
   return window['go']['main']['App']['GetGCPOAuthCredentials']();
 }

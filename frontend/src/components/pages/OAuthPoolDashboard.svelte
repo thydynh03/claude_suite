@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, addToast } from '../../lib/stores/appState';
 
   export let onOpenGoogleLogin: () => void = () => {};
 
@@ -33,6 +33,27 @@
   let activeFilter: 'all' | 'PRO' | 'ULTRA' | 'FREE' = 'all';
   let isLoading = false;
   let selectedIds: string[] = [];
+  let isWarming = false;
+  let bulkBusy = false;
+
+  // Every account currently visible under the search box and tier filter. Bulk
+  // actions operate on the intersection with selectedIds, never on rows the user
+  // cannot see — selecting all, then filtering, then deleting used to take the
+  // hidden ones with it.
+  $: visibleIds = filteredAccounts.map((a: any) => a.id).filter(Boolean);
+  $: selectedVisible = selectedIds.filter((id) => visibleIds.includes(id));
+  $: allVisibleSelected = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+  $: someVisibleSelected = selectedVisible.length > 0 && !allVisibleSelected;
+
+  function toggleSelectAll() {
+    selectedIds = allVisibleSelected ? [] : [...visibleIds];
+  }
+
+  function toggleOne(id: string) {
+    selectedIds = selectedIds.includes(id)
+      ? selectedIds.filter((x) => x !== id)
+      : [...selectedIds, id];
+  }
 
   // GCP Credentials State
   let showGcpSettings = false;
@@ -87,10 +108,12 @@
       if ((AppBindings as any).SaveGCPOAuthCredentials) {
         await (AppBindings as any).SaveGCPOAuthCredentials(gcpClientId, gcpClientSecret);
         addLog('Đã lưu GCP OAuth Credentials vào file config!', 'SUCCESS');
+        addToast('Đã lưu GCP OAuth Credentials — nút Đăng Nhập Google đã sẵn sàng.', 'SUCCESS');
         showGcpSettings = false;
       }
     } catch (e) {
       addLog(`Lỗi lưu GCP Creds: ${e}`, 'ERROR');
+      addToast(`Lưu GCP Credentials thất bại: ${e}`, 'ERROR');
     } finally {
       isSavingGcp = false;
     }
@@ -173,16 +196,80 @@
     }
   }
 
+  // Reports per-account outcome. Announcing a flat "thành công" while three
+  // accounts failed to refresh is how a revoked token stayed invisible until a
+  // task died on it.
   async function handleWarmupAll() {
+    if (isWarming) return;
+    isWarming = true;
     try {
-      if ((AppBindings as any).WarmupAntiAccountKeys) {
-        await (AppBindings as any).WarmupAntiAccountKeys();
-        addLog('🔥 Đã làm nóng (Warmup) tất cả tài khoản trong Pool!', 'SUCCESS');
-        await loadAccounts();
+      const r = await (AppBindings as any).WarmupAntiAccountKeys();
+      await loadAccounts();
+
+      const refreshed = r?.refreshed ?? 0;
+      const failed = r?.failed ?? 0;
+      const skipped = r?.skipped ?? 0;
+
+      if (failed > 0) {
+        const detail = (r?.errors || []).slice(0, 3).join(' · ');
+        addToast(`Làm nóng: ${refreshed} thành công, ${failed} lỗi. ${detail}`, 'ERROR', 9000);
+        (r?.errors || []).forEach((e: string) => addLog(`Warmup lỗi — ${e}`, 'ERROR'));
+      } else if (refreshed === 0) {
+        addToast(`Không có tài khoản nào cần làm mới (${skipped} token vẫn còn hạn).`, 'INFO');
+      } else {
+        addToast(`Đã làm nóng ${refreshed} tài khoản.`, 'SUCCESS');
       }
+      addLog(`Warmup: ${refreshed} refreshed, ${failed} failed, ${skipped} skipped`, 'INFO');
     } catch (e) {
       addLog(`Lỗi Warmup: ${e}`, 'ERROR');
+      addToast(`Làm nóng thất bại: ${e}`, 'ERROR');
+    } finally {
+      isWarming = false;
     }
+  }
+
+  async function handleManualRefresh() {
+    await loadAccounts();
+    addToast(`Đã tải lại — ${accounts.length} tài khoản trong pool.`, 'INFO');
+  }
+
+  // Bulk actions run one account at a time and count both outcomes, so a partial
+  // failure is reported as a partial failure.
+  async function runBulk(label: string, fn: (id: string) => Promise<any>) {
+    if (bulkBusy || selectedVisible.length === 0) return;
+    bulkBusy = true;
+    let ok = 0;
+    let failed = 0;
+    try {
+      for (const id of selectedVisible) {
+        try {
+          await fn(id);
+          ok++;
+        } catch (e) {
+          failed++;
+          addLog(`${label} thất bại cho ${id}: ${e}`, 'ERROR');
+        }
+      }
+      await loadAccounts();
+      selectedIds = [];
+      addToast(
+        failed === 0 ? `${label}: ${ok} tài khoản.` : `${label}: ${ok} thành công, ${failed} lỗi.`,
+        failed === 0 ? 'SUCCESS' : 'ERROR'
+      );
+    } finally {
+      bulkBusy = false;
+    }
+  }
+
+  function bulkToggleStatus() {
+    return runBulk('Đổi trạng thái', (id) => (AppBindings as any).ToggleAntiAccountKeyStatus(id));
+  }
+
+  function bulkDelete() {
+    // Deleting accounts cannot be undone from the UI, and the pool is the only
+    // copy of an imported refresh token.
+    if (!confirm(`Xoá ${selectedVisible.length} tài khoản khỏi pool? Không hoàn tác được.`)) return;
+    return runBulk('Xoá', (id) => (AppBindings as any).DeleteAntiAccountKey(id));
   }
 
   function copyText(text: string, label: string) {
@@ -231,14 +318,17 @@
         <button
           type="button"
           on:click={handleWarmupAll}
-          class="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+          disabled={isWarming}
+          class="disabled:opacity-60 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
         >
-          <span class="material-symbols-outlined text-base">local_fire_department</span> 🔥 Làm Nóng (Warmup) Tất Cả
+          <span class="material-symbols-outlined text-base {isWarming ? 'animate-spin' : ''}">{isWarming ? 'progress_activity' : 'local_fire_department'}</span>
+          {isWarming ? 'Đang làm nóng…' : 'Làm Nóng (Warmup) Tất Cả'}
         </button>
         <button
           type="button"
-          on:click={loadAccounts}
-          class="bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant transition-all cursor-pointer flex items-center gap-1.5"
+          on:click={handleManualRefresh}
+          disabled={isLoading}
+          class="disabled:opacity-60 bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant transition-all cursor-pointer flex items-center gap-1.5"
         >
           <span class="material-symbols-outlined text-base {isLoading ? 'animate-spin' : ''}">refresh</span> Làm Mới
         </button>
@@ -347,6 +437,49 @@
     </div>
   </div>
 
+  <!-- Bulk action bar: only rendered when something is selected, so it never
+       occupies space it is not using. -->
+  {#if selectedVisible.length > 0}
+    <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/5 border border-primary/30 rounded-xl">
+      <span class="text-xs font-bold text-on-surface">
+        Đã chọn {selectedVisible.length} tài khoản
+      </span>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          on:click={bulkToggleStatus}
+          disabled={bulkBusy}
+          class="px-3 py-1.5 rounded-lg text-xs font-bold border border-outline-variant bg-surface-container-high hover:bg-surface-container-highest disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-sm">toggle_on</span> Bật / Tắt
+        </button>
+        <button
+          type="button"
+          on:click={handleWarmupAll}
+          disabled={bulkBusy || isWarming}
+          class="px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-sm">local_fire_department</span> Làm nóng
+        </button>
+        <button
+          type="button"
+          on:click={bulkDelete}
+          disabled={bulkBusy}
+          class="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-sm">delete</span> Xoá
+        </button>
+        <button
+          type="button"
+          on:click={() => (selectedIds = [])}
+          class="px-3 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
+        >
+          Bỏ chọn
+        </button>
+      </div>
+    </div>
+  {/if}
+
   <!-- Accounts & Quotas Main Table -->
   <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
     <div class="overflow-x-auto">
@@ -354,7 +487,14 @@
         <thead>
           <tr class="bg-surface-container-low text-on-surface-variant font-bold border-b border-outline-variant uppercase text-[11px] tracking-wider">
             <th class="p-3 w-10 text-center">
-              <input type="checkbox" class="rounded accent-primary" />
+              <input
+                type="checkbox"
+                class="rounded accent-primary cursor-pointer"
+                checked={allVisibleSelected}
+                indeterminate={someVisibleSelected}
+                on:change={toggleSelectAll}
+                title="Chọn tất cả tài khoản đang hiển thị"
+              />
             </th>
             <th class="p-3 min-w-[200px]">EMAIL & TRẠNG THÁI</th>
             <th class="p-3 min-w-[420px]">HẠN MỨC MODEL (MODEL QUOTA)</th>
@@ -367,7 +507,12 @@
             <tr class="hover:bg-surface-container-low/50 transition-all {acc.is_current ? 'bg-primary/5' : ''}">
               <!-- Checkbox -->
               <td class="p-3 text-center">
-                <input type="checkbox" class="rounded accent-primary" />
+                <input
+                  type="checkbox"
+                  class="rounded accent-primary cursor-pointer"
+                  checked={selectedIds.includes(acc.id)}
+                  on:change={() => toggleOne(acc.id)}
+                />
               </td>
 
               <!-- Email & Badges -->

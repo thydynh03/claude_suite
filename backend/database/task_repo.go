@@ -234,3 +234,82 @@ func (r *TaskRepository) NextDispatchable() (*models.Task, error) {
 
 	return candidate, nil
 }
+
+// Blocker names one task that another is waiting on, and what state it is in.
+type Blocker struct {
+	TaskID string `json:"task_id"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+}
+
+// BlockedTask is a task sitting in the backlog that cannot be dispatched because
+// at least one of its dependencies is not done.
+type BlockedTask struct {
+	TaskID   string    `json:"task_id"`
+	Title    string    `json:"title"`
+	Blockers []Blocker `json:"blockers"`
+	// Dead is true when at least one blocker has failed. Those never clear on
+	// their own: the board looks busy while nothing can ever run.
+	Dead bool `json:"dead"`
+}
+
+// DispatchReadiness explains why the backlog is or is not moving.
+//
+// NextDispatchable answers "what runs next" and returns nil for every reason at
+// once — empty backlog, unmet dependencies, a dependency that failed. The UI
+// showed the same nothing in all three cases, so a board with one task waiting
+// on two failed ones looked identical to a board with no work at all.
+type DispatchReadiness struct {
+	Ready   int           `json:"ready"`
+	Blocked []BlockedTask `json:"blocked"`
+	Running int           `json:"running"`
+}
+
+func (r *TaskRepository) DispatchReadiness() (DispatchReadiness, error) {
+	var out DispatchReadiness
+
+	allTasks, err := r.GetAll()
+	if err != nil {
+		return out, err
+	}
+
+	byID := make(map[string]models.Task, len(allTasks))
+	for _, t := range allTasks {
+		byID[t.TaskID] = t
+	}
+
+	for _, t := range allTasks {
+		if t.Status == "running" {
+			out.Running++
+		}
+		if t.Status != "backlog" && t.Status != "queued" {
+			continue
+		}
+
+		blocked := BlockedTask{TaskID: t.TaskID, Title: t.Title}
+		for _, depID := range t.DependsOn {
+			dep, known := byID[depID]
+			if known && dep.Status == "done" {
+				continue
+			}
+			b := Blocker{TaskID: depID, Status: "missing"}
+			if known {
+				b.Title, b.Status = dep.Title, dep.Status
+			}
+			// A dependency that is gone is as dead as one that failed: nothing
+			// will ever mark it done.
+			if b.Status == "failed" || b.Status == "missing" {
+				blocked.Dead = true
+			}
+			blocked.Blockers = append(blocked.Blockers, b)
+		}
+
+		if len(blocked.Blockers) == 0 {
+			out.Ready++
+			continue
+		}
+		out.Blocked = append(out.Blocked, blocked)
+	}
+
+	return out, nil
+}

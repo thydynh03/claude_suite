@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { renderMarkdown } from '../../lib/markdown';
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog } from '../../lib/stores/appState';

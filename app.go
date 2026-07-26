@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"os/exec"
+
 	"claude_suite/backend/claims"
 	"claude_suite/backend/cli"
 	"claude_suite/backend/core"
@@ -331,14 +333,21 @@ func (a *App) ClearAllTasks() error {
 
 // ── Orchestrator & Execution ───────────────────────────────────────────
 
+// StartOrchestrator reports whether this call started it. Returning true
+// unconditionally made a second press look like a fresh start.
 func (a *App) StartOrchestrator() bool {
-	a.orchestrator.Start()
-	return true
+	return a.orchestrator.Start()
 }
 
 func (a *App) StopOrchestrator() bool {
-	a.orchestrator.Stop()
-	return true
+	return a.orchestrator.Stop()
+}
+
+// GetDispatchReadiness tells the board why nothing is running: no work, work
+// waiting on unfinished tasks, or work waiting on tasks that failed and will
+// never finish. Pressing Execute Plan used to look identical in all three cases.
+func (a *App) GetDispatchReadiness() (database.DispatchReadiness, error) {
+	return a.taskRepo.DispatchReadiness()
 }
 
 func (a *App) IsOrchestratorRunning() bool {
@@ -849,9 +858,74 @@ func (a *App) ToggleAntiAccountKeyStatus(id string) string {
 	return res
 }
 
-func (a *App) WarmupAntiAccountKeys() {
+// WarmupResult reports what warming the pool actually achieved, per account.
+type WarmupResult struct {
+	Total     int      `json:"total"`
+	Refreshed int      `json:"refreshed"`
+	Failed    int      `json:"failed"`
+	Skipped   int      `json:"skipped"`
+	Errors    []string `json:"errors"`
+}
+
+// WarmupAntiAccountKeys refreshes every account's access token and reports the
+// outcome.
+//
+// It used to only clear rate-limit marks in memory and return nothing, so the
+// button called "Làm Nóng" neither touched the network nor told anyone what
+// happened. An account whose refresh token had been revoked stayed marked
+// "active" until the next task failed on it.
+func (a *App) WarmupAntiAccountKeys() WarmupResult {
+	// Clearing the rate-limit marks first is still right: an account parked for a
+	// 429 an hour ago deserves another try. Accounts the user switched off stay
+	// off — that toggle is a decision, not a transient state.
 	cli.GlobalAntiPool.WarmupKeys()
+
+	clientID, clientSecret := oauthCreds()
+	pending := cli.GlobalAntiPool.AccountsNeedingRefresh()
+
+	result := WarmupResult{Total: len(cli.GlobalAntiPool.GetKeys())}
+	result.Skipped = result.Total - len(pending)
+
+	if len(pending) > 0 && (clientID == "" || clientSecret == "") {
+		result.Failed = len(pending)
+		result.Errors = append(result.Errors,
+			"Chưa có GCP OAuth Credentials nên không làm mới được token nào. Đặt Client ID/Secret ở phần cấu hình phía trên.")
+		a.saveAntiKeys()
+		return result
+	}
+
+	for id, refreshToken := range pending {
+		token, err := services.RefreshGoogleAccessToken(context.Background(), clientID, clientSecret, refreshToken)
+		if err != nil {
+			result.Failed++
+			cli.GlobalAntiPool.DisableKey(id, err.Error())
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", accountLabel(id), err))
+			a.emitLog(fmt.Sprintf("⚠️ Tài khoản %s không làm mới được token: %v", accountLabel(id), err), "WARN")
+			continue
+		}
+		cli.GlobalAntiPool.SetAccessToken(id, token.AccessToken, token.ExpiresAt)
+		result.Refreshed++
+	}
+
 	a.saveAntiKeys()
+	return result
+}
+
+// accountLabel prefers the email over the internal id: an error naming
+// "k-3f2a" tells the user nothing they can act on.
+func accountLabel(id string) string {
+	for _, k := range cli.GlobalAntiPool.GetKeys() {
+		if k.ID == id {
+			if k.Email != "" {
+				return k.Email
+			}
+			if k.Name != "" {
+				return k.Name
+			}
+			break
+		}
+	}
+	return id
 }
 
 // oauthCreds resolves GCP OAuth credentials from (1) environment variables,
@@ -1357,25 +1431,36 @@ func (a *App) OpenClaimSession(subject string, ttlMinutes int) map[string]interf
 		return map[string]interface{}{"success": false, "error": err.Error()}
 	}
 
-	addr := a.claimsHost.Addr()
-	// The listener binds every interface, which prints as [::]. Emitting
-	// "YOUR-HOST" made the copied line work for nobody: a teammate on this
-	// machine — the usual case, a second agent in another IDE — had to know to
-	// edit it first, and most did not. localhost works there, and the UI says
-	// what to change when the teammate is on another machine.
-	host := "ws://" + strings.Replace(addr, "[::]", "localhost", 1)
+	// One address per case the user might be in, rather than one address that is
+	// only right for the case they are probably not in. See claims.JoinTargets.
+	targets := claims.JoinTargets(a.claimsHost.Addr())
+	host := ""
+	if len(targets) > 0 {
+		host = targets[0].Host
+	}
+
+	commands := make([]map[string]string, 0, len(targets))
+	for _, t := range targets {
+		commands = append(commands, map[string]string{
+			"scope":   t.Scope,
+			"label":   t.Label,
+			"host":    t.Host,
+			"command": claims.JoinCommand(t.Host, id, token),
+		})
+	}
+
 	return map[string]interface{}{
 		"success": true,
 		"id":      id,
 		"token":   token,
 		"host":    host,
-		// The exact command a teammate's agent runs. Handing over a ready line
-		// avoids the flag-by-flag reconstruction that goes wrong over chat.
-		"join_command": fmt.Sprintf(
-			`%s --host %s --session %s --token %s `+
-				`--author YOU/your-agent --provider claude `+
-				`--subject "file.go:12" --assert "what is wrong" --falsify "check-name"`,
-			claimToolCommand(), host, id, token),
+		"targets": commands,
+		// Kept for the local case so existing callers keep working; "targets" is
+		// what the UI should show, because it says which address is for whom.
+		"join_command": claims.JoinCommand(host, id, token),
+		// Whether the tool this command names is actually installed. Without
+		// this the UI hands out a line that fails with "not found" and no cause.
+		"tool_installed": claimToolInstalled(),
 	}
 }
 
@@ -1430,16 +1515,29 @@ func (a *App) FinishClaimSession(sessionID string) (*claims.Outcome, error) {
 // without being told to install anything first, so it names the full path when
 // the tool is there and falls back to the bare name when it is not — which is
 // the development case, where PATH does have it.
-func claimToolCommand() string {
-	const toolName = "claude-suite-claim.exe"
+// claimToolInstalled reports whether claude-suite-claim can be found — beside
+// the app, as the installer places it, or on PATH.
+//
+// The command handed to a teammate names the tool without a path, so this is what
+// decides whether that command can work at all. The previous version returned the
+// absolute path of *this* machine and embedded it in a line meant to be run on
+// another one; it worked only while both sides used the same install directory.
+func claimToolInstalled() bool {
+	names := []string{"claude-suite-claim", "claude-suite-claim.exe"}
 
-	exe, err := os.Executable()
-	if err == nil {
-		beside := filepath.Join(filepath.Dir(exe), toolName)
-		if info, statErr := os.Stat(beside); statErr == nil && !info.IsDir() {
-			// Quoted: the install path contains a space ("Program Files").
-			return `"` + beside + `"`
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for _, name := range names {
+			if info, statErr := os.Stat(filepath.Join(dir, name)); statErr == nil && !info.IsDir() {
+				return true
+			}
 		}
 	}
-	return "claude-suite-claim"
+
+	for _, name := range names {
+		if _, err := exec.LookPath(name); err == nil {
+			return true
+		}
+	}
+	return false
 }

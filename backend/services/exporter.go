@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"claude_suite/backend/models"
+	"claude_suite/backend/textutil"
 )
 
 type ExporterService struct{}
@@ -37,7 +38,11 @@ func (e *ExporterService) ExportKanbanReport(tasks []models.Task, outDir string)
 		for _, t := range tasks {
 			if t.Status == status {
 				count++
-				md.WriteString(fmt.Sprintf("- **[%s]** %s\n  - Priority: `%s` | Assigned: `%s`\n  - Prompt: %s\n", t.TaskID[:8], t.Title, t.Priority, t.AssignedTo, t.Prompt))
+				// textutil.Truncate, not t.TaskID[:8]: a task whose ID is shorter
+				// than 8 bytes panics the export and takes the whole app with it.
+				// Nothing guarantees the length — IDs come from the AI planner and
+				// from imports as well as from the generator here.
+				md.WriteString(fmt.Sprintf("- **[%s]** %s\n  - Priority: `%s` | Assigned: `%s`\n  - Prompt: %s\n", textutil.Truncate(t.TaskID, 8, ""), t.Title, t.Priority, t.AssignedTo, t.Prompt))
 				if t.Result != "" {
 					md.WriteString(fmt.Sprintf("  - Result: %s\n", t.Result))
 				}
@@ -71,7 +76,13 @@ h1 { color: #2563eb; }
 </body>
 </html>`, md.String())
 
-	_ = os.WriteFile(htmlFile, []byte(htmlContent), 0644)
+	// The HTML copy used to be written with the error discarded, so a full disk
+	// or a read-only folder produced a report the UI happily announced and the
+	// user could not open. The markdown is already on disk at this point, so the
+	// path is still returned — the caller decides how loudly to complain.
+	if err := os.WriteFile(htmlFile, []byte(htmlContent), 0644); err != nil {
+		return mdFile, "", fmt.Errorf("ghi bản HTML thất bại (bản markdown đã lưu tại %s): %w", mdFile, err)
+	}
 
 	return mdFile, htmlFile, nil
 }

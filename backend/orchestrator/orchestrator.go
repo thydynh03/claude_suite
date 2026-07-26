@@ -153,11 +153,15 @@ func (o *Orchestrator) GetNotifierURL() string {
 	return o.notifierSvc.GetWebhookURL()
 }
 
-func (o *Orchestrator) Start() {
+// Start begins scanning the backlog and reports whether this call is what
+// started it. A second press used to return silently and the UI announced a
+// fresh start either way, so "nothing happened" and "already running" looked
+// identical to the user.
+func (o *Orchestrator) Start() bool {
 	o.mu.Lock()
 	if o.running {
 		o.mu.Unlock()
-		return
+		return false
 	}
 	o.running = true
 	o.stopCh = make(chan struct{})
@@ -170,6 +174,7 @@ func (o *Orchestrator) Start() {
 
 	o.emitLog(fmt.Sprintf("🚀 Orchestrator ACTIVE: Quét Backlog & phân công song song (tối đa %d agent).", o.GetMaxConcurrency()), "INFO")
 	go o.loop(stop)
+	return true
 }
 
 // stopChannel returns the channel for the current run under the lock. A caller
@@ -181,17 +186,19 @@ func (o *Orchestrator) stopChannel() <-chan struct{} {
 	return o.stopCh
 }
 
-func (o *Orchestrator) Stop() {
+// Stop halts backlog scanning and reports whether this call is what stopped it.
+func (o *Orchestrator) Stop() bool {
 	o.mu.Lock()
 	if !o.running {
 		o.mu.Unlock()
-		return
+		return false
 	}
 	o.running = false
 	close(o.stopCh)
 	o.mu.Unlock()
 
 	o.emitLog("🛑 Orchestrator INACTIVE: Đã tạm dừng quét Backlog (task đang chạy vẫn tiếp tục).", "WARN")
+	return true
 }
 
 func (o *Orchestrator) IsRunning() bool {

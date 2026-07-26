@@ -3,7 +3,7 @@
   import type { Task } from '../../lib/types';
   import KanbanView from './KanbanView.svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog, orchestratorRunning, tasksStore, agentsStore } from '../../lib/stores/appState';
+  import { addLog, addToast, orchestratorRunning, tasksStore, agentsStore } from '../../lib/stores/appState';
 
   let subTab: 'kanban' | 'builder' | 'reports' = 'kanban';
   let requirementText = '';
@@ -13,6 +13,10 @@
   const unsubscribeTasks = tasksStore.subscribe((v) => { tasks = v as Task[]; });
 
   let isDecomposing = false;
+  let isStarting = false;
+  let isExporting = false;
+  let lastReportPath = '';
+  let readiness: { ready?: number; blocked?: any[]; running?: number } | null = null;
 
   let planModelChoice = 'claude:claude-opus-4-8';
   let showQuotaModal = false;
@@ -148,12 +152,75 @@
     addLog('Cleared all tasks', 'INFO');
   }
 
+  // Says what the orchestrator can actually do with the current board.
+  //
+  // This used to start it and announce success regardless: pressing it twice, or
+  // pressing it with a backlog whose only task waits on two failed ones, looked
+  // exactly like a successful start. The board then sat still and the button
+  // looked broken — it was not, there was simply nothing it could dispatch.
   async function handleExecutePlan() {
-    subTab = 'kanban'; // Auto-switch to Interactive Kanban view
-    await loadTasks();
-    await loadAgents();
-    await AppBindings.StartOrchestrator();
-    addLog('Orchestrator started! Switched to Interactive Kanban.', 'SUCCESS');
+    if (isStarting) return;
+    isStarting = true;
+    subTab = 'kanban';
+    try {
+      await loadTasks();
+      await loadAgents();
+
+      const started = await AppBindings.StartOrchestrator();
+      orchestratorRunning.set(true);
+
+      const r = await (AppBindings as any).GetDispatchReadiness();
+      readiness = r;
+
+      const ready = r?.ready ?? 0;
+      const blocked = (r?.blocked || []).length;
+      const dead = (r?.blocked || []).filter((b: any) => b.dead).length;
+
+      if (ready > 0) {
+        addToast(
+          started
+            ? `Đã khởi động — ${ready} task sẵn sàng giao.`
+            : `Orchestrator đang chạy sẵn — ${ready} task sẵn sàng giao.`,
+          'SUCCESS'
+        );
+      } else if (dead > 0) {
+        addToast(
+          `Không giao được task nào: ${dead} task đang chờ task đã lỗi. Hãy Retry các task lỗi trước.`,
+          'ERROR',
+          9000
+        );
+      } else if (blocked > 0) {
+        addToast(`Chưa giao được task nào: ${blocked} task còn chờ task khác hoàn thành.`, 'INFO');
+      } else {
+        addToast('Backlog trống — chưa có task nào để giao.', 'INFO');
+      }
+      addLog(`Execute Plan: ready=${ready}, blocked=${blocked}, dead=${dead}`, 'INFO');
+    } catch (e) {
+      addToast(`Không khởi động được orchestrator: ${e}`, 'ERROR');
+      addLog(`Execute Plan failed: ${e}`, 'ERROR');
+    } finally {
+      isStarting = false;
+    }
+  }
+
+  async function handleExportReport() {
+    if (isExporting) return;
+    if ((tasks || []).length === 0) {
+      addToast('Bảng đang trống — không có task nào để xuất.', 'INFO');
+      return;
+    }
+    isExporting = true;
+    try {
+      const file = await AppBindings.ExportKanbanReport();
+      addLog(`Exported report to ${file}`, 'SUCCESS');
+      lastReportPath = file;
+      addToast(`Đã xuất báo cáo: ${file}`, 'SUCCESS', 8000);
+    } catch (e) {
+      addLog(`Export failed: ${e}`, 'ERROR');
+      addToast(`Xuất báo cáo thất bại: ${e}`, 'ERROR');
+    } finally {
+      isExporting = false;
+    }
   }
 </script>
 
@@ -275,8 +342,8 @@
             <button on:click={handleClearAll} class="flex items-center gap-1 px-3 py-1 bg-surface-container-highest rounded border border-outline-variant text-xs font-semibold hover:bg-rose-100 hover:text-rose-700 transition-all">
               <span class="material-symbols-outlined text-sm">delete</span> Clear
             </button>
-            <button on:click={handleExecutePlan} class="flex items-center gap-1 px-4 py-1 bg-emerald-600 text-white rounded border border-emerald-700 text-xs font-bold hover:bg-emerald-700 transition-all">
-              <span class="material-symbols-outlined text-sm">play_arrow</span> Execute Plan
+            <button on:click={handleExecutePlan} disabled={isStarting} class="flex items-center gap-1 px-4 py-1 bg-emerald-600 text-white rounded border border-emerald-700 text-xs font-bold hover:bg-emerald-700 disabled:opacity-60 transition-all cursor-pointer">
+              <span class="material-symbols-outlined text-sm {isStarting ? 'animate-spin' : ''}">{isStarting ? 'progress_activity' : 'play_arrow'}</span> Execute Plan
             </button>
           </div>
         </div>
@@ -326,9 +393,18 @@
     <div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant">
       <h3 class="font-bold text-base mb-2">Báo cáo dự án & Tasks</h3>
       <p class="text-xs text-on-surface-variant mb-4">Xuất báo cáo Kanban sang định dạng Markdown và HTML.</p>
-      <button on:click={async () => { const file = await AppBindings.ExportKanbanReport(); addLog(`Exported report to ${file}`, 'SUCCESS'); }} class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold">
-        Export Report Now
+      <button
+        on:click={handleExportReport}
+        disabled={isExporting}
+        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-60 cursor-pointer"
+      >
+        {isExporting ? 'Đang xuất…' : 'Export Report Now'}
       </button>
+      {#if lastReportPath}
+        <p class="text-[11px] text-on-surface-variant mt-3 font-mono break-all">
+          File gần nhất: {lastReportPath}
+        </p>
+      {/if}
     </div>
   {/if}
 

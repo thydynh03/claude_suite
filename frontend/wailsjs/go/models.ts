@@ -289,6 +289,98 @@ export namespace cli {
 
 }
 
+export namespace database {
+	
+	export class Blocker {
+	    task_id: string;
+	    title: string;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Blocker(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.task_id = source["task_id"];
+	        this.title = source["title"];
+	        this.status = source["status"];
+	    }
+	}
+	export class BlockedTask {
+	    task_id: string;
+	    title: string;
+	    blockers: Blocker[];
+	    dead: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlockedTask(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.task_id = source["task_id"];
+	        this.title = source["title"];
+	        this.blockers = this.convertValues(source["blockers"], Blocker);
+	        this.dead = source["dead"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class DispatchReadiness {
+	    ready: number;
+	    blocked: BlockedTask[];
+	    running: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DispatchReadiness(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ready = source["ready"];
+	        this.blocked = this.convertValues(source["blocked"], BlockedTask);
+	        this.running = source["running"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace main {
 	
 	export class BudgetStatus {
@@ -339,6 +431,26 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.success = source["success"];
 	        this.error = source["error"];
+	    }
+	}
+	export class WarmupResult {
+	    total: number;
+	    refreshed: number;
+	    failed: number;
+	    skipped: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WarmupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.refreshed = source["refreshed"];
+	        this.failed = source["failed"];
+	        this.skipped = source["skipped"];
+	        this.errors = source["errors"];
 	    }
 	}
 

@@ -6,7 +6,7 @@
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { tick } from 'svelte';
   import { models } from '../../../wailsjs/go/models';
-  import { addLog, tasksStore, agentsStore, taskLogsStore, taskScreenshotsStore, clearTaskLog } from '../../lib/stores/appState';
+  import { addLog, addToast, tasksStore, agentsStore, taskLogsStore, taskScreenshotsStore, clearTaskLog } from '../../lib/stores/appState';
   import Dropdown from '../ui/Dropdown.svelte';
 
   export let onRefresh: () => void;
@@ -16,6 +16,61 @@
   // that had just changed could be replaced by the stale copy. That is why new
   // tasks only appeared after switching tabs and back.
   $: tasks = ($tasksStore || []) as Task[];
+
+  // Derived from the board rather than fetched separately: a second source would
+  // drift from the cards it annotates the moment a task changed status. The
+  // backend has the same rule in TaskRepository.DispatchReadiness, which is what
+  // the orchestrator actually dispatches on; this is the display of it.
+  $: blockedById = (() => {
+    const byId = new Map(tasks.map((t) => [t.task_id, t]));
+    const out: Record<string, { blockers: any[]; dead: boolean }> = {};
+
+    for (const t of tasks) {
+      if (t.status !== 'backlog' && t.status !== 'queued') continue;
+
+      const blockers: any[] = [];
+      let dead = false;
+      for (const depId of t.depends_on || []) {
+        const dep = byId.get(depId);
+        if (dep && dep.status === 'done') continue;
+        const status = dep ? dep.status : 'missing';
+        // A dependency that failed, or that no longer exists, never clears on
+        // its own — the task is stuck until someone intervenes.
+        if (status === 'failed' || status === 'missing') dead = true;
+        blockers.push({ task_id: depId, title: dep ? dep.title : '', status });
+      }
+
+      if (blockers.length > 0) out[t.task_id] = { blockers, dead };
+    }
+    return out;
+  })();
+
+  // Retries every failed or missing blocker at once. Retrying them one by one
+  // from the failed column is possible but means finding them first, which is
+  // exactly the work this badge exists to save.
+  async function retryBlockers(blk: { blockers: any[] }) {
+    const stuck = blk.blockers.filter((b) => b.status === 'failed');
+    if (stuck.length === 0) {
+      addToast('Task đang chặn đã bị xoá — hãy sửa phần phụ thuộc của task này.', 'ERROR');
+      return;
+    }
+    let ok = 0;
+    for (const b of stuck) {
+      try {
+        await (AppBindings as any).RetryTask(b.task_id);
+        ok++;
+      } catch (e) {
+        addLog(`Retry ${b.task_id} thất bại: ${e}`, 'ERROR');
+      }
+    }
+    onRefresh();
+    addToast(
+      ok === stuck.length
+        ? `Đã đưa ${ok} task lỗi về backlog để chạy lại.`
+        : `Retry được ${ok}/${stuck.length} task.`,
+      ok === stuck.length ? 'SUCCESS' : 'ERROR'
+    );
+  }
 
   onMount(() => {
     (async () => {
@@ -441,6 +496,40 @@
 
               {#if task.prompt}
                 <p class="text-[11px] text-on-surface-variant line-clamp-2 pl-6">{task.prompt}</p>
+              {/if}
+
+              <!-- Why this task is not moving. A blocked task looked exactly like
+                   a task waiting its turn, which is what made Execute Plan seem
+                   dead: the board was full and nothing could ever be dispatched. -->
+              {#if blockedById[task.task_id]}
+                {@const blk = blockedById[task.task_id]}
+                <div class="ml-6 rounded-lg px-2 py-1.5 border text-[10px] leading-snug
+                  {blk.dead
+                    ? 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'}">
+                  <div class="flex items-center gap-1 font-bold">
+                    <span class="material-symbols-outlined text-[13px]">
+                      {blk.dead ? 'block' : 'hourglass_top'}
+                    </span>
+                    {blk.dead ? 'Bị chặn bởi task lỗi' : 'Đang chờ task khác'}
+                  </div>
+                  <ul class="mt-0.5 space-y-0.5">
+                    {#each blk.blockers as b}
+                      <li class="truncate" title="{b.title || b.task_id} — {b.status}">
+                        • {b.title || b.task_id} <span class="opacity-70">({b.status})</span>
+                      </li>
+                    {/each}
+                  </ul>
+                  {#if blk.dead}
+                    <button
+                      type="button"
+                      on:click|stopPropagation={() => retryBlockers(blk)}
+                      class="mt-1 px-2 py-0.5 rounded border border-red-500/40 font-bold hover:bg-red-500/20 cursor-pointer"
+                    >
+                      Retry task đang chặn
+                    </button>
+                  {/if}
+                </div>
               {/if}
 
               <!-- Assignment Dropdown -->

@@ -3,6 +3,9 @@
 # installer from wails' regenerated default template and shipped without the
 # companion CLI tools. Only the outputs are ignored now.
 build/bin/
+
+# `wails generate module` drops a probe binary in the repo root.
+/claude_suite.exe
 build/ClaudeAgentManager/
 build/ClaudeScheduler/
 build/ClaudeSuite/

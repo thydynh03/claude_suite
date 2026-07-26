@@ -37,7 +37,7 @@ func main() {
 		host     = flag.String("host", "", "session host, e.g. ws://10.0.0.4:9111")
 		session  = flag.String("session", "", "session id")
 		token    = flag.String("token", "", "join token")
-		author   = flag.String("author", "", "who is claiming, e.g. an/claude-code")
+		author   = flag.String("author", "", "who is claiming (default: user@host/claude-code)")
 		provider = flag.String("provider", "", "model provider, e.g. claude or gemini")
 		outDir   = flag.String("out", ".claude-suite", "where to write verdict.json")
 		wait     = flag.Duration("wait", 30*time.Minute, "how long to wait for the outcome")
@@ -56,7 +56,16 @@ func main() {
 		return
 	}
 
-	if err := run(*host, *session, *token, *author, *provider, *outDir, *wait, c); err != nil {
+	// An empty --author used to travel all the way to the host and land in the
+	// log as an empty string; the app's copy-paste command filled it with
+	// "YOU/your-agent", which nobody edited. Naming the machine by default means
+	// the shared command line is correct as handed over.
+	who := *author
+	if who == "" {
+		who = defaultAuthor(*provider)
+	}
+
+	if err := run(*host, *session, *token, who, *provider, *outDir, *wait, c); err != nil {
 		fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
 		os.Exit(1)
 	}
