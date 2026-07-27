@@ -195,7 +195,13 @@
         } else {
           activeTab = 'preview';
         }
-        if (res && res.success) {
+        // "partial" is reported as a warning rather than folded into success:
+        // a run where three of five actions failed used to show a green result
+        // over a log full of errors.
+        if (res && res.success && res.status === 'partial') {
+          addLog(`Browser Agent chạy xong nhưng có lỗi: ${res.error}`, 'WARN');
+          addToast(`Chạy xong nhưng có thao tác thất bại — ${res.error}`, 'ERROR', 9000);
+        } else if (res && res.success) {
           addLog(`Browser Agent hoàn tất trang "${res.title}"! (Trạng thái: ${res.status || 'OK'})`, 'SUCCESS');
           addToast(`Browser Agent hoàn tất trang "${res.title}"! (Trạng thái: ${res.status || 'OK'})`, 'SUCCESS');
         } else {

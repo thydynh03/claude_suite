@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 	"encoding/json"
@@ -215,9 +215,12 @@ func OpenAgentChromeForLogin(targetURL string, logf func(string)) error {
 		"--no-first-run",
 		"--no-default-browser-check",
 	}
-	if cleanURL := strings.Trim(strings.TrimSpace(targetURL), "\"'"); cleanURL != "" {
-		args = append(args, cleanURL)
-	}
+	// Deliberately NOT passing targetURL here. chromedp opens its own target and
+	// navigates it, so handing the URL to the launch as well produced a second
+	// window per run showing the same page — which is where the stack of Chrome
+	// windows came from. The parameter is kept because callers pass it and the
+	// signature is used elsewhere; it no longer opens anything.
+	_ = targetURL
 
 	if logf != nil {
 		logf("🔓 Mở Chrome Agent ở chế độ ĐĂNG NHẬP (không bật debug port) — Google sẽ không chặn.")
@@ -268,9 +271,12 @@ func EnsureAgentChromeSession(targetURL string, logf func(string)) (int, error) 
 		"--no-first-run",
 		"--no-default-browser-check",
 	}
-	if cleanURL := strings.Trim(strings.TrimSpace(targetURL), "\"'"); cleanURL != "" {
-		args = append(args, cleanURL)
-	}
+	// Deliberately NOT passing targetURL here. chromedp opens its own target and
+	// navigates it, so handing the URL to the launch as well produced a second
+	// window per run showing the same page — which is where the stack of Chrome
+	// windows came from. The parameter is kept because callers pass it and the
+	// signature is used elsewhere; it no longer opens anything.
+	_ = targetURL
 
 	log("🚀 Mở Chrome Agent (profile riêng: %s)...", userDataDir)
 	if err := sysproc.Command(ChromeExecutablePath(), args...).Start(); err != nil {

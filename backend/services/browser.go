@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 	"agent_center/backend/textutil"
@@ -39,6 +39,14 @@ type BrowserActionResult struct {
 type BrowserAgentService struct {
 	mu         sync.Mutex
 	cancelFunc context.CancelFunc
+	// running guards against a second run starting while one is in flight.
+	//
+	// Both runs attach to the same Chrome through the same profile, so when the
+	// first one finishes its deferred cancelAlloc tears down the CDP connection
+	// underneath the second — which then fails every remaining step with
+	// "context canceled" and no indication of why. Each run also opens its own
+	// target, which is where the stack of blank Chrome windows came from.
+	running bool
 
 	askMu    sync.Mutex
 	askChans map[string]chan string
@@ -339,11 +347,26 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 	// Cancellable task context
 	ctx, cancelTask := context.WithCancel(context.Background())
 	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		cancelTask()
+		result.Success = false
+		result.Status = "failed"
+		result.Error = "Browser Agent đang chạy một tác vụ khác — dừng tác vụ đó trước đã."
+		return result, fmt.Errorf("browser agent is already running")
+	}
+	s.running = true
 	s.cancelFunc = cancelTask
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		s.cancelFunc = nil
+		s.running = false
+		// Only clear the handle if it is still ours. Clearing unconditionally
+		// meant a finishing run disarmed the Stop button for whatever was
+		// running next.
+		if s.cancelFunc != nil {
+			s.cancelFunc = nil
+		}
 		s.mu.Unlock()
 		cancelTask()
 	}()
@@ -414,6 +437,12 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 
 	// Free-text answer to the login prompt below; seeded into the AI's history.
 	userGuidance := ""
+
+	// Counted so the final result can tell "the loop ended" apart from "the work
+	// was done".
+	actionFailures := 0
+	actionsSucceeded := 0
+	var lastActionErr error
 
 	// A sign-in wall would otherwise eat the entire step budget on a form the AI
 	// cannot fill. Park the run on a choice form instead of killing it.
@@ -671,6 +700,15 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 
 					if err := s.executeActionOnCDPContext(cdpCtx, act.Action, act.Selector, act.Text, act.Direction, act.Seconds, takeScreenshot, result, logMsg); err != nil {
 						logMsg(fmt.Sprintf("⚠️ [Bước %d/%d] Thao tác CDP bị lỗi: %v", step, maxSteps, err))
+						// Recorded, not just logged. Every action could fail and
+						// the run still reported success at the end, because the
+						// only thing consulted was whether the loop finished.
+						actionFailures++
+						lastActionErr = err
+						actionHistory = append(actionHistory,
+							fmt.Sprintf("Bước %d: thao tác THẤT BẠI (%v) — đừng lặp lại y hệt.", step, err))
+					} else {
+						actionsSucceeded++
 					}
 				}
 			}
@@ -683,6 +721,23 @@ HƯỚNG DẪN XỬ LÝ QUAN TRỌNG (BẮT BỘC TUÂN THỦ DẠNG JSON Ở CU
 
 	if result.Status == "in_progress" {
 		result.Status = "completed"
+	}
+
+	// A run where nothing worked is not a success, whatever the loop did. This
+	// reported "completed" with Success true after five failed actions, so the
+	// UI showed a green result over a log full of errors.
+	switch {
+	case actionsSucceeded == 0 && actionFailures > 0:
+		result.Success = false
+		result.Status = "failed"
+		result.Error = fmt.Sprintf("Cả %d thao tác đều thất bại. Lỗi cuối: %v", actionFailures, lastActionErr)
+	case actionFailures > 0:
+		// Partial: some steps worked. Still reported honestly rather than
+		// rounded up to success.
+		result.Status = "partial"
+		result.Error = fmt.Sprintf("%d/%d thao tác thất bại. Lỗi cuối: %v",
+			actionFailures, actionFailures+actionsSucceeded, lastActionErr)
+		logMsg(fmt.Sprintf("⚠️ Hoàn tất nhưng có %d thao tác thất bại.", actionFailures))
 	}
 
 	return result, nil
