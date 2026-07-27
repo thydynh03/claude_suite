@@ -5,7 +5,13 @@
 build/bin/
 
 # `wails generate module` drops a probe binary in the repo root.
+# `wails generate module` drops a probe binary in the repo root, named after
+# whatever wails.json calls the project. Both names are listed because the
+# project was renamed and the old pattern silently stopped matching — which is
+# how a 26MB binary got committed.
 /claude_suite.exe
+/agent_center.exe
+/AgentCenter.exe
 build/ClaudeAgentManager/
 build/ClaudeScheduler/
 build/ClaudeSuite/

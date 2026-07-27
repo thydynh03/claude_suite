@@ -1186,7 +1186,7 @@ func (a *App) CheckChromeDebugMode() map[string]interface{} {
 	return map[string]interface{}{"ready": ready, "message": msg, "profile": profileDir, "port": port}
 }
 
-func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, model string, takeScreenshot bool, headless bool, useRealProfile bool, maxSteps int) (*services.BrowserActionResult, error) {
+func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, model string, takeScreenshot bool, headless bool, useRealProfile bool, maxSteps int, keepBrowserOpen bool) (*services.BrowserActionResult, error) {
 	systemPrompt := ""
 	if roleFile != "" {
 		systemPrompt, _ = a.GetRoleContent(roleFile)
@@ -1220,7 +1220,7 @@ func (a *App) RunBrowserTask(targetURL string, prompt string, roleFile string, m
 		}
 	}
 
-	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner, onLog, onFrame)
+	return a.browserService.RunAutonomousBrowserTask(targetURL, prompt, systemPrompt, model, takeScreenshot, headless, useRealProfile, maxSteps, runner, onLog, onFrame, keepBrowserOpen)
 }
 
 // ── Anti CLI Multi-Account / Key Pool ──────────────────────────────────

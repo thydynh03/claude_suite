@@ -101,3 +101,75 @@ func TestADerivedTimeoutContextCarriesADeadlineItsParentDoesNot(t *testing.T) {
 		t.Errorf("deadline is %v away, want about a minute", time.Until(deadline))
 	}
 }
+
+// The agent's tab is created by chromedp and closed by that context, so cleanup
+// used to close whatever the run had just opened — a video the user asked it to
+// play included. "đừng tắt trình duyệt" could not work, because the closing was
+// the harness tidying up rather than a decision the agent made.
+//
+// Source check for the same reason as above: the property is that the cancel is
+// conditional, and proving it behaviourally needs a real Chrome.
+func TestClosingTheAgentTabIsSkippableWhenAskedToKeepItOpen(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "browser.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse browser.go: %v", err)
+	}
+
+	var loop *ast.FuncDecl
+	ast.Inspect(file, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "RunAutonomousBrowserTask" {
+			loop = fn
+			return false
+		}
+		return true
+	})
+	if loop == nil {
+		t.Fatal("RunAutonomousBrowserTask not found")
+	}
+
+	// The parameter has to reach the function, or the checkbox drives nothing.
+	var hasParam bool
+	for _, field := range loop.Type.Params.List {
+		for _, name := range field.Names {
+			if name.Name == "keepBrowserOpen" {
+				hasParam = true
+			}
+		}
+	}
+	if !hasParam {
+		t.Fatal("keepBrowserOpen is not a parameter of RunAutonomousBrowserTask")
+	}
+
+	// And cancelCtx must be deferred inside a conditional, not unconditionally.
+	var guarded bool
+	ast.Inspect(loop, func(n ast.Node) bool {
+		ifStmt, ok := n.(*ast.IfStmt)
+		if !ok {
+			return true
+		}
+		unary, ok := ifStmt.Cond.(*ast.UnaryExpr)
+		if !ok || unary.Op != token.NOT {
+			return true
+		}
+		ident, ok := unary.X.(*ast.Ident)
+		if !ok || ident.Name != "keepBrowserOpen" {
+			return true
+		}
+		for _, stmt := range ifStmt.Body.List {
+			def, ok := stmt.(*ast.DeferStmt)
+			if !ok {
+				continue
+			}
+			if fn, ok := def.Call.Fun.(*ast.Ident); ok && fn.Name == "cancelCtx" {
+				guarded = true
+			}
+		}
+		return true
+	})
+
+	if !guarded {
+		t.Error("cancelCtx is not guarded by !keepBrowserOpen — the tab is closed regardless of the setting")
+	}
+}

@@ -17,7 +17,7 @@ func TestASecondRunIsRefusedWhileOneIsInFlight(t *testing.T) {
 	s.mu.Unlock()
 
 	result, err := s.RunAutonomousBrowserTask(
-		"https://example.com", "làm gì đó", "", "gemini", false, true, false, 3, nil, nil, nil)
+		"https://example.com", "làm gì đó", "", "gemini", false, true, false, 3, nil, nil, nil, false)
 
 	if err == nil {
 		t.Fatal("a second concurrent run was accepted")
@@ -46,7 +46,7 @@ func TestRefusingASecondRunLeavesTheFirstRunAlone(t *testing.T) {
 	s.mu.Unlock()
 
 	_, _ = s.RunAutonomousBrowserTask(
-		"https://example.com", "x", "", "gemini", false, true, false, 1, nil, nil, nil)
+		"https://example.com", "x", "", "gemini", false, true, false, 1, nil, nil, nil, false)
 
 	s.mu.Lock()
 	stillRunning := s.running

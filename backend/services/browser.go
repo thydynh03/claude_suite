@@ -315,6 +315,13 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 	// log text and a single screenshot at the end, so a headless agent doing five
 	// steps was something the user had to take on trust. May be nil.
 	onFrame func(step int, dataURL string),
+	// keepBrowserOpen leaves the agent's tab open when the run ends.
+	//
+	// The tab is created by chromedp and closed by its context, so a run that
+	// ended with a video playing closed the video — asking the agent "đừng tắt
+	// trình duyệt" could not work, because closing it was the harness cleaning up
+	// rather than anything the agent decided.
+	keepBrowserOpen bool,
 ) (*BrowserActionResult, error) {
 	if maxSteps <= 0 {
 		maxSteps = 5
@@ -384,7 +391,13 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 		return result, err
 	}
 	defer cancelAlloc()
-	defer cancelCtx()
+	// Closing the tab is cleanup, not part of the task, so it is skippable. The
+	// allocator is released either way: with a persistent profile that only drops
+	// the CDP connection and Chrome keeps running, which is what makes leaving
+	// the tab open possible at all.
+	if !keepBrowserOpen {
+		defer cancelCtx()
+	}
 
 	// Initial Navigation & DOM Extraction
 	var title, html, text, landedURL string

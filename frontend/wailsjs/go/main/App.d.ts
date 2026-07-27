@@ -197,7 +197,7 @@ export function RevertGitCommit(arg1:string):Promise<void>;
 
 export function ReviewMemoryLesson(arg1:string,arg2:string):Promise<void>;
 
-export function RunBrowserTask(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean,arg7:boolean,arg8:number):Promise<services.BrowserActionResult>;
+export function RunBrowserTask(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean,arg7:boolean,arg8:number,arg9:boolean):Promise<services.BrowserActionResult>;
 
 export function RunGitCommand(arg1:Array<string>):Promise<string>;
 

@@ -25,6 +25,9 @@
   let takeScreenshot = true;
   let isHeadless = true;
   let usePersistentProfile = true;
+  // Default on: the common ask is "open this and leave it", and closing what the
+  // agent just opened is the surprising behaviour, not keeping it.
+  let keepBrowserOpen = true;
   let maxSteps = 5;
   let isRunning = false;
 
@@ -188,7 +191,7 @@
 
     try {
       if ((AppBindings as any).RunBrowserTask) {
-        const res = await (AppBindings as any).RunBrowserTask(urlToRun, instructionPrompt, selectedRole, selectedModel, takeScreenshot, isHeadless, usePersistentProfile, maxSteps);
+        const res = await (AppBindings as any).RunBrowserTask(urlToRun, instructionPrompt, selectedRole, selectedModel, takeScreenshot, isHeadless, usePersistentProfile, maxSteps, keepBrowserOpen);
         result = res;
         if (res && res.ai_response) {
           activeTab = 'ai';
@@ -328,6 +331,27 @@
       <label class="flex items-center gap-1.5 cursor-pointer select-none">
         <input type="checkbox" bind:checked={usePersistentProfile} class="accent-primary" />
         <span>Profile riêng (nhớ đăng nhập)</span>
+      </label>
+
+      <!-- The agent's tab belongs to the CDP context, so cleanup closed whatever
+           the run had just opened. Asking the agent not to close the browser
+           could never work: the closing was this harness tidying up. -->
+      <label
+        class="flex items-center gap-1.5 select-none {usePersistentProfile ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}"
+        title={usePersistentProfile
+          ? 'Chạy xong vẫn giữ tab của agent — dùng khi muốn nghe nhạc, xem video, hoặc thao tác tiếp bằng tay.'
+          : 'Cần bật "Profile riêng". Với profile tạm, Chrome do app tự khởi động và sẽ đóng theo khi chạy xong.'}
+      >
+        <input
+          type="checkbox"
+          bind:checked={keepBrowserOpen}
+          disabled={!usePersistentProfile}
+          class="accent-primary disabled:cursor-not-allowed"
+        />
+        <span>Giữ trình duyệt mở sau khi xong</span>
+        {#if !usePersistentProfile}
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">info</span>
+        {/if}
       </label>
 
       {#if usePersistentProfile}
