@@ -149,6 +149,8 @@ export function ImportGoogleAccounts(arg1:string):Promise<string>;
 
 export function IsOrchestratorRunning():Promise<boolean>;
 
+export function IsTunnelRunning():Promise<boolean>;
+
 export function IsWebhookRunning():Promise<boolean>;
 
 export function ListRoles():Promise<Array<string>>;
@@ -259,6 +261,8 @@ export function StartClaimsHost(arg1:number):Promise<Record<string, any>>;
 
 export function StartOrchestrator():Promise<boolean>;
 
+export function StartTunnelProcess(arg1:string):Promise<string>;
+
 export function StopBrowserTask():Promise<void>;
 
 export function StopClaimsHost():Promise<void>;
@@ -266,6 +270,8 @@ export function StopClaimsHost():Promise<void>;
 export function StopOrchestrator():Promise<boolean>;
 
 export function StopTask(arg1:string):Promise<boolean>;
+
+export function StopTunnelProcess():Promise<boolean>;
 
 export function TestMCPServer(arg1:string):Promise<string>;
 

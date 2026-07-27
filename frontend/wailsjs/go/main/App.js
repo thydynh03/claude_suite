@@ -282,6 +282,10 @@ export function IsOrchestratorRunning() {
   return window['go']['main']['App']['IsOrchestratorRunning']();
 }
 
+export function IsTunnelRunning() {
+  return window['go']['main']['App']['IsTunnelRunning']();
+}
+
 export function IsWebhookRunning() {
   return window['go']['main']['App']['IsWebhookRunning']();
 }
@@ -502,6 +506,10 @@ export function StartOrchestrator() {
   return window['go']['main']['App']['StartOrchestrator']();
 }
 
+export function StartTunnelProcess(arg1) {
+  return window['go']['main']['App']['StartTunnelProcess'](arg1);
+}
+
 export function StopBrowserTask() {
   return window['go']['main']['App']['StopBrowserTask']();
 }
@@ -516,6 +524,10 @@ export function StopOrchestrator() {
 
 export function StopTask(arg1) {
   return window['go']['main']['App']['StopTask'](arg1);
+}
+
+export function StopTunnelProcess() {
+  return window['go']['main']['App']['StopTunnelProcess']();
 }
 
 export function TestMCPServer(arg1) {
