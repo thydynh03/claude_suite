@@ -305,7 +305,7 @@
           <span class="material-symbols-outlined text-sm text-on-surface-variant">description</span>
           <span class="text-sm font-semibold text-on-surface">Mô tả dự án / mục tiêu</span>
         </div>
-        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden h-[420px] focus-within:border-primary transition-colors">
+        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden h-[420px] transition-colors">
           <textarea
             bind:value={requirementText}
             on:keydown={(e) => {
@@ -319,7 +319,7 @@
           ></textarea>
           <div class="p-3 bg-surface-container flex flex-col gap-2 border-t border-outline-variant">
             <div class="flex items-center gap-2">
-              <label for="plan-model-select" class="text-xs font-medium text-on-surface-variant whitespace-nowrap">Agent &amp; model</label>
+              <span class="text-xs font-medium text-on-surface-variant whitespace-nowrap">Agent &amp; model</span>
               <div class="flex-1">
                 <ModelSelect
                   value={planModel}
@@ -446,7 +446,7 @@
     <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between gap-1">
       <span class="text-xs font-medium text-on-surface-variant">Trạng thái hệ thống</span>
       <div class="flex items-center gap-2">
-        <div class="w-2 h-2 rounded-full {runningCount > 0 ? 'bg-primary animate-pulse' : $orchestratorRunning ? 'bg-primary' : 'bg-outline'}"></div>
+        <div class="w-2 h-2 rounded-full {runningCount > 0 ? 'bg-primary' : $orchestratorRunning ? 'bg-primary' : 'bg-outline'}"></div>
         <span class="text-sm font-semibold text-on-surface">
           {runningCount > 0 ? 'Đang giao việc' : $orchestratorRunning ? 'Đang quét backlog' : 'Sẵn sàng'}
         </span>

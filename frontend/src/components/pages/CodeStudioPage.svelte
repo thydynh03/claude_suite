@@ -799,6 +799,7 @@
               modified={fileContent}
               path={activeTabPath}
               dark={editorDark}
+              {fontSize}
             />
           </div>
         </div>
@@ -967,6 +968,18 @@
               {:else if turn.status === 'reverted'}
                 <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5 pt-2 border-t border-outline-variant">
                   <span class="material-symbols-outlined text-sm text-warning">history</span> Đã khôi phục file về trước lượt này
+                </div>
+              {:else if turn.status === 'error'}
+                <!-- A failed turn used to end with no card-level state at all,
+                     while two of its own messages told the user to "read the
+                     answer below" — turn.output was never rendered anywhere. -->
+                <div class="space-y-2 pt-2 border-t border-outline-variant">
+                  <span class="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-sm text-error">error</span> Lượt này thất bại
+                  </span>
+                  {#if turn.output}
+                    <pre class="text-[11px] font-mono whitespace-pre-wrap text-on-surface-variant bg-surface-container-high border border-outline-variant rounded-lg p-2 max-h-40 overflow-auto">{turn.output}</pre>
+                  {/if}
                 </div>
               {/if}
             </div>

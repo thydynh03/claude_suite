@@ -23,6 +23,12 @@
   /** Used only to pick the language, exactly like CodeEditor. */
   export let path = '';
   export let dark = true;
+  /**
+   * Kept in step with CodeEditor's stepper. It used to be hardcoded here, so
+   * in Diff view the +/- buttons counted a number in the toolbar and the panes
+   * never changed — the same bug CodeEditor had, one component over.
+   */
+  export let fontSize = 13;
 
   let host: HTMLDivElement;
   let view: MergeView | null = null;
@@ -45,7 +51,7 @@
       languageFor(path),
       ...(dark ? [oneDark] : []),
       EditorView.theme({
-        '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '13px' },
+        '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: `${fontSize}px` },
       }),
     ];
   }
@@ -59,6 +65,7 @@
   let builtModified = '';
   let builtPath = '';
   let builtDark = true;
+  let builtFontSize = 13;
 
   function build() {
     if (!host) return;
@@ -66,6 +73,7 @@
     builtModified = normModified;
     builtPath = path;
     builtDark = dark;
+    builtFontSize = fontSize;
     view?.destroy();
     view = new MergeView({
       a: { doc: normOriginal, extensions: paneExtensions() },
@@ -92,7 +100,11 @@
   $: if (
     view &&
     host &&
-    (normOriginal !== builtOriginal || normModified !== builtModified || path !== builtPath || dark !== builtDark)
+    (normOriginal !== builtOriginal ||
+      normModified !== builtModified ||
+      path !== builtPath ||
+      dark !== builtDark ||
+      fontSize !== builtFontSize)
   ) {
     build();
   }

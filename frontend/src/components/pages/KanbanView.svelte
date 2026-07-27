@@ -346,15 +346,15 @@
   }
 
   async function handleClearAll() {
-    if (confirm('Bạn có chắc chắn muốn xóa toàn bộ Tasks không?')) {
+    if (confirm('Bạn có chắc chắn muốn xoá toàn bộ task?')) {
       try {
         await AppBindings.ClearAllTasks();
         tasks = [];
         tasksStore.set([]);
         selectedTaskIDs = [];
         if (onRefresh) await onRefresh();
-        addLog('Đã xóa toàn bộ tasks.', 'SUCCESS');
-        addToast('Đã xóa toàn bộ tasks.', 'SUCCESS');
+        addLog('Đã xoá toàn bộ task.', 'SUCCESS');
+        addToast('Đã xoá toàn bộ task.', 'SUCCESS');
       } catch (e) {
         addLog(`Không xoá được toàn bộ task: ${e}`, 'ERROR');
         addToast(`Không xoá được toàn bộ task: ${e}`, 'ERROR');
@@ -364,7 +364,7 @@
 
   async function handleDeleteSelected() {
     if (selectedTaskIDs.length === 0) return;
-    if (confirm(`Bạn có chắc muốn xóa ${selectedTaskIDs.length} tasks đã chọn?`)) {
+    if (confirm(`Bạn có chắc muốn xoá ${selectedTaskIDs.length} task đã chọn?`)) {
       const wanted = selectedTaskIDs.length;
       let removed = 0;
       let firstError = '';
@@ -383,8 +383,8 @@
       // local copy the next board event would overwrite.
       await refreshBoard();
       if (removed === wanted) {
-        addLog(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
-        addToast(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
+        addLog(`Đã xoá ${removed} task đã chọn.`, 'SUCCESS');
+        addToast(`Đã xoá ${removed} task đã chọn.`, 'SUCCESS');
       } else {
         addLog(`Chỉ xoá được ${removed}/${wanted} task: ${firstError}`, 'ERROR');
         addToast(`Chỉ xoá được ${removed}/${wanted} task: ${firstError}`, 'ERROR');
@@ -419,7 +419,7 @@
     try {
       const doneTasks = tasks.filter(t => t.status === 'done');
       if (doneTasks.length === 0) {
-        addLog('Không có task nào ở trạng thái Done để xóa.', 'WARN');
+        addLog('Không có task nào ở trạng thái Done để xoá.', 'WARN');
         addToast('Không có task nào ở trạng thái Done để xoá.', 'INFO');
         return;
       }
@@ -656,8 +656,11 @@
       <h3 class="text-sm font-semibold text-on-surface flex items-center gap-2">
         <span class="material-symbols-outlined text-base text-on-surface-variant">add_task</span> Tạo task mới
       </h3>
-      <button type="button" on:click={() => showAddModal = false} aria-label="Đóng"
-        class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+      <!-- Both closers are disabled while the create is in flight: closing
+           mid-request threw away what the user typed and then fired a toast
+           into a modal that was no longer there. -->
+      <button type="button" on:click={() => showAddModal = false} aria-label="Đóng" disabled={creatingTask}
+        class="text-on-surface-variant hover:text-on-surface cursor-pointer disabled:opacity-40">
         <span class="material-symbols-outlined text-base">close</span>
       </button>
     </div>
@@ -709,7 +712,8 @@
       <button
         type="button"
         on:click={() => showAddModal = false}
-        class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+        disabled={creatingTask}
+        class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40">
         Huỷ
       </button>
       <button
