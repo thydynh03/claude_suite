@@ -1,7 +1,6 @@
-﻿package services
+package services
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -63,7 +62,7 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 
 	s.mu.Lock()
 	if s.server != nil {
-		_ = s.server.Shutdown(context.Background())
+		_ = s.server.Close()
 		s.server = nil
 	}
 	s.state = state
@@ -181,12 +180,20 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 		s.server = nil
 		s.mu.Unlock()
 		if server != nil {
-			go func() { _ = server.Shutdown(context.Background()) }()
+			go func() { _ = server.Close() }()
 		}
 	})
 
-	// Loopback only, bound before returning.
-	listener, err := net.Listen("tcp", "127.0.0.1:8045")
+	// Loopback only, bound before returning. Try up to 5 times if port was just closed.
+	var listener net.Listener
+	var err error
+	for i := 0; i < 5; i++ {
+		listener, err = net.Listen("tcp", "127.0.0.1:8045")
+		if err == nil {
+			break
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
 	if err != nil {
 		return "", fmt.Errorf("cổng 8045 đang bị chiếm (app khác hoặc phiên đăng nhập cũ?): %w", err)
 	}

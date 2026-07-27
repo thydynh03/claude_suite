@@ -235,12 +235,12 @@
   <!-- Top Bar -->
   <TopNavBar />
 
-  <div class="flex flex-1 pt-[60px]">
+  <div class="flex flex-1 pt-[60px] h-[calc(100vh-60px)] min-h-0 overflow-hidden">
     <!-- Side Nav Bar -->
     <SideNavBar />
 
     <!-- Main Canvas Viewport -->
-    <main class="{$sidebarCollapsed ? 'ml-[72px]' : 'ml-[240px]'} flex-1 p-6 h-[calc(100vh-60px)] overflow-y-auto bg-background transition-all duration-300">
+    <main class="{$sidebarCollapsed ? 'ml-[72px]' : 'ml-[240px]'} flex-1 p-6 h-full overflow-y-auto bg-background transition-all duration-300">
       {#if $activeTab === 'cockpit'}
         <CockpitPage />
       {:else if $activeTab === 'kanban'}
