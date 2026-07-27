@@ -1,4 +1,4 @@
-﻿package defaults_test
+package defaults_test
 
 import (
 	"os"
@@ -16,6 +16,9 @@ func TestFreshInstallProducesUsableState(t *testing.T) {
 	fresh := filepath.Join(t.TempDir(), "AgentCenter")
 	t.Setenv(paths.DataDirEnv, fresh)
 	t.Setenv(paths.LegacyDataDirEnv, "")
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 
 	dir := paths.EnsureDataDir()
 	if _, err := os.Stat(dir); err != nil {

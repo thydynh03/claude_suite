@@ -1,4 +1,4 @@
-﻿// Package paths resolves where Agent Center keeps per-user state: the SQLite
+// Package paths resolves where Agent Center keeps per-user state: the SQLite
 // database, the JSON configs, the agent role markdown and the logs.
 //
 // It exists as its own package so that both database and logger can agree on
@@ -82,13 +82,10 @@ func LegacyDataDirs() []string {
 		dirs = append(dirs, v)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs, filepath.Join(home, ".agent_center"))
-		// Also check old .agent_center location
-		dirs = append(dirs, filepath.Join(home, ".agent_center"))
+		dirs = append(dirs, filepath.Join(home, ".claude_suite"))
 	}
-	// Migrate from old Windows AgentCenter directory
 	if base := os.Getenv("LOCALAPPDATA"); base != "" {
-		dirs = append(dirs, filepath.Join(base, "AgentCenter"))
+		dirs = append(dirs, filepath.Join(base, "ClaudeSuite"))
 	}
 
 	current := filepath.Clean(DataDir())
