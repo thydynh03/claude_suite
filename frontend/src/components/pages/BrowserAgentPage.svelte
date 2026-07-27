@@ -302,14 +302,28 @@
         <span>Chụp màn hình</span>
       </label>
 
-      <!-- Headless is ignored while the persistent profile is on (you must be able
-           to see the window to sign in), so don't offer a control that does nothing. -->
-      {#if !usePersistentProfile}
-        <label class="flex items-center gap-1.5 cursor-pointer select-none">
-          <input type="checkbox" bind:checked={isHeadless} class="accent-primary" />
-          <span>Chạy ngầm</span>
-        </label>
-      {/if}
+      <!-- Headless is ignored while the persistent profile is on: you have to be
+           able to see the window to sign in. It used to be hidden entirely in
+           that case, which reads as a missing feature rather than a disabled
+           one — people go looking for the checkbox instead of learning why it
+           does not apply. Shown, disabled, with the reason. -->
+      <label
+        class="flex items-center gap-1.5 select-none {usePersistentProfile ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
+        title={usePersistentProfile
+          ? 'Không dùng được khi bật "Profile riêng" — Chrome phải hiện ra để bạn đăng nhập được. Bỏ chọn "Profile riêng" nếu muốn chạy ngầm.'
+          : 'Chạy Chrome ẩn, không hiện cửa sổ.'}
+      >
+        <input
+          type="checkbox"
+          bind:checked={isHeadless}
+          disabled={usePersistentProfile}
+          class="accent-primary disabled:cursor-not-allowed"
+        />
+        <span>Chạy ngầm</span>
+        {#if usePersistentProfile}
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">info</span>
+        {/if}
+      </label>
 
       <label class="flex items-center gap-1.5 cursor-pointer select-none">
         <input type="checkbox" bind:checked={usePersistentProfile} class="accent-primary" />
