@@ -194,11 +194,11 @@ func lanAddresses() []ifaceAddr {
 // claimToolURL is where the latest published claim tool always lives. GitHub
 // keeps this path stable across releases, which is what lets a machine that
 // never installed the app fetch the tool by itself.
-const claimToolURL = "https://github.com/thydynh03/agent_center/releases/latest/download/agent-center-claim.exe"
+const claimToolURL = "https://github.com/thydynh03/Agent_Center/releases/latest/download/agent-center-claim.exe"
 
 // projectRepoURL is the fallback for machines the prebuilt exe cannot serve
 // (macOS, Linux): clone and `go run` the tool from source.
-const projectRepoURL = "https://github.com/thydynh03/agent_center"
+const projectRepoURL = "https://github.com/thydynh03/Agent_Center"
 
 // claimArgs is the part of a join line that is identical however the tool got
 // onto the recipient's machine. The placeholders describe themselves in the

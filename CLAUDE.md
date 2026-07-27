@@ -108,7 +108,7 @@ hands out ready-made copies of all three):
   `%TEMP%` and run it from there — the release URL is stable across versions:
 
   ```powershell
-  $c = "$env:TEMP\agent-center-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c https://github.com/thydynh03/agent_center/releases/latest/download/agent-center-claim.exe }
+  $c = "$env:TEMP\agent-center-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c https://github.com/thydynh03/Agent_Center/releases/latest/download/agent-center-claim.exe }
   ```
 
 - **MCP, nothing downloaded**: the host serves each session as an MCP server;

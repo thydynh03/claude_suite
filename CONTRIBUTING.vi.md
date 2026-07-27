@@ -17,9 +17,9 @@ Khi tham gia, bạn đồng ý với [Quy tắc ứng xử](CODE_OF_CONDUCT.md).
 
 | Bạn muốn… | Bắt đầu từ đây |
 |---|---|
-| Báo lỗi | [Mở một bug report](https://github.com/thydynh03/agent_center/issues/new?template=bug_report.yml) — kèm phiên bản trên thanh tiêu đề và file log trong thư mục dữ liệu |
-| Đề xuất tính năng | [Mở một feature request](https://github.com/thydynh03/agent_center/issues/new?template=feature_request.yml) — mô tả vấn đề trước, giải pháp sau |
-| Sửa việc nhỏ | Bất kỳ issue nào gắn nhãn [`good first issue`](https://github.com/thydynh03/agent_center/labels/good%20first%20issue) |
+| Báo lỗi | [Mở một bug report](https://github.com/thydynh03/Agent_Center/issues/new?template=bug_report.yml) — kèm phiên bản trên thanh tiêu đề và file log trong thư mục dữ liệu |
+| Đề xuất tính năng | [Mở một feature request](https://github.com/thydynh03/Agent_Center/issues/new?template=feature_request.yml) — mô tả vấn đề trước, giải pháp sau |
+| Sửa việc nhỏ | Bất kỳ issue nào gắn nhãn [`good first issue`](https://github.com/thydynh03/Agent_Center/labels/good%20first%20issue) |
 | Dịch thuật | `frontend/src/lib/stores/i18n.ts` chứa toàn bộ chuỗi. Giữ nhãn ngắn — thanh điều hướng rộng 240px và có test làm vỡ build khi một nhãn không còn vừa |
 | Cải thiện tài liệu | Mọi sửa đổi đều được hoan nghênh, kể cả lỗi chính tả. Hai bản ngôn ngữ nên đi cùng nhau |
 

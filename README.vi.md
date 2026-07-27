@@ -12,10 +12,10 @@ bảng Kanban các task, giao task cho các sub-agent Claude và Gemini CLI ch�
 song trong thư mục dự án của bạn, và không chịu đánh dấu "xong" chừng nào workspace
 còn chưa build được.
 
-[![CI](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/thydynh03/agent_center?color=2f81f7)](https://github.com/thydynh03/agent_center/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/thydynh03/agent_center/total?color=2f81f7)](https://github.com/thydynh03/agent_center/releases)
+[![CI](https://github.com/thydynh03/Agent_Center/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/Agent_Center/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/thydynh03/Agent_Center/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/Agent_Center/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/thydynh03/Agent_Center?color=2f81f7)](https://github.com/thydynh03/Agent_Center/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/thydynh03/Agent_Center/total?color=2f81f7)](https://github.com/thydynh03/Agent_Center/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](frontend/package.json)
@@ -67,7 +67,7 @@ gian thực, các tool mà từng agent gọi, diff git nó tạo ra, số token
 ### Windows — dùng bộ cài (khuyến nghị)
 
 1. Tải `AgentCenter-amd64-installer.exe` từ
-   [bản phát hành mới nhất](https://github.com/thydynh03/agent_center/releases/latest).
+   [bản phát hành mới nhất](https://github.com/thydynh03/Agent_Center/releases/latest).
 2. Chạy nó. App xuất hiện trong Start menu và gỡ được qua **Apps & features** như mọi
    ứng dụng bình thường.
 3. Bộ cài đặt kèm luôn hai công cụ dòng lệnh nằm cạnh app: `agent-center-claim`
@@ -285,7 +285,7 @@ máy khác cũng không lấy được tài khoản của bạn.
 ## Build từ mã nguồn
 
 ```bash
-git clone https://github.com/thydynh03/agent_center.git
+git clone https://github.com/thydynh03/Agent_Center.git
 cd agent_center
 
 wails dev                                     # app desktop, hot reload

@@ -175,7 +175,7 @@ func TestAgentJoinPromptIsSelfContained(t *testing.T) {
 		"--host ws://192.168.1.5:9111", "--session abc123", "--token tok",
 		"releases/latest/download/agent-center-claim.exe",
 		"go run ./cmd/agent-center-claim",
-		"https://github.com/thydynh03/agent_center",
+		"https://github.com/thydynh03/Agent_Center",
 		"--ping",
 		"--checks",
 		"--falsify",

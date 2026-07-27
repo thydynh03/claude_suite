@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"strings"
@@ -143,12 +143,12 @@ func TestBuildUpdaterBatEscapesPercentInPaths(t *testing.T) {
 }
 
 func TestIsInstallerAssetLooksOnlyAtTheFilename(t *testing.T) {
-	if !isInstallerAsset("https://github.com/thydynh03/agent_center/releases/download/v2.15.0/agent_center-amd64-installer.exe") {
+	if !isInstallerAsset("https://github.com/thydynh03/Agent_Center/releases/download/v2.15.0/agent_center-amd64-installer.exe") {
 		t.Error("the real installer asset was not recognized")
 	}
 	// The release tag is part of the URL; a tag mentioning "installer" must
 	// not reroute a portable exe through the installer branch.
-	if isInstallerAsset("https://github.com/thydynh03/agent_center/releases/download/v2.16.0-installer-fix/AgentCenter.exe") {
+	if isInstallerAsset("https://github.com/thydynh03/Agent_Center/releases/download/v2.16.0-installer-fix/AgentCenter.exe") {
 		t.Error("a tag containing 'installer' misclassified the portable exe")
 	}
 }

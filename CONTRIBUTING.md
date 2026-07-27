@@ -17,9 +17,9 @@ By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 | You want to… | Start here |
 |---|---|
-| Report a bug | [Open a bug report](https://github.com/thydynh03/agent_center/issues/new?template=bug_report.yml) — include the version from the title bar and the log file from the data directory |
-| Suggest a feature | [Open a feature request](https://github.com/thydynh03/agent_center/issues/new?template=feature_request.yml) — describe the problem before the solution |
-| Fix something small | Anything labelled [`good first issue`](https://github.com/thydynh03/agent_center/labels/good%20first%20issue) |
+| Report a bug | [Open a bug report](https://github.com/thydynh03/Agent_Center/issues/new?template=bug_report.yml) — include the version from the title bar and the log file from the data directory |
+| Suggest a feature | [Open a feature request](https://github.com/thydynh03/Agent_Center/issues/new?template=feature_request.yml) — describe the problem before the solution |
+| Fix something small | Anything labelled [`good first issue`](https://github.com/thydynh03/Agent_Center/labels/good%20first%20issue) |
 | Translate | `frontend/src/lib/stores/i18n.ts` holds every string. Keep labels short — the sidebar rail is 240px and there is a test that fails when a nav label no longer fits |
 | Improve the docs | Every fix is welcome, including typos. Both language versions should stay in step |
 

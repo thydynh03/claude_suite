@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { theme, toggleTheme } from '../../lib/stores/theme';
   import { zoom, zoomIn, zoomOut, zoomReset } from '../../lib/stores/zoom';
   import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog, addToast, commandPaletteOpen, onboardingOpen, helpOpen } from '../../lib/stores/appState';
@@ -50,7 +50,7 @@
   }
 
   function openRepo() {
-    const url = 'https://github.com/thydynh03/agent_center';
+    const url = 'https://github.com/thydynh03/Agent_Center';
     try {
       (AppBindings as any).OpenURLInBrowser(url);
     } catch {

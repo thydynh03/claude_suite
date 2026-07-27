@@ -11,7 +11,7 @@
 **Do not open a public issue for a security problem.**
 
 Use GitHub's private vulnerability reporting:
-[Report a vulnerability](https://github.com/thydynh03/agent_center/security/advisories/new).
+[Report a vulnerability](https://github.com/thydynh03/Agent_Center/security/advisories/new).
 It goes only to the maintainers, and you can attach details there safely.
 
 Please include what you would want if you received the report: the version, the
@@ -95,7 +95,7 @@ way you would treat a script from that source.
 **Đừng mở issue công khai cho một vấn đề bảo mật.**
 
 Hãy dùng kênh báo cáo riêng tư của GitHub:
-[Report a vulnerability](https://github.com/thydynh03/agent_center/security/advisories/new).
+[Report a vulnerability](https://github.com/thydynh03/Agent_Center/security/advisories/new).
 Nó chỉ đến tay maintainer, và bạn đính kèm chi tiết ở đó được an toàn.
 
 Xin ghi kèm những thứ chính bạn sẽ muốn có nếu nhận được báo cáo này: phiên bản,

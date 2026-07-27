@@ -12,10 +12,10 @@ of tasks, dispatch those tasks to Claude and Gemini CLI sub-agents running in
 parallel against your project folder, and refuse to mark anything "done" until the
 workspace still builds.
 
-[![CI](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/thydynh03/agent_center?color=2f81f7)](https://github.com/thydynh03/agent_center/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/thydynh03/agent_center/total?color=2f81f7)](https://github.com/thydynh03/agent_center/releases)
+[![CI](https://github.com/thydynh03/Agent_Center/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/Agent_Center/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/thydynh03/Agent_Center/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/Agent_Center/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/thydynh03/Agent_Center?color=2f81f7)](https://github.com/thydynh03/Agent_Center/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/thydynh03/Agent_Center/total?color=2f81f7)](https://github.com/thydynh03/Agent_Center/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](frontend/package.json)
@@ -67,7 +67,7 @@ called, the git diff it produced, real token usage and real cost.
 ### Windows — the installer (recommended)
 
 1. Download `AgentCenter-amd64-installer.exe` from the
-   [latest release](https://github.com/thydynh03/agent_center/releases/latest).
+   [latest release](https://github.com/thydynh03/Agent_Center/releases/latest).
 2. Run it. The app appears in the Start menu and uninstalls through
    **Apps & features** like any other program.
 3. The installer also places two command-line companions next to the app:
@@ -285,7 +285,7 @@ machine will not hand over your accounts.
 ## Build from source
 
 ```bash
-git clone https://github.com/thydynh03/agent_center.git
+git clone https://github.com/thydynh03/Agent_Center.git
 cd agent_center
 
 wails dev                                     # desktop app, hot reload

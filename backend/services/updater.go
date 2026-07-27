@@ -220,7 +220,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	// machine would repeat forever.
 	var lastErr error
 
-	apiUrl := "https://api.github.com/repos/thydynh03/agent_center/releases/latest"
+	apiUrl := "https://api.github.com/repos/thydynh03/Agent_Center/releases/latest"
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 					// No .exe in the release: the install button can only ever
 					// fail on this, so say so up front instead of letting the
 					// user discover it by pressing it.
-					downloadUrl = "https://github.com/thydynh03/agent_center/archive/refs/tags/" + rel.TagName + ".zip"
+					downloadUrl = "https://github.com/thydynh03/Agent_Center/archive/refs/tags/" + rel.TagName + ".zip"
 					body = manualOnlyNotice(rel.TagName) + body
 				}
 				return &UpdateInfo{
@@ -269,7 +269,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	}
 
 	// Fallback: Check tags API if releases API is empty
-	tagsUrl := "https://api.github.com/repos/thydynh03/agent_center/tags"
+	tagsUrl := "https://api.github.com/repos/thydynh03/Agent_Center/tags"
 	tReq, err := http.NewRequest("GET", tagsUrl, nil)
 	if err == nil {
 		tReq.Header.Set("User-Agent", "AgentCenter-App")
@@ -302,7 +302,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 					return &UpdateInfo{
 						HasUpdate:   true,
 						Version:     latestTag,
-						DownloadURL: "https://github.com/thydynh03/agent_center/archive/refs/tags/" + latestTag + ".zip",
+						DownloadURL: "https://github.com/thydynh03/Agent_Center/archive/refs/tags/" + latestTag + ".zip",
 						Body:        manualOnlyNotice(latestTag) + "Bản phát hành mới " + latestTag + " trên GitHub Repository.",
 					}, nil
 				}
@@ -322,7 +322,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 // cannot be installed from inside the app.
 func manualOnlyNotice(tag string) string {
 	return "⚠️ Bản " + tag + " chưa có file .exe để tự cập nhật — hãy tải và cài thủ công tại " +
-		"https://github.com/thydynh03/agent_center/releases/latest\n\n"
+		"https://github.com/thydynh03/Agent_Center/releases/latest\n\n"
 }
 
 // buildUpdaterBat swaps the downloaded exe over the running one after it

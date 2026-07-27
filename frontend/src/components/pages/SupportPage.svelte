@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog, addToast } from '../../lib/stores/appState';
@@ -225,7 +225,7 @@
       </button>
 
       <a
-        href="https://github.com/thydynh03/agent_center/issues"
+        href="https://github.com/thydynh03/Agent_Center/issues"
         target="_blank"
         rel="noreferrer"
         class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-surface-container-high transition-colors cursor-pointer">
