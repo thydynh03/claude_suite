@@ -1,4 +1,4 @@
-﻿package orchestrator
+package orchestrator
 
 import (
 	"testing"
@@ -19,6 +19,11 @@ func TestFallbackHandler_IsQuotaExhausted(t *testing.T) {
 	errQuota := "API Error 429: rate limit exceeded / quota exhausted"
 	if !handler.IsQuotaExhausted(agent, errQuota) {
 		t.Errorf("expected true for 429 quota error, got false")
+	}
+
+	errSessionLimit := "You've hit your session limit · resets 3:50pm (Asia/Saigon)"
+	if !handler.IsQuotaExhausted(agent, errSessionLimit) {
+		t.Errorf("expected true for session limit error, got false")
 	}
 
 	errNormal := "file not found error"

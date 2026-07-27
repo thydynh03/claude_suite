@@ -1,4 +1,4 @@
-﻿package orchestrator
+package orchestrator
 
 import (
 	"strings"
@@ -21,6 +21,9 @@ func (f *FallbackHandler) IsQuotaExhausted(agent *models.Agent, errStr string) b
 	keywords := []string{
 		"token limit", "quota", "rate limit", "credit balance",
 		"context_length_exceeded", "429", "out of tokens", "exhausted", "quota limit", "daily limit",
+		"session limit", "hit your limit", "resets", "usage limit", "limit reached",
+		"overloaded", "capacity", "too many requests", "resource_exhausted",
+		"insufficient_quota", "free tier", "billing", "529",
 	}
 
 	for _, kw := range keywords {
