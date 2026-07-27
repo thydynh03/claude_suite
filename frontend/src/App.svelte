@@ -19,6 +19,7 @@
   import ToastHost from './components/ui/ToastHost.svelte';
   import CommandPalette from './components/ui/CommandPalette.svelte';
   import ZoomIndicator from './components/ui/ZoomIndicator.svelte';
+  import ShortcutSheet from './components/ui/ShortcutSheet.svelte';
   import { attachZoomControls } from './lib/stores/zoom';
   import OnboardingTour from './components/ui/OnboardingTour.svelte';
   import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, setTaskScreenshot, sidebarCollapsed, tasksStore, agentsStore, onboardingOpen } from './lib/stores/appState';
@@ -274,6 +275,7 @@
 <ToastHost />
 <CommandPalette />
 <ZoomIndicator />
+<ShortcutSheet />
 <OnboardingTour open={showOnboarding} on:close={closeOnboarding} />
 
 {#if showApprovalModal}

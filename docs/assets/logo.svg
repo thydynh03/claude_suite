@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" role="img" aria-label="Agent Center">
+  <title>Agent Center</title>
+
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4aa8ff"/>
+      <stop offset="100%" stop-color="#0a63d6"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#d6e4f5"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#5cb0ff"/>
+      <stop offset="100%" stop-color="#0a63d6"/>
+    </linearGradient>
+    <!-- The glow in the reference art. Kept subtle: at favicon sizes a strong
+         blur turns the monogram into a smudge. -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="640" height="360" rx="28" fill="#04070d"/>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="26" filter="url(#glow)">
+    <!-- A, without a crossbar: the dot below carries that weight instead. -->
+    <path d="M 214 205 L 266 92 L 318 205" stroke="url(#ink)"/>
+    <!-- C, opening to the right, sharing the A's optical centre line. -->
+    <path d="M 419 106 A 58 58 0 1 0 419 191" stroke="url(#blue)"/>
+  </g>
+  <circle cx="266" cy="172" r="13" fill="#2f9bff" filter="url(#glow)"/>
+
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" text-anchor="middle">
+    <text x="320" y="278" font-size="52" font-weight="700" letter-spacing="7">
+      <tspan fill="#ffffff">AGENT</tspan><tspan fill="url(#word)"> CENTER</tspan>
+    </text>
+    <text x="320" y="316" font-size="15" font-weight="600" letter-spacing="3.2" fill="#7fb4e8">
+      MANAGE AI · ORCHESTRATE · VERIFY · DELIVER
+    </text>
+  </g>
+</svg>

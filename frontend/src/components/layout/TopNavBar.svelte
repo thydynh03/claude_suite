@@ -1,13 +1,13 @@
 <script lang="ts">
   import { theme, toggleTheme } from '../../lib/stores/theme';
-  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog, addToast, commandPaletteOpen } from '../../lib/stores/appState';
+  import { zoom, zoomIn, zoomOut, zoomReset } from '../../lib/stores/zoom';
+  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog, addToast, commandPaletteOpen, onboardingOpen, helpOpen } from '../../lib/stores/appState';
   import { currentLang } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
-  let openMenu: 'file' | 'view' | 'window' | null = null;
-  let zoomLevel = 100;
+  let openMenu: 'file' | 'view' | 'window' | 'help' | null = null;
 
-  function toggleMenu(menu: 'file' | 'view' | 'window') {
+  function toggleMenu(menu: 'file' | 'view' | 'window' | 'help') {
     openMenu = openMenu === menu ? null : menu;
   }
 
@@ -15,21 +15,47 @@
     openMenu = null;
   }
 
+  // These three used to keep their own `zoomLevel` and write
+  // document.body.style.zoom, which was a second zoom entirely: Ctrl+wheel
+  // scales documentElement, and body sits inside it, so the two multiplied —
+  // "Phóng to" from 150% here on top of 200% there is 300%, and neither
+  // readout knew about the other. One store now, one element.
   function handleZoomIn() {
-    zoomLevel = Math.min(zoomLevel + 10, 150);
-    document.body.style.zoom = `${zoomLevel}%`;
+    zoomIn();
     closeMenus();
   }
 
   function handleZoomOut() {
-    zoomLevel = Math.max(zoomLevel - 10, 70);
-    document.body.style.zoom = `${zoomLevel}%`;
+    zoomOut();
     closeMenus();
   }
 
   function handleResetZoom() {
-    zoomLevel = 100;
-    document.body.style.zoom = '100%';
+    zoomReset();
+    closeMenus();
+  }
+
+  function openHelp(section: 'shortcuts' | 'guide') {
+    if (section === 'shortcuts') {
+      helpOpen.set(true);
+    } else {
+      onboardingOpen.set(true);
+    }
+    closeMenus();
+  }
+
+  function goTab(tab: string) {
+    activeTab.set(tab);
+    closeMenus();
+  }
+
+  function openRepo() {
+    const url = 'https://github.com/thydynh03/claude_suite';
+    try {
+      (AppBindings as any).OpenURLInBrowser(url);
+    } catch {
+      window.open(url, '_blank');
+    }
     closeMenus();
   }
 
@@ -256,14 +282,20 @@
             <!-- No shortcut hints here: none of these are bound, and Ctrl+0
                  is taken by the Settings tab shortcut in App.svelte, so the
                  old label contradicted what the key actually does. -->
-            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
-              <span class="material-symbols-outlined text-sm">zoom_in</span> Phóng to
+            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_in</span> Phóng to</span>
+              <span class="text-[10px] text-outline font-mono">Ctrl +</span>
             </button>
-            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
-              <span class="material-symbols-outlined text-sm">zoom_out</span> Thu nhỏ
+            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_out</span> Thu nhỏ</span>
+              <span class="text-[10px] text-outline font-mono">Ctrl -</span>
             </button>
-            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
-              <span class="material-symbols-outlined text-sm">restart_alt</span> Cỡ mặc định
+            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">restart_alt</span> Cỡ mặc định</span>
+              <!-- Ctrl+Shift+0, not Ctrl+0: App.svelte binds Ctrl+0..9 to the
+                   navigation tabs. The readout is live so this menu and the
+                   zoom badge can never disagree. -->
+              <span class="text-[10px] text-outline font-mono">{Math.round($zoom * 100)}%</span>
             </button>
           </div>
         {/if}
@@ -291,6 +323,46 @@
             <div class="py-1">
               <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-error/10 text-error transition-colors flex justify-between items-center">
                 <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Đóng app</span>
+              </button>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Help Menu -->
+      <div class="relative">
+        <button
+          type="button"
+          on:click={() => toggleMenu('help')}
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1 {openMenu ==='help' ? 'bg-surface-container-highest text-on-surface' : ''}"
+        >
+          Help
+        </button>
+        {#if openMenu === 'help'}
+          <div class="absolute left-0 top-full mt-1 w-60 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
+            <div class="py-1">
+              <!-- Every item here goes somewhere that already exists. A Help
+                   menu whose entries lead nowhere is worse than no Help menu:
+                   it is the first place a stuck user looks. -->
+              <button type="button" on:click={() => openHelp('guide')} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">rocket_launch</span> Hướng dẫn bắt đầu</span>
+              </button>
+              <button type="button" on:click={() => openHelp('shortcuts')} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">keyboard</span> Phím tắt</span>
+                <span class="text-[10px] text-outline font-mono">F1</span>
+              </button>
+            </div>
+            <div class="py-1">
+              <button type="button" on:click={() => goTab('docs')} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">menu_book</span> Tài liệu
+              </button>
+              <button type="button" on:click={() => goTab('support')} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">help</span> Hỗ trợ &amp; khắc phục sự cố
+              </button>
+            </div>
+            <div class="py-1">
+              <button type="button" on:click={openRepo} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">open_in_new</span> Mã nguồn trên GitHub
               </button>
             </div>
           </div>

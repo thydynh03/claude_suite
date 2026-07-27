@@ -49,6 +49,9 @@ export const onboardingOpen = writable<boolean>(false);
 // "Command Palette" item used to just switch to the Settings tab.
 export const commandPaletteOpen = writable<boolean>(false);
 
+// Set to true to open the keyboard-shortcut sheet (Help menu, or F1).
+export const helpOpen = writable<boolean>(false);
+
 // Transient toast notifications.
 export type Toast = { id: number; message: string; level: string };
 export const toasts = writable<Toast[]>([]);

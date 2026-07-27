@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="build/appicon.png" alt="Claude Suite" width="104" />
+<img src="docs/assets/logo.svg" alt="Claude Suite" width="420" />
 
 # Claude Suite
 
