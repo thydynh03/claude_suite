@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"claude_suite/backend/logger"
 	"claude_suite/backend/paths"
 
 	_ "modernc.org/sqlite"
@@ -65,13 +66,26 @@ func OpenAt(path string) (*sql.DB, error) {
 func InitDB() (*sql.DB, error) {
 	var initErr error
 	dbOnce.Do(func() {
+		// Everything below assumes this directory exists. When it cannot be
+		// created — a file already sitting at that name, a locked-down profile
+		// — sqlite fails with a message about the .db file that says nothing
+		// about the real cause, so the real cause is reported first.
+		if dir, err := paths.EnsureDataDirErr(); err != nil {
+			initErr = fmt.Errorf("không tạo được thư mục dữ liệu %s: %w", dir, err)
+			return
+		}
 		dbPath := GetDBPath()
 
 		// Older builds hardcoded the developer's checkout as the data directory.
 		// Adopt that state once, before anything opens the new database.
 		if report, err := AdoptLegacyDataDir(filepath.Dir(dbPath)); err != nil {
+			// A failed adoption is not fatal — the app opens a fresh database —
+			// but it looks exactly like total data loss to the user, so it is
+			// recorded where it can be found afterwards.
+			logger.Error(fmt.Sprintf("data migration failed, old data left in place: %v", err))
 			fmt.Printf("Data migration warning: %v\n", err)
 		} else if report != nil {
+			logger.Info(fmt.Sprintf("adopted existing data from %s", report.From))
 			fmt.Printf("Adopted existing Claude Suite data from %s (kept as a backup there)\n", report.From)
 		}
 

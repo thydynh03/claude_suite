@@ -213,3 +213,43 @@ The orchestrator's capture path and the mapper must call this same function;
 resolving identity twice in two ways splits one folder's memory across two
 workspace rows, and `workspace_repo.go`'s re-keying (`RekeyWorkspace`,
 `workspaceKeyedTables`) only heals the path-gains-a-remote case.
+
+---
+
+## 12. The inbound webhook binds loopback, and that is the whole security model
+
+`WebhookService.Start` listens on `127.0.0.1:<port>`, not `:<port>`. Binding
+every interface is the obvious "make it useful on the LAN" change, and it is
+the one thing this endpoint must never do.
+
+The handler takes an unauthenticated POST and turns its body into a backlog
+task. The orchestrator later hands that task's prompt to a sub-agent running
+with `--dangerously-skip-permissions` inside the user's workspace. Bound to
+`:9090`, anyone on the same café Wi-Fi could make this app write files.
+
+There is no token to add "later" that fixes it retroactively: the whole point
+is that reaching this port has to be a deliberate act by the person who owns
+the machine — an SSH forward or a tunnel they started — not the default state
+of a checkbox in Settings.
+
+---
+
+## 13. The updater's .bat switches codepage before it names a path
+
+`buildUpdaterBat` starts with `chcp 65001` and doubles every literal `%` in the
+paths it embeds. Both look like superstition; both were failures.
+
+`cmd.exe` decodes a batch file in the console's OEM codepage, not UTF-8. This
+app's users are Vietnamese, so `%TEMP%` routinely sits under `C:\Users\Trần\`
+and portable copies live in folders like `D:\Phần mềm\`. Written as UTF-8 and
+read as CP1258, those paths arrive as mojibake: all sixty `copy` attempts fail,
+and the app — which already called `os.Exit(0)` to release the exe — never
+comes back. The preamble is pure ASCII, so it decodes identically in any
+codepage and switches the interpreter before the first path-bearing line.
+
+Batch also expands `%VAR%` while reading a line, so a single `%` in a folder
+name swallows the rest of the path.
+
+If you rewrite this script, keep both properties, and keep the give-up branch
+writing its marker: a swap that silently failed re-offered the same update
+forever, and the user only saw an app that restarted unchanged.

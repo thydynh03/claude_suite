@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"os/exec"
@@ -72,6 +74,16 @@ type App struct {
 	// Every repository is holding a nil handle in that case, so startup must
 	// say so and stop rather than panic on the first query.
 	dbInitErr error
+
+	// Startup speaks before the frontend can listen; these hold what it said
+	// until domReady.
+	noticeMu       sync.Mutex
+	domIsReady     bool
+	pendingNotices []map[string]string
+
+	// antiKeysLoadFailed blocks saves that would overwrite an account file the
+	// app could not read: an empty pool is not a newer version of it.
+	antiKeysLoadFailed bool
 }
 
 // The desktop app must offer every shared capability. Adding a method to
@@ -364,8 +376,14 @@ func (a *App) ScanWorkspaceFiles() ([]string, error) {
 
 func (a *App) ReadFileContent(relPath string) (string, error) {
 	workspace := a.workspaceConfig.LastWorkspaceFolder
+	if workspace == "" {
+		// With no workspace the guard below permits everything and a relative
+		// path resolves against the process's working directory — Downloads,
+		// for a portable copy. Refusing names the actual problem.
+		return "", fmt.Errorf("chưa chọn workspace — hãy chọn thư mục dự án trước khi mở file")
+	}
 	fullPath := relPath
-	if !filepath.IsAbs(relPath) && workspace != "" {
+	if !filepath.IsAbs(relPath) {
 		fullPath = filepath.Join(workspace, relPath)
 	}
 	// Same containment rule as the TUI adapter: filepath.Join cleans "..", but a
@@ -384,8 +402,14 @@ func (a *App) ReadFileContent(relPath string) (string, error) {
 
 func (a *App) SaveFileContent(relPath string, content string) error {
 	workspace := a.workspaceConfig.LastWorkspaceFolder
+	if workspace == "" {
+		// Saving into the exe's directory is how a portable copy ends up
+		// writing stray files into Downloads — or failing with a bare
+		// "Access is denied" from Program Files that never mentions why.
+		return fmt.Errorf("chưa chọn workspace — hãy chọn thư mục dự án trước khi lưu file")
+	}
 	fullPath := relPath
-	if !filepath.IsAbs(relPath) && workspace != "" {
+	if !filepath.IsAbs(relPath) {
 		fullPath = filepath.Join(workspace, relPath)
 	}
 	// Writing needs this more than reading did. ReadFileContent has been
@@ -913,7 +937,12 @@ func (a *App) loadWorkspaceConfig() {
 	cfgPath := filepath.Join(dbDir, "workspace_config.json")
 	data, err := os.ReadFile(cfgPath)
 	if err == nil {
-		_ = json.Unmarshal(data, &a.workspaceConfig)
+		// A parse failure here means the file exists but is damaged; the app
+		// then starts with no workspace, which reads as "my settings vanished".
+		if err := json.Unmarshal(data, &a.workspaceConfig); err != nil {
+			logger.Error(fmt.Sprintf("workspace_config.json hỏng: %v", err))
+			a.emitLog("⚠️ workspace_config.json không đọc được — app khởi động không có workspace, hãy chọn lại thư mục dự án.", "WARN")
+		}
 	}
 }
 
@@ -921,7 +950,20 @@ func (a *App) saveWorkspaceConfig() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "workspace_config.json")
 	data, _ := json.MarshalIndent(a.workspaceConfig, "", "  ")
-	_ = os.WriteFile(cfgPath, data, 0644)
+	a.saveConfigFile(cfgPath, data, "workspace")
+}
+
+// saveConfigFile writes a config atomically and says so when it cannot.
+//
+// These writes were `_ = os.WriteFile`: picking a workspace reported success,
+// and the choice was simply gone on the next launch when the write had failed.
+// Non-atomic also meant a crash mid-write left truncated JSON that the loader
+// silently read as "no config" — the same silence, one launch later.
+func (a *App) saveConfigFile(path string, data []byte, what string) {
+	if err := services.WriteFileAtomic(path, data, 0o600); err != nil {
+		logger.Error(fmt.Sprintf("save %s config: %v", what, err))
+		a.emitLog(fmt.Sprintf("⚠️ Không lưu được cấu hình %s (%v) — thay đổi này sẽ mất khi khởi động lại.", what, err), "ERROR")
+	}
 }
 
 // ── Integrations Config (outbound webhook + MCP) ───────────────────────
@@ -940,7 +982,7 @@ func (a *App) saveIntegrationsConfig() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "integrations_config.json")
 	data, _ := json.MarshalIndent(a.integrationsConfig, "", "  ")
-	_ = os.WriteFile(cfgPath, data, 0644)
+	a.saveConfigFile(cfgPath, data, "tích hợp")
 }
 
 // ── Anti Keys Config ───────────────────────────────────────────────────
@@ -961,17 +1003,31 @@ func (a *App) loadAntiKeys() {
 		return
 	}
 	var keys []cli.AntiAccountKey
-	if json.Unmarshal(plaintext, &keys) == nil {
-		cli.GlobalAntiPool.SetKeys(keys)
-		if wasPlain && len(keys) > 0 {
-			// A legacy plain-text install: reseal it now, so the refresh
-			// tokens stop sitting on disk in the clear.
-			a.saveAntiKeys()
-		}
+	if err := json.Unmarshal(plaintext, &keys); err != nil {
+		// Damaged JSON used to be swallowed entirely: the pool came up empty
+		// with no explanation, and the first account the user added atomically
+		// overwrote the still-recoverable file, taking every refresh token with
+		// it. Say so, and leave the file alone.
+		a.antiKeysLoadFailed = true
+		a.emitLog("❌ anti_accounts.json không đọc được ("+err.Error()+") — danh sách tài khoản đang trống và file được giữ nguyên để bạn khôi phục.", "ERROR")
+		return
+	}
+	cli.GlobalAntiPool.SetKeys(keys)
+	if wasPlain && len(keys) > 0 {
+		// A legacy plain-text install: reseal it now, so the refresh
+		// tokens stop sitting on disk in the clear.
+		a.saveAntiKeys()
 	}
 }
 
 func (a *App) saveAntiKeys() {
+	// The file could not be read this session, so what is in memory is not a
+	// newer version of it — it is nothing. Writing that over a damaged but
+	// recoverable file destroys the refresh tokens for good.
+	if a.antiKeysLoadFailed {
+		a.emitLog("⚠️ Bỏ qua lưu anti_accounts.json: file hiện tại chưa đọc được, ghi đè sẽ mất toàn bộ tài khoản cũ.", "WARN")
+		return
+	}
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
 	data, _ := json.MarshalIndent(cli.GlobalAntiPool.GetKeys(), "", "  ")
@@ -1006,7 +1062,7 @@ func (a *App) saveUIConfig() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "ui_config.json")
 	data, _ := json.MarshalIndent(a.uiConfig, "", "  ")
-	_ = os.WriteFile(cfgPath, data, 0644)
+	a.saveConfigFile(cfgPath, data, "giao diện")
 }
 
 // ShouldShowOnboarding reports whether the welcome tour should open — true on a
@@ -1301,18 +1357,45 @@ func oauthCreds() (string, string) {
 	}
 
 	cfgPath := filepath.Join(filepath.Dir(database.GetDBPath()), "gcp_oauth.json")
-	if data, err := os.ReadFile(cfgPath); err == nil {
-		var fileCreds struct {
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return id, secret
+	}
+	// PowerShell's Out-File and Set-Content write a BOM by default, and
+	// encoding/json rejects one outright: the file existed, parsed as nothing,
+	// and the app told the user to create the file they were looking at.
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+
+	// Google Cloud Console hands out client_secret_*.json with the fields
+	// nested under "installed" (or "web"). Reading only the flat shape meant a
+	// user who dropped in the file they actually downloaded got zero values
+	// from a successful parse.
+	var fileCreds struct {
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+		Installed    struct {
 			ClientID     string `json:"client_id"`
 			ClientSecret string `json:"client_secret"`
+		} `json:"installed"`
+		Web struct {
+			ClientID     string `json:"client_id"`
+			ClientSecret string `json:"client_secret"`
+		} `json:"web"`
+	}
+	if err := json.Unmarshal(data, &fileCreds); err != nil {
+		logger.Error(fmt.Sprintf("gcp_oauth.json không đọc được: %v", err))
+		return id, secret
+	}
+	for _, pair := range [][2]string{
+		{fileCreds.ClientID, fileCreds.ClientSecret},
+		{fileCreds.Installed.ClientID, fileCreds.Installed.ClientSecret},
+		{fileCreds.Web.ClientID, fileCreds.Web.ClientSecret},
+	} {
+		if id == "" {
+			id = pair[0]
 		}
-		if json.Unmarshal(data, &fileCreds) == nil {
-			if id == "" {
-				id = fileCreds.ClientID
-			}
-			if secret == "" {
-				secret = fileCreds.ClientSecret
-			}
+		if secret == "" {
+			secret = pair[1]
 		}
 	}
 	return id, secret
@@ -2046,11 +2129,45 @@ func (a *App) emitLog(message, level string) {
 	if a.ctx == nil {
 		return
 	}
-	wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
+	entry := map[string]string{
 		"message": message,
 		"level":   level,
 		"time":    time.Now().Format("15:04:05"),
-	})
+	}
+
+	// Wails drops an event nobody is listening for, and the frontend registers
+	// its listeners as it mounts — so everything startup had to say (a data
+	// file that could not be decrypted, tasks recovered from a killed session)
+	// used to vanish. Those lines are held until the DOM is ready.
+	a.noticeMu.Lock()
+	if !a.domIsReady {
+		a.pendingNotices = append(a.pendingNotices, entry)
+		a.noticeMu.Unlock()
+		logger.Info(level + ": " + message)
+		return
+	}
+	a.noticeMu.Unlock()
+
+	wailsRuntime.EventsEmit(a.ctx, "log_entry", entry)
+}
+
+// domReady flushes what startup said before anyone could hear it.
+func (a *App) domReady(ctx context.Context) {
+	a.noticeMu.Lock()
+	a.domIsReady = true
+	pending := a.pendingNotices
+	a.pendingNotices = nil
+	a.noticeMu.Unlock()
+
+	for _, entry := range pending {
+		wailsRuntime.EventsEmit(ctx, "log_entry", entry)
+	}
+
+	// A previous update that could not swap the exe relaunched the old version
+	// and said nothing, so the same update was offered again forever.
+	if a.updaterService != nil && a.updaterService.TakeFailedSwapNotice() {
+		a.emitLog("⚠️ Lần cập nhật trước không thay được file chương trình (file đang bị khoá — thường do phần mềm diệt virus hoặc thư mục đang đồng bộ). App vẫn chạy bản cũ; hãy thử cập nhật lại.", "WARN")
+	}
 }
 
 // ── Claim adjudication ─────────────────────────────────────────────────

@@ -32,14 +32,29 @@ func DataDir() string {
 	if home, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(home, ".claude_suite")
 	}
-	return "."
+	// Last resort: the temp dir, never ".". A portable exe run from Program
+	// Files or a network share would otherwise try to create its database
+	// beside the executable and be denied, with no channel to say why.
+	return filepath.Join(os.TempDir(), "ClaudeSuite")
 }
 
 // EnsureDataDir returns DataDir, creating it if necessary.
 func EnsureDataDir() string {
-	dir := DataDir()
-	_ = os.MkdirAll(dir, 0o755)
+	dir, _ := EnsureDataDirErr()
 	return dir
+}
+
+// EnsureDataDirErr is EnsureDataDir for callers that can report the failure.
+// Everything downstream — the database, every config file — depends on this
+// directory existing, and swallowing the error meant a profile where it could
+// not be created produced a string of unexplained failures instead of one
+// clear message.
+func EnsureDataDirErr() (string, error) {
+	dir := DataDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return dir, err
+	}
+	return dir, nil
 }
 
 // LogDir is where rotating application logs are written.
