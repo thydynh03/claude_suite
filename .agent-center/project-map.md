@@ -1,6 +1,6 @@
 # Project Map
 
-Sinh tự động bởi Agent Center (workspace 0a1a4751315c) — 315 file, 2453 node, 2713 edge.
+Sinh tự động bởi Agent Center (workspace 0a1a4751315c) — 315 file, 2454 node, 2714 edge.
 KHÔNG sửa tay: file này bị ghi đè sau mỗi lần build lại project map.
 
 ## Thư mục
