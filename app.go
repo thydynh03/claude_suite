@@ -1000,8 +1000,15 @@ func (a *App) loadAntiKeys() {
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
 	data, err := os.ReadFile(cfgPath)
-	if err != nil {
-		return
+	if err != nil || len(data) == 0 {
+		oldDir := filepath.Join(filepath.Dir(dbDir), "ClaudeSuite")
+		oldCfgPath := filepath.Join(oldDir, "anti_accounts.json")
+		if oldData, oldErr := os.ReadFile(oldCfgPath); oldErr == nil && len(oldData) > 0 {
+			data = oldData
+			a.emitLog("📦 Phát hiện file tài khoản từ ClaudeSuite — tự động chuyển đổi dữ liệu...", "INFO")
+		} else {
+			return
+		}
 	}
 	plaintext, wasPlain, err := secrets.Open(data)
 	if err != nil {
@@ -1023,10 +1030,24 @@ func (a *App) loadAntiKeys() {
 		a.emitLog("❌ anti_accounts.json không đọc được ("+err.Error()+") — danh sách tài khoản đang trống và file được giữ nguyên để bạn khôi phục.", "ERROR")
 		return
 	}
+	if len(keys) == 0 {
+		oldDir := filepath.Join(filepath.Dir(dbDir), "ClaudeSuite")
+		oldCfgPath := filepath.Join(oldDir, "anti_accounts.json")
+		if oldData, oldErr := os.ReadFile(oldCfgPath); oldErr == nil && len(oldData) > 0 {
+			if oldPlaintext, _, oldOpenErr := secrets.Open(oldData); oldOpenErr == nil {
+				var oldKeys []cli.AntiAccountKey
+				if json.Unmarshal(oldPlaintext, &oldKeys) == nil && len(oldKeys) > 0 {
+					keys = oldKeys
+					wasPlain = true
+					a.emitLog(fmt.Sprintf("📦 Đã khôi phục thành công %d tài khoản từ ClaudeSuite!", len(keys)), "SUCCESS")
+				}
+			}
+		}
+	}
 	cli.GlobalAntiPool.SetKeys(keys)
 	if wasPlain && len(keys) > 0 {
-		// A legacy plain-text install: reseal it now, so the refresh
-		// tokens stop sitting on disk in the clear.
+		// A legacy plain-text install or legacy header: reseal it now, so the refresh
+		// tokens stop sitting on disk in the clear or under old header.
 		a.saveAntiKeys()
 	}
 }

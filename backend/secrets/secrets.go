@@ -1,4 +1,4 @@
-﻿// Package secrets seals small credential files to the local Windows user.
+// Package secrets seals small credential files to the local Windows user.
 //
 // anti_accounts.json holds Google refresh tokens. 0600 permissions keep other
 // accounts out, but anything running AS the user — or a copied disk, a synced
@@ -21,6 +21,7 @@ import (
 // header marks a sealed file. Legacy files start with JSON ('[' or '{'), so
 // its absence is what makes transparent migration possible.
 const header = "agent-center-sealed-v1\n"
+const legacyHeader = "claude-suite-sealed-v1\n"
 
 // Seal wraps plaintext for storage.
 func Seal(plaintext []byte) ([]byte, error) {
@@ -35,12 +36,19 @@ func Seal(plaintext []byte) ([]byte, error) {
 // JSON, and reports which it was — a caller seeing wasPlain=true should
 // re-save, which is how existing installs migrate without a step.
 func Open(data []byte) (plaintext []byte, wasPlain bool, err error) {
-	if !bytes.HasPrefix(data, []byte(header)) {
-		return data, true, nil
+	if bytes.HasPrefix(data, []byte(header)) {
+		plaintext, err = unprotect(bytes.TrimPrefix(data, []byte(header)))
+		if err != nil {
+			return nil, false, fmt.Errorf("open sealed data (wrong machine or user account?): %w", err)
+		}
+		return plaintext, false, nil
 	}
-	plaintext, err = unprotect(bytes.TrimPrefix(data, []byte(header)))
-	if err != nil {
-		return nil, false, fmt.Errorf("open sealed data (wrong machine or user account?): %w", err)
+	if bytes.HasPrefix(data, []byte(legacyHeader)) {
+		plaintext, err = unprotect(bytes.TrimPrefix(data, []byte(legacyHeader)))
+		if err != nil {
+			return nil, false, fmt.Errorf("open legacy sealed data (wrong machine or user account?): %w", err)
+		}
+		return plaintext, true, nil
 	}
-	return plaintext, false, nil
+	return data, true, nil
 }
