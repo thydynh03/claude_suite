@@ -169,9 +169,100 @@
     addToast(`Đã sao chép ${what}.`, 'SUCCESS');
   }
 
+  let participants: string[] = [];
+  $: activeAgents = Array.from(new Set([
+    ...participants,
+    ...claims.map(c => c.author),
+    ...opinions.map(o => o.author),
+    ...chat.map(m => m.author)
+  ])).filter(a => a && a !== arbiterName && a !== 'Hệ thống');
+
+  // Mention & Slash Command autocomplete popups
+  let chatInputEl: HTMLInputElement | null = null;
+  let showMentionPopup = false;
+  let mentionSearch = '';
+  let showSlashPopup = false;
+  let slashSearch = '';
+
+  const SLASH_COMMANDS = [
+    { cmd: '/exit', label: 'Chốt phiên phân xử (Finish Session)', desc: 'Chuyển phiên sang trạng thái đã chốt' },
+    { cmd: '/check', label: 'Chạy kiểm chứng ngay (Force Adjudicate)', desc: 'Chạy các falsifiers kiểm chứng các claim' },
+    { cmd: '/debate', label: 'Mở vòng thảo luận (Open Debate)', desc: 'Mở vòng thảo luận cho các ý kiến' },
+    { cmd: '/clear', label: 'Xóa lịch sử chat hiện tại', desc: 'Xóa màn hình hiển thị chat' },
+    { cmd: '/help', label: 'Hướng dẫn các lệnh Slash', desc: 'Hiển thị danh sách các lệnh' },
+  ];
+
+  // AI Orchestrator Arbiter mode
+  let autoArbiterEnabled = false;
+  let isArbiterThinking = false;
+  let previousChatLength = 0;
+
+  function handleChatInputKeyup(e: KeyboardEvent) {
+    const val = chatDraft;
+    if (val.startsWith('/')) {
+      showSlashPopup = true;
+      slashSearch = val.slice(1).toLowerCase();
+      showMentionPopup = false;
+    } else {
+      showSlashPopup = false;
+      const lastWord = val.split(/\s+/).pop() || '';
+      if (lastWord.startsWith('@')) {
+        showMentionPopup = true;
+        mentionSearch = lastWord.slice(1).toLowerCase();
+      } else {
+        showMentionPopup = false;
+      }
+    }
+  }
+
+  function insertTag(agentName: string) {
+    const tag = `@${agentName} `;
+    const words = chatDraft.split(/\s+/);
+    if (words.length > 0 && words[words.length - 1].startsWith('@')) {
+      words.pop();
+      chatDraft = [...words, tag].join(' ').trim() + ' ';
+    } else {
+      chatDraft = chatDraft ? `${chatDraft.trim()} ${tag}` : tag;
+    }
+    showMentionPopup = false;
+    chatInputEl?.focus();
+  }
+
+  function insertSlashCmd(cmdStr: string) {
+    chatDraft = cmdStr + ' ';
+    showSlashPopup = false;
+    chatInputEl?.focus();
+  }
+
   async function sendChat() {
     const text = chatDraft.trim();
     if (!text || !selected) return;
+    showMentionPopup = false;
+    showSlashPopup = false;
+
+    // Handle Slash commands
+    if (text.startsWith('/')) {
+      const parts = text.split(' ');
+      const command = parts[0].toLowerCase();
+      chatDraft = '';
+      if (command === '/exit') {
+        confirmFinish = true;
+        return;
+      } else if (command === '/check' || command === '/adjudicate') {
+        await forceAdjudicate();
+        return;
+      } else if (command === '/debate') {
+        await openDebate();
+        return;
+      } else if (command === '/clear') {
+        chat = [];
+        return;
+      } else if (command === '/help') {
+        chat = [...chat, { author: 'Hệ thống', text: 'Các lệnh Slash:\n/exit - Chốt phiên\n/check - Chạy kiểm chứng ngay\n/debate - Mở vòng thảo luận\n/clear - Xóa màn hình chat\n/help - Mở hướng dẫn', at: new Date().toISOString() }];
+        return;
+      }
+    }
+
     chatDraft = '';
     try {
       await (AppBindings as any).SayInClaimSession(selected, arbiterName, text);
@@ -188,9 +279,50 @@
       return;
     }
     try {
-      chat = (await (AppBindings as any).GetClaimChat(selected)) || [];
+      const newChat = (await (AppBindings as any).GetClaimChat(selected)) || [];
+      if (newChat.length > previousChatLength) {
+        if (autoArbiterEnabled && previousChatLength > 0) {
+          triggerAIArbiter(newChat);
+        }
+        previousChatLength = newChat.length;
+      }
+      chat = newChat;
     } catch {
       chat = [];
+    }
+  }
+
+  async function triggerAIArbiter(newChat: typeof chat) {
+    if (!autoArbiterEnabled || isArbiterThinking || !selected) return;
+    const lastMsg = newChat[newChat.length - 1];
+    if (!lastMsg || lastMsg.author === arbiterName || lastMsg.author === 'Hệ thống') return;
+
+    isArbiterThinking = true;
+    try {
+      const recentChat = newChat.slice(-6).map(m => `${m.author}: ${m.text}`).join('\n');
+      const agentListStr = activeAgents.join(', ');
+      const prompt = `Bạn là Trọng tài AI (Arbiter) điều hành phiên phân xử Agent Center.
+Danh sách các Agent tham gia: ${agentListStr}
+Chủ đề phiên: ${subject || 'Kiểm tra mã nguồn'}
+
+Lịch sử thảo luận gần đây:
+${recentChat}
+
+Nhiệm vụ của Trọng tài AI:
+1. Đọc tin nhắn mới của ${lastMsg.author}.
+2. Hãy tag trực tiếp tên agent (ví dụ: @${lastMsg.author}) nếu cần hỏi thêm hoặc yêu cầu đưa ra bằng chứng file:dòng / kiểm chứng falsifier.
+3. Trả lời ngắn gọn 1-3 câu, khách quan và chuyên nghiệp.`;
+
+      const res = await (AppBindings as any).RunQuickCLI(prompt, 'claude-sonnet-4-5', 'Bạn là Trọng tài AI trong phiên phân xử.', []);
+      if (res && res.success && res.output) {
+        const reply = res.output.trim();
+        await (AppBindings as any).SayInClaimSession(selected, arbiterName, reply);
+        await refreshChat();
+      }
+    } catch (e) {
+      console.warn('AI Arbiter error:', e);
+    } finally {
+      isArbiterThinking = false;
     }
   }
 
@@ -243,6 +375,7 @@
       remarks = s.remarks || [];
       round = s.round || 0;
       maxRound = s.maxRound || 2;
+      participants = s.participants || [];
       await refreshChat();
     } catch (e: any) {
       console.warn('GetClaimSession:', e);
@@ -856,29 +989,65 @@
        the problem is upstream, checking now", i.e. most of a real review. Chat is
        never evidence: only a falsifier settles anything. -->
   {#if selected}
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
-      <div class="flex items-center justify-between gap-3">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 relative">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <h4 class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
           <span class="material-symbols-outlined text-base text-on-surface-variant">forum</span>
           Thảo luận trong phiên
         </h4>
-        <!-- Nhãn hiện rõ: trước đây chỉ có tooltip nên ô này trông như một hộp
-             chữ không rõ để làm gì. -->
-        <label class="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant whitespace-nowrap">
-          Tên của bạn
-          <input
-            bind:value={arbiterName}
-            class="w-32 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface outline-none focus:border-primary"
-          />
-        </label>
+
+        <div class="flex items-center gap-4">
+          <!-- AI Orchestrator Arbiter Checkbox -->
+          <label class="flex items-center gap-1.5 text-xs font-medium text-primary cursor-pointer select-none">
+            <input
+              type="checkbox"
+              bind:checked={autoArbiterEnabled}
+              class="accent-primary cursor-pointer"
+            />
+            🤖 Tự động làm Trọng tài AI
+          </label>
+
+          {#if isArbiterThinking}
+            <span class="text-[11px] text-amber-400 font-mono animate-pulse flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> AI Trọng tài đang suy nghĩ...
+            </span>
+          {/if}
+
+          <label class="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant whitespace-nowrap">
+            Tên đại diện
+            <input
+              bind:value={arbiterName}
+              class="w-28 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface outline-none focus:border-primary"
+            />
+          </label>
+        </div>
       </div>
+
+      <!-- Active Agents Mention Bar -->
+      {#if activeAgents.length > 0}
+        <div class="flex items-center flex-wrap gap-1.5 bg-surface-container-low border border-outline-variant/60 rounded-lg p-2 text-xs">
+          <span class="text-[11px] text-on-surface-variant font-medium flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">alternate_email</span> Tag Agent:
+          </span>
+          {#each activeAgents as agentName}
+            <button
+              type="button"
+              on:click={() => insertTag(agentName)}
+              class="bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 px-2 py-0.5 rounded text-[11px] font-mono cursor-pointer transition-colors"
+              title="Nhấn để tag @{agentName} vào ô nhắn"
+            >
+              @{agentName}
+            </button>
+          {/each}
+        </div>
+      {/if}
 
       <div class="max-h-56 overflow-y-auto space-y-2 pr-1">
         {#each chat as m}
           <div class="flex gap-2 text-xs">
             <span class="font-semibold text-primary whitespace-nowrap">{m.author}</span>
             <span class="flex-1 text-on-surface whitespace-pre-wrap break-words">{m.text}</span>
-            <span class="text-outline font-mono whitespace-nowrap">
+            <span class="text-outline font-mono whitespace-nowrap text-[10px]">
               {m.at ? new Date(m.at).toLocaleTimeString('vi-VN') : ''}
             </span>
           </div>
@@ -892,12 +1061,55 @@
         {/each}
       </div>
 
-      <div class="flex gap-2">
+      <!-- Chat Input Area with Popups -->
+      <div class="relative flex gap-2">
+        <!-- Mention (@) Autocomplete Popup -->
+        {#if showMentionPopup}
+          {@const filtered = activeAgents.filter(a => a.toLowerCase().includes(mentionSearch))}
+          {#if filtered.length > 0}
+            <div class="absolute bottom-full left-0 mb-1 w-64 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs max-h-40 overflow-y-auto">
+              <div class="px-3 py-1 text-[10px] font-semibold text-outline uppercase">Chọn Agent để tag</div>
+              {#each filtered as a}
+                <button
+                  type="button"
+                  on:click={() => insertTag(a)}
+                  class="w-full text-left px-3 py-1.5 hover:bg-surface-container-high text-on-surface flex items-center gap-2 cursor-pointer"
+                >
+                  <span class="material-symbols-outlined text-xs text-primary">account_circle</span>
+                  <span class="font-mono">{a}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+
+        <!-- Slash (/) Commands Autocomplete Popup -->
+        {#if showSlashPopup}
+          {@const filteredCmds = SLASH_COMMANDS.filter(c => c.cmd.includes(slashSearch) || c.label.toLowerCase().includes(slashSearch))}
+          {#if filteredCmds.length > 0}
+            <div class="absolute bottom-full left-0 mb-1 w-80 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs max-h-48 overflow-y-auto">
+              <div class="px-3 py-1 text-[10px] font-semibold text-outline uppercase">Lệnh Slash</div>
+              {#each filteredCmds as c}
+                <button
+                  type="button"
+                  on:click={() => insertSlashCmd(c.cmd)}
+                  class="w-full text-left px-3 py-1.5 hover:bg-surface-container-high flex flex-col cursor-pointer border-b border-outline-variant/30 last:border-none"
+                >
+                  <span class="font-mono font-semibold text-primary">{c.cmd} <span class="font-sans font-normal text-on-surface text-[11px]">— {c.label}</span></span>
+                  <span class="text-[10px] text-on-surface-variant">{c.desc}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+
         <input
+          bind:this={chatInputEl}
           bind:value={chatDraft}
-          on:keydown={(e) => { if (e.key === 'Enter') sendChat(); }}
-          placeholder="Nhắn cho các agent trong phiên…"
-          class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+          on:keyup={handleChatInputKeyup}
+          on:keydown={(e) => { if (e.key === 'Enter' && !showMentionPopup && !showSlashPopup) sendChat(); }}
+          placeholder="Nhắn cho các agent (gõ @ để tag agent, / để chọn lệnh)..."
+          class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface outline-none focus:border-primary font-mono"
         />
         <button
           type="button"
@@ -908,10 +1120,11 @@
           Gửi
         </button>
       </div>
-      <p class="text-xs text-on-surface-variant">
-        Thảo luận không phải bằng chứng — chỉ falsifier mới kết luận được một claim.
-        Agent được dặn chỉ trả lời khi bị gọi tên, bị hỏi, hoặc bị phản bác — muốn agent
-        nào đáp thì nhắc thẳng tên nó trong tin nhắn.
+
+      <p class="text-xs text-on-surface-variant flex items-center justify-between">
+        <span>
+          Thảo luận không phải bằng chứng — gõ <code class="bg-surface-container px-1 py-0.5 rounded">/help</code> để xem các lệnh Slash hoặc gõ <code class="bg-surface-container px-1 py-0.5 rounded">@</code> để tag agent.
+        </span>
       </p>
     </div>
   {/if}

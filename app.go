@@ -2527,16 +2527,17 @@ func (a *App) GetClaimSession(sessionID string) map[string]interface{} {
 	// Everything visible: the UI is the operator's view, not an agent's, so the
 	// blind-collect restriction does not apply to it.
 	return map[string]interface{}{
-		"found":    true,
-		"id":       session.ID,
-		"subject":  session.Subject,
-		"phase":    string(session.Phase()),
-		"claims":   session.VisibleTo(""),
-		"warnings": session.Warnings(),
-		"round":    session.DebateRound(),
-		"maxRound": claims.MaxDebateRounds,
-		"opinions": session.OpenOpinions(),
-		"remarks":  session.Remarks(),
+		"found":        true,
+		"id":           session.ID,
+		"subject":      session.Subject,
+		"phase":        string(session.Phase()),
+		"claims":       session.VisibleTo(""),
+		"warnings":     session.Warnings(),
+		"round":        session.DebateRound(),
+		"maxRound":     claims.MaxDebateRounds,
+		"opinions":     session.OpenOpinions(),
+		"remarks":      session.Remarks(),
+		"participants": session.ParticipantNames(),
 	}
 }
 

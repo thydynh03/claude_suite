@@ -165,6 +165,18 @@ func (s *Session) ParticipantCount() int {
 	return len(s.participants)
 }
 
+// ParticipantNames returns a slice of all participant author names.
+func (s *Session) ParticipantNames() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var names []string
+	for author := range s.participants {
+		names = append(names, author)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // Homogeneous reports whether every participant runs the same provider.
 func (s *Session) Homogeneous() bool {
 	s.mu.Lock()
