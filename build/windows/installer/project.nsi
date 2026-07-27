@@ -57,6 +57,28 @@ ManifestDPIAware true
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
 
+# Reopen the app when the update is done.
+#
+# The in-app updater exits the running app and hands over to this installer, so
+# that it can replace the files the app is holding open. Without this the whole
+# update ends with no app on screen and nothing said about it — the user is left
+# to work out for themselves that the thing they were using is now in the Start
+# menu, one version newer.
+#
+# Launched through explorer.exe rather than MUI's default Exec. This installer
+# is RequestExecutionLevel admin, so Exec would start the app with the
+# installer's elevated token, and that is not a cosmetic difference: sub-agents
+# run with --dangerously-skip-permissions, so an elevated app means every agent
+# it spawns is elevated too. An elevated window also silently refuses
+# drag-and-drop from Explorer (UIPI). explorer.exe already runs as the logged-in
+# user, so the child it starts is back at medium integrity.
+#
+# A silent install (/S — the release workflow uses it to verify the payload)
+# shows no pages at all, so nothing is launched on CI.
+!define MUI_FINISHPAGE_RUN
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchAppAsUser
+!define MUI_FINISHPAGE_RUN_TEXT "Mở Claude Suite"
+
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
@@ -66,6 +88,12 @@ ManifestDPIAware true
 !insertmacro MUI_UNPAGE_INSTFILES # Uinstalling page
 
 !insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
+
+# See MUI_FINISHPAGE_RUN above for why this goes through explorer.exe instead of
+# starting the executable directly.
+Function LaunchAppAsUser
+    Exec '"$WINDIR\explorer.exe" "$INSTDIR\${PRODUCT_EXECUTABLE}"'
+FunctionEnd
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
