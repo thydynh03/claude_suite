@@ -22,6 +22,10 @@
   let cmdOutput = '';
   let busy = false;
   let aiBusy = false;
+  // The git-command box has its own flag: sharing `busy` with the commit
+  // button made the Run button spin through an entire commit, reporting a
+  // command that was never run.
+  let cmdBusy = false;
 
   const statusLabel: Record<string, string> = {
     'M': 'Modified', 'A': 'Added', 'D': 'Deleted', 'R': 'Renamed',
@@ -97,13 +101,13 @@
   async function runCmd() {
     const parts = cmdInput.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return;
-    busy = true;
+    cmdBusy = true;
     try {
       cmdOutput = await AppBindings.RunGitCommand(parts);
       await refreshAll();
     } catch (e: any) {
       cmdOutput = String(e?.message || e);
-    } finally { busy = false; }
+    } finally { cmdBusy = false; }
   }
 </script>
 
@@ -191,10 +195,10 @@
           <input bind:value={cmdInput} on:keydown={(e) => { if (e.key === 'Enter') runCmd(); }}
             placeholder="status  |  log --oneline -5  |  branch -a"
             class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-1.5 text-xs font-mono text-on-surface outline-none focus:border-primary" />
-          <button type="button" on:click={runCmd} disabled={busy}
+          <button type="button" on:click={runCmd} disabled={busy || cmdBusy}
             class="border border-outline-variant text-on-surface-variant px-3 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
-            {#if busy}
-              <span class="material-symbols-outlined text-sm animate-spin">sync</span>
+            {#if cmdBusy}
+              <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
             {/if}
             Chạy
           </button>

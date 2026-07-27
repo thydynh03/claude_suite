@@ -162,7 +162,15 @@
               tabindex="0"
               class="group flex items-center justify-between gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors border {selectedRole === role ? 'bg-secondary-container border-transparent text-on-secondary-container' : 'border-transparent hover:bg-surface-container-high text-on-surface'}"
               on:click={() => selectRole(role)}
-              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRole(role); } }}
+              on:keydown={(e) => {
+                // Only the row itself. The delete button lives inside this
+                // element, so its Enter keydown bubbled up here first and
+                // selectRole cleared confirmingDelete before the click even
+                // fired — arming and disarming forever, with the second step
+                // unreachable from the keyboard.
+                if (e.target !== e.currentTarget) return;
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRole(role); }
+              }}
             >
               <div class="flex items-center gap-2 overflow-hidden">
                 <span class="material-symbols-outlined text-sm flex-shrink-0 text-on-surface-variant">description</span>

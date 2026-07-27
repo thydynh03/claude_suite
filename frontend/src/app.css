@@ -1,4 +1,10 @@
 @import "tailwindcss";
+/* Into the base layer, on purpose. This stylesheet sets `font-size: 24px` on
+   .material-symbols-outlined; unlayered, that declaration outranks every
+   Tailwind utility (utilities are layered, and unlayered wins), so `text-sm`
+   on an icon did nothing at all. Tailwind's import above establishes the layer
+   order, so joining `base` here puts it below utilities where it belongs. */
+@import "material-symbols/outlined.css" layer(base);
 
 @theme {
   --color-primary: var(--primary);

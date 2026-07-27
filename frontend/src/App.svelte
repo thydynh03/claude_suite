@@ -271,19 +271,29 @@
       <p class="font-mono text-xs text-on-surface break-words">{approvalTask}</p>
     </div>
 
-    <div class="flex flex-wrap justify-end gap-2">
+    <!-- "Luôn cho phép" is not a third way of answering this task: it turns
+         off the confirmation prompt for every future task and cannot be undone
+         from here. It sits apart from the answer pair and says what it costs,
+         because styled like its neighbours it was one mis-click away. -->
+    <div class="flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        class="mr-auto px-2 py-1 rounded-lg text-[11px] text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1.5"
+        title="Tắt hẳn bước xác nhận cho mọi task sau này (bật lại trong Cài đặt)"
+        on:click={resolveApprovalAlways}>
+        <span class="material-symbols-outlined text-sm">all_inclusive</span>
+        Cho phép và không hỏi lại nữa
+      </button>
+      <!-- Escape resolves this dialog as a rejection, which is a decision, not
+           a dismissal — so the dialog says so rather than letting a reflex key
+           silently kill a task. -->
       <button
         type="button"
         bind:this={approvalRejectEl}
-        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1.5"
         on:click={() => resolveApproval(false)}>
         Từ chối
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1.5"
-        on:click={resolveApprovalAlways}>
-        <span class="material-symbols-outlined text-sm">all_inclusive</span> Luôn cho phép
+        <kbd class="text-[10px] font-mono text-outline">Esc</kbd>
       </button>
       <button
         type="button"

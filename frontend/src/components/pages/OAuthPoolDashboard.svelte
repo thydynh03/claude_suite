@@ -351,6 +351,10 @@
   $: unknownTierCount = accounts.filter(a => !a.tier || a.tier === 'UNKNOWN').length;
 </script>
 
+<!-- Escape cancels the confirm dialog, as confirm() always did. Outside the
+     {#if} because Svelte does not allow this tag inside a block. -->
+<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && confirmDelete) confirmDelete = null; }} />
+
 <div class="space-y-4">
   <!-- Top Control Banner -->
   <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 space-y-4">
@@ -790,8 +794,14 @@
 <!-- Hỏi lại trước khi xoá, bằng modal của app thay cho confirm() của webview. -->
 {#if confirmDelete}
   {@const cd = confirmDelete}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div class="w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <button
+      type="button"
+      class="absolute inset-0 cursor-default"
+      aria-label="Đóng hộp thoại"
+      on:click={() => (confirmDelete = null)}
+    ></button>
+    <div class="relative w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">
       <h4 class="text-sm font-semibold text-on-surface">{cd.title}</h4>
       <p class="text-xs text-on-surface-variant">{cd.body}</p>
       <div class="flex justify-end gap-2 pt-1">

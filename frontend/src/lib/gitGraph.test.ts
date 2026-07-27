@@ -71,6 +71,20 @@ describe('laneColor', () => {
   it('is stable per lane and wraps around', () => {
     expect(laneColor(0)).toBe(laneColor(0));
     expect(laneColor(0)).not.toBe(laneColor(1));
-    expect(laneColor(0)).toBe(laneColor(7));
+    // Wraps at the palette length rather than at a number written here twice.
+    const period = (() => {
+      for (let n = 1; n < 32; n++) if (laneColor(n) === laneColor(0)) return n;
+      return -1;
+    })();
+    expect(period).toBeGreaterThan(1);
+    expect(laneColor(period * 2)).toBe(laneColor(0));
+  });
+
+  // The panel is drawn entirely from the theme tokens; a hard-coded hue here
+  // was the one saturated thing left on it, and it ignored light/dark.
+  it('draws lanes from theme variables, not a fixed palette', () => {
+    for (let lane = 0; lane < 8; lane++) {
+      expect(laneColor(lane)).toMatch(/^var\(--[a-z-]+\)$/);
+    }
   });
 });

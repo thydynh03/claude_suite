@@ -340,6 +340,11 @@
   $: if (selected) refreshSession();
 </script>
 
+<!-- Escape cancels the confirm dialog, as the confirm() it replaced always
+     did. It lives here rather than inside the {#if}, where Svelte does not
+     allow it. -->
+<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && confirmFinish) confirmFinish = false; }} />
+
 <div class="space-y-5 font-sans">
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div class="space-y-0.5">
@@ -795,8 +800,14 @@
 <!-- Hỏi lại trước khi chốt: chốt xong là không mở lại phiên được. Dùng modal
      trong app thay cho confirm() của webview. -->
 {#if confirmFinish}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div class="w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <button
+      type="button"
+      class="absolute inset-0 cursor-default"
+      aria-label="Đóng hộp thoại"
+      on:click={() => (confirmFinish = false)}
+    ></button>
+    <div class="relative w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">
       <h4 class="text-sm font-semibold text-on-surface">Chốt phiên này?</h4>
       <p class="text-xs text-on-surface-variant">
         Phiên sẽ chuyển sang trạng thái đã chốt: kết luận của các claim được ghi lại và

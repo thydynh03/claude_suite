@@ -319,7 +319,7 @@
     <!-- Thinking Pill -->
     {#if $isThinking}
       <div class="flex items-center gap-2 bg-surface-container px-3 py-1 rounded-full border border-outline-variant text-xs text-on-surface-variant">
-        <span class="material-symbols-outlined text-sm animate-pulse">psychology</span>
+        <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
         <span class="text-[11px]">Đang suy nghĩ…</span>
       </div>
     {/if}
@@ -387,7 +387,7 @@
           <span class="material-symbols-outlined text-sm text-on-surface-variant">call_split</span>
           Branch hiện tại: <strong class="text-on-surface font-mono text-sm ml-1">{gitBranchInfo?.current || 'master'}</strong>
         </span>
-        <span class="text-[10px] bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded font-mono">
+        <span class="text-[10px] bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-lg font-mono">
           {gitStatus?.changed_files || 0} file đã sửa
         </span>
       </div>
@@ -437,7 +437,7 @@
         <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-lg p-3 flex items-center justify-between text-xs hover:bg-surface-container-low transition-colors">
           <div class="space-y-0.5 max-w-[380px]">
             <div class="flex items-center gap-2">
-              <span class="font-mono text-on-surface-variant text-[11px] bg-surface-container-high px-1.5 py-0.5 rounded">{c.hash}</span>
+              <span class="font-mono text-on-surface-variant text-[11px] bg-surface-container-high px-1.5 py-0.5 rounded-lg">{c.hash}</span>
               <span class="text-on-surface truncate">{c.message}</span>
             </div>
             <p class="text-[10px] text-on-surface-variant">{c.author} · {c.date}</p>

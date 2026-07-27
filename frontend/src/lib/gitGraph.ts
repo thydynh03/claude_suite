@@ -98,16 +98,22 @@ export function layoutCommits(commits: GraphCommit[]): LaidOutCommit[] {
   return out;
 }
 
-/** Stable colour per lane, so a branch keeps its colour down the page. */
+/**
+ * Stable colour per lane, so a branch keeps its colour down the page.
+ *
+ * Theme variables, not a seven-hue rainbow: everything else in the Git panel
+ * is drawn from the token palette, and a saturated commit graph was the one
+ * loud thing left on an otherwise flat surface. The current lane keeps the
+ * accent; the rest are neutrals that still differ enough to follow a line.
+ * SVG stroke/fill accept var(), and lanes wrap past the end of the list.
+ */
 export function laneColor(lane: number): string {
   const COLORS = [
-    '#3b82f6', // blue
-    '#22c55e', // green
-    '#f59e0b', // amber
-    '#a855f7', // purple
-    '#ef4444', // red
-    '#14b8a6', // teal
-    '#ec4899', // pink
+    'var(--primary)',
+    'var(--outline)',
+    'var(--secondary)',
+    'var(--outline-variant)',
+    'var(--tertiary)',
   ];
   return COLORS[lane % COLORS.length];
 }

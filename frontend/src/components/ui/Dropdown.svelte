@@ -117,9 +117,12 @@
   </button>
 
   {#if isOpen}
+    <!-- shadow-lg stays: the no-shadow rule is for cards, and this list floats
+         over them. Stripped, it carried the same surface and border as the
+         Kanban card underneath and read as part of it. -->
     <div
       role="listbox"
-      class="absolute z-50 w-full mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden py-1 max-h-60 overflow-y-auto"
+      class="absolute z-50 w-full mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg overflow-hidden py-1 max-h-60 overflow-y-auto"
     >
       {#each options as option, i}
         <button

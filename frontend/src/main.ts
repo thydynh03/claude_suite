@@ -8,7 +8,10 @@ import '@fontsource/geist-sans/600.css'
 import '@fontsource/geist-sans/700.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
-import 'material-symbols/outlined.css'
+// material-symbols is imported from app.css instead, into the base layer:
+// imported here it lands unlayered, and an unlayered `font-size: 24px` beats
+// every layered Tailwind utility, so every text-sm/text-base icon in the app
+// rendered at 24px no matter what class it carried.
 import './app.css'
 import App from './App.svelte'
 

@@ -282,12 +282,12 @@
 
     try {
       await AppBindings.UpdateTaskStatus(taskID, newStatus);
-      addLog(`Task status updated to ${newStatus}`, 'INFO');
+      addLog(`Đã đổi trạng thái task sang ${newStatus}.`, 'INFO');
     } catch (e) {
       // The card was moved optimistically, so a failure here leaves the board
       // showing a status the database does not have. Say so and re-read.
       addToast(`Không đổi được trạng thái task: ${e}`, 'ERROR');
-      addLog(`UpdateTaskStatus failed: ${e}`, 'ERROR');
+      addLog(`Không đổi được trạng thái task: ${e}`, 'ERROR');
     }
     if (onRefresh) onRefresh();
   }
@@ -399,7 +399,7 @@
       addToast(ok ? 'Đã gửi yêu cầu dừng task.' : 'Task này không đang chạy.', ok ? 'SUCCESS' : 'INFO');
     } catch (e) {
       addToast(`Không dừng được task: ${e}`, 'ERROR');
-      addLog(`StopTask failed: ${e}`, 'ERROR');
+      addLog(`Không dừng được task: ${e}`, 'ERROR');
     }
   }
 
@@ -411,7 +411,7 @@
       if (onRefresh) await onRefresh();
     } catch (e) {
       addToast(`Retry thất bại: ${e}`, 'ERROR');
-      addLog(`RetryTask failed: ${e}`, 'ERROR');
+      addLog(`Không chạy lại được task: ${e}`, 'ERROR');
     }
   }
 

@@ -148,8 +148,12 @@
       }
       const loaded = Array.isArray(res) ? res : [];
       tasksStore.set(loaded);
-      addLog(`Đã phân rã thành công ${loaded.length} tasks bằng ${fallbackAgentName}!`, 'SUCCESS');
-      addToast(`Đã phân rã thành công ${loaded.length} tasks bằng ${fallbackAgentName}!`, 'SUCCESS');
+      // Same ending as the main path: land on the board, say it the same way.
+      // This branch used to leave the user on the plan tab wondering where the
+      // tasks went, and phrased the same event differently.
+      subTab = 'kanban';
+      addLog(`Đã tạo ${loaded.length} task bằng ${fallbackAgentName}.`, 'SUCCESS');
+      addToast(`Đã tạo ${loaded.length} task bằng ${fallbackAgentName}.`, 'SUCCESS');
       planModelChoice = `${fallbackProvider}:${fallbackModel}`;
     } catch (err2) {
       addLog(`Lỗi phân rã bằng ${fallbackAgentName}: ${err2}`, 'ERROR');
@@ -216,7 +220,7 @@
       } else {
         addToast('Backlog trống — chưa có task nào để giao.', 'INFO');
       }
-      addLog(`Execute Plan: ready=${ready}, blocked=${blocked}, dead=${dead}`, 'INFO');
+      addLog(`Chạy kế hoạch: ${ready} sẵn sàng, ${blocked} bị chặn, ${dead} hỏng.`, 'INFO');
     } catch (e) {
       addLog(`Không khởi động được orchestrator: ${e}`, 'ERROR');
       addToast(`Không khởi động được orchestrator: ${e}`, 'ERROR');
