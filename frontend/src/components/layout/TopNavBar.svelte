@@ -1,6 +1,6 @@
 <script lang="ts">
   import { theme, toggleTheme } from '../../lib/stores/theme';
-  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog, addToast } from '../../lib/stores/appState';
+  import { activeTab, workspaceFolder, orchestratorRunning, isThinking, addLog, addToast, commandPaletteOpen } from '../../lib/stores/appState';
   import { currentLang } from '../../lib/stores/i18n';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
@@ -65,7 +65,9 @@
   }
 
   function handleCommandPalette() {
-    activeTab.set('settings');
+    // This used to open the Settings tab, under a label that says "Command
+    // Palette" and a shortcut nothing was bound to.
+    commandPaletteOpen.set(true);
     closeMenus();
   }
 
@@ -198,7 +200,7 @@
 <header class="flex justify-between items-center px-6 w-full fixed top-0 z-50 bg-surface border-b border-outline-variant h-[60px]">
   <div class="flex items-center gap-6">
     <div class="flex items-center gap-2">
-      <span class="text-lg font-bold text-on-surface">Claude Suite</span>
+      <span class="text-sm font-semibold text-on-surface">Claude Suite</span>
     </div>
 
     <nav class="hidden md:flex items-center gap-1 relative select-none" on:mouseleave={closeMenus}>
@@ -207,28 +209,33 @@
         <button
           type="button"
           on:click={() => toggleMenu('file')}
-          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-md flex items-center gap-1 {openMenu === 'file' ? 'bg-surface-container-highest text-on-surface font-bold' : ''}"
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1 {openMenu ==='file' ? 'bg-surface-container-highest text-on-surface' : ''}"
         >
           File
         </button>
         {#if openMenu === 'file'}
-          <div class="absolute left-0 top-full mt-1 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
+          <div class="absolute left-0 top-full mt-1 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
             <div class="py-1">
+              <!-- Shortcut hints name only keys that are actually bound:
+                   Ctrl+K in CommandPalette, Ctrl+1..0 in App.svelte. The menu
+                   used to advertise Ctrl+Shift+O and Ctrl+Shift+P, neither of
+                   which existed anywhere. -->
               <button type="button" on:click={handleNewConversation} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">chat</span> New Conversation</span>
-                <span class="text-[10px] text-outline font-mono">Ctrl+Shift+O</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">chat</span> Cockpit</span>
+                <span class="text-[10px] text-outline font-mono">Ctrl+1</span>
               </button>
               <button type="button" on:click={handleCreateProject} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">create_new_folder</span> Create Project</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">view_kanban</span> Task Board</span>
+                <span class="text-[10px] text-outline font-mono">Ctrl+2</span>
               </button>
               <button type="button" on:click={handleCommandPalette} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center group">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">terminal</span> Command Palette</span>
-                <span class="text-[10px] text-outline font-mono">Ctrl+Shift+P</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">terminal</span> Bảng lệnh</span>
+                <span class="text-[10px] text-outline font-mono">Ctrl+K</span>
               </button>
             </div>
             <div class="py-1">
               <button type="button" on:click={handleSelectFolder} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">folder_open</span> Open Workspace</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">folder_open</span> Mở workspace</span>
               </button>
             </div>
           </div>
@@ -240,23 +247,23 @@
         <button
           type="button"
           on:click={() => toggleMenu('view')}
-          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-md flex items-center gap-1 {openMenu === 'view' ? 'bg-surface-container-highest text-on-surface font-bold' : ''}"
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1 {openMenu ==='view' ? 'bg-surface-container-highest text-on-surface' : ''}"
         >
           View
         </button>
         {#if openMenu === 'view'}
-          <div class="absolute left-0 top-full mt-1 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface">
-            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_in</span> Zoom In</span>
-              <span class="text-[10px] text-outline font-mono">Ctrl++</span>
+          <div class="absolute left-0 top-full mt-1 w-48 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg py-1 z-50 text-xs font-sans text-on-surface">
+            <!-- No shortcut hints here: none of these are bound, and Ctrl+0
+                 is taken by the Settings tab shortcut in App.svelte, so the
+                 old label contradicted what the key actually does. -->
+            <button type="button" on:click={handleZoomIn} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">zoom_in</span> Phóng to
             </button>
-            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">zoom_out</span> Zoom Out</span>
-              <span class="text-[10px] text-outline font-mono">Ctrl+-</span>
+            <button type="button" on:click={handleZoomOut} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">zoom_out</span> Thu nhỏ
             </button>
-            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">restart_alt</span> Reset Zoom</span>
-              <span class="text-[10px] text-outline font-mono">Ctrl+0</span>
+            <button type="button" on:click={handleResetZoom} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">restart_alt</span> Cỡ mặc định
             </button>
           </div>
         {/if}
@@ -267,23 +274,23 @@
         <button
           type="button"
           on:click={() => toggleMenu('window')}
-          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-md flex items-center gap-1 {openMenu === 'window' ? 'bg-surface-container-highest text-on-surface font-bold' : ''}"
+          class="text-on-surface-variant text-xs font-semibold hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1 {openMenu ==='window' ? 'bg-surface-container-highest text-on-surface' : ''}"
         >
           Window
         </button>
         {#if openMenu === 'window'}
-          <div class="absolute left-0 top-full mt-1 w-44 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
+          <div class="absolute left-0 top-full mt-1 w-44 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg py-1 z-50 text-xs font-sans text-on-surface divide-y divide-outline-variant">
             <div class="py-1">
               <button type="button" on:click={handleMinimize} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">minimize</span> Minimize</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">minimize</span> Thu nhỏ cửa sổ</span>
               </button>
               <button type="button" on:click={handleMaximize} class="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex justify-between items-center">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">crop_square</span> Maximize</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">crop_square</span> Phóng cửa sổ</span>
               </button>
             </div>
             <div class="py-1">
               <button type="button" on:click={handleCloseWindow} class="w-full text-left px-4 py-2 hover:bg-error/10 text-error transition-colors flex justify-between items-center">
-                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Close</span>
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">close</span> Đóng app</span>
               </button>
             </div>
           </div>
@@ -369,7 +376,7 @@
         Git Branch Manager & Commit Log
       </h3>
       <button type="button" on:click={() => showGitBranchModal = false} class="text-on-surface-variant hover:text-on-surface">
-        <span class="material-symbols-outlined text-xl">close</span>
+        <span class="material-symbols-outlined text-base">close</span>
       </button>
     </div>
 
@@ -462,7 +469,7 @@
         Git Commit & Code Review
       </h3>
       <button type="button" on:click={() => showGitCommitModal = false} class="text-on-surface-variant hover:text-on-surface">
-        <span class="material-symbols-outlined text-xl">close</span>
+        <span class="material-symbols-outlined text-base">close</span>
       </button>
     </div>
 

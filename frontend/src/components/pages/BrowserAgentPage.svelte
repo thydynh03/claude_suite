@@ -55,7 +55,7 @@
     submittingAsk = true;
     try {
       await (AppBindings as any).ResolveBrowserAsk(pendingAsk.id, answer);
-      liveLogs = [...liveLogs, `[${new Date().toLocaleTimeString()}] 💬 Bạn đã trả lời: "${answer}"`];
+      liveLogs = [...liveLogs, `[${new Date().toLocaleTimeString()}] Bạn đã trả lời: "${answer}"`];
       pendingAsk = null;
       otherAnswer = '';
     } catch (e: any) {
@@ -136,17 +136,17 @@
   async function handleOpenAgentChrome() {
     isOpeningChrome = true;
     chromeAgentReady = false;
-    liveLogs = [`[${new Date().toLocaleTimeString()}] 🌐 Đang mở cửa sổ Chrome Agent...`];
+    liveLogs = [`[${new Date().toLocaleTimeString()}] Đang mở cửa sổ Chrome Agent…`];
     try {
       const res = await (AppBindings as any).OpenAgentChromeWindow(targetUrl.trim() || 'https://github.com');
       if (res?.logs?.length) liveLogs = [...liveLogs, ...res.logs.map((l: string) => `[${new Date().toLocaleTimeString()}] ${l}`)];
       if (res?.success) {
         chromeAgentReady = true;
-        addLog('✅ Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy ĐÓNG cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
-        addToast('✅ Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy ĐÓNG cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
+        addLog('Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy đóng cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
+        addToast('Chrome Agent mở ở chế độ đăng nhập (không bật CDP nên Google không chặn). Đăng nhập xong hãy đóng cửa sổ đó rồi bấm "Kích hoạt Agent".', 'SUCCESS');
       } else {
-        addLog(`❌ Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
-        addToast(`❌ Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
+        addLog(`Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
+        addToast(`Mở Chrome Agent thất bại: ${res?.error}`, 'ERROR');
       }
     } catch (e: any) {
       addLog(`Lỗi OpenAgentChromeWindow: ${e?.message || e}`, 'ERROR');
@@ -183,7 +183,7 @@
     result = null;
     pendingAsk = null;
     otherAnswer = '';
-    liveLogs = [`[${new Date().toLocaleTimeString()}] 🚀 Kích hoạt Browser Agent truy cập ${urlToRun}...`];
+    liveLogs = [`[${new Date().toLocaleTimeString()}] Kích hoạt Browser Agent truy cập ${urlToRun}…`];
     addLog(`Kích hoạt Native Chrome CDP Browser Agent (Model: ${selectedModel}, Profile: ${usePersistentProfile ? "Agent (bền vững)" : "Tạm thời"}, MaxSteps: ${maxSteps}) truy cập ${urlToRun}...`, 'INFO');
 
     try {
@@ -217,42 +217,27 @@
 
 <div class="space-y-6 font-sans">
   <!-- Header -->
+  <!-- Không còn nút chạy nhanh localhost:5173 / Hacker News: đó là lối tắt của
+       người phát triển, vô nghĩa với người dùng thật. -->
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div class="space-y-0.5">
       <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-xl text-primary">language</span>
-        <h1 class="text-lg font-bold text-on-surface">Browser Agent</h1>
+        <span class="material-symbols-outlined text-lg text-primary">language</span>
+        <h1 class="text-lg font-semibold text-on-surface">Browser Agent</h1>
       </div>
       <p class="text-xs text-on-surface-variant">Giao việc cho AI điều khiển Chrome: mở trang, đọc nội dung, điền form, bấm nút.</p>
-    </div>
-
-    <div class="flex flex-wrap gap-2">
-      <button
-        type="button"
-        on:click={() => handleRunBrowserAgent('http://localhost:5173')}
-        disabled={isRunning}
-        class="text-on-surface-variant border border-outline-variant px-2.5 py-1 rounded-lg text-[11px] font-semibold hover:bg-surface-container-high disabled:opacity-40 cursor-pointer transition-all">
-        localhost:5173
-      </button>
-      <button
-        type="button"
-        on:click={() => handleRunBrowserAgent('https://news.ycombinator.com')}
-        disabled={isRunning}
-        class="text-on-surface-variant border border-outline-variant px-2.5 py-1 rounded-lg text-[11px] font-semibold hover:bg-surface-container-high disabled:opacity-40 cursor-pointer transition-all">
-        Hacker News
-      </button>
     </div>
   </div>
 
   <!-- Single control card: what to do on top, how to do it underneath -->
-  <div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl space-y-3">
+  <div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-xl space-y-3">
     <div class="relative">
       <span class="material-symbols-outlined absolute left-3.5 top-2.5 text-sm text-outline">link</span>
       <input
         type="text"
         bind:value={targetUrl}
         placeholder="https://github.com/owner/repo/pull/123"
-        class="w-full bg-surface-container-low border border-outline-variant rounded-xl pl-10 pr-4 py-2.5 text-xs text-on-surface font-mono outline-none focus:border-primary"
+        class="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-10 pr-4 py-2.5 text-xs text-on-surface font-mono outline-none focus:border-primary"
       />
     </div>
 
@@ -263,7 +248,7 @@
           type="text"
           bind:value={instructionPrompt}
           placeholder="Bạn muốn agent làm gì trên trang này?"
-          class="w-full bg-surface-container-low border border-outline-variant rounded-xl pl-10 pr-4 py-2.5 text-xs text-on-surface outline-none focus:border-primary"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-10 pr-4 py-2.5 text-xs text-on-surface outline-none focus:border-primary"
         />
       </div>
 
@@ -271,18 +256,18 @@
         type="button"
         on:click={() => handleRunBrowserAgent()}
         disabled={!isRunning && !targetUrl.trim()}
-        class="px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-40 {isRunning ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'bg-primary text-on-primary hover:opacity-90'}"
+        class="px-4 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-50 {isRunning ? 'border border-outline-variant text-error hover:bg-error/10' : 'bg-primary text-on-primary hover:opacity-90'}"
       >
-        <span class="material-symbols-outlined text-base">{isRunning ? 'stop_circle' : 'rocket_launch'}</span>
-        {isRunning ? 'Dừng Agent' : 'Kích hoạt Agent'}
+        <span class="material-symbols-outlined text-sm">{isRunning ? 'stop_circle' : 'rocket_launch'}</span>
+        {isRunning ? 'Dừng agent' : 'Kích hoạt agent'}
       </button>
     </div>
 
     <!-- Settings: one quiet row, no nested box -->
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 border-t border-outline-variant/60 text-[11px] text-on-surface-variant">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 border-t border-outline-variant/60 text-xs text-on-surface-variant">
       <div class="flex items-center gap-1.5">
-        <label for="browser-role-select" class="font-semibold">Role</label>
-        <select id="browser-role-select" bind:value={selectedRole} class="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] text-on-surface font-mono outline-none focus:border-primary">
+        <label for="browser-role-select" class="font-medium">Role</label>
+        <select id="browser-role-select" bind:value={selectedRole} class="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface font-mono outline-none focus:border-primary">
           {#each roles as role}
             <option value={role}>{role}</option>
           {/each}
@@ -294,34 +279,34 @@
       </div>
 
       <div class="flex items-center gap-1.5">
-        <label for="browser-model-select" class="font-semibold">Model</label>
+        <label for="browser-model-select" class="font-medium">Model</label>
         <ModelSelect
           bind:value={selectedModel}
-          selectClass="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] text-on-surface font-mono outline-none focus:border-primary"
+          selectClass="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface font-mono outline-none focus:border-primary"
         />
       </div>
 
       <div class="flex items-center gap-1.5">
-        <label for="browser-max-steps" class="font-semibold">Steps</label>
-        <input id="browser-max-steps" type="number" min="1" max="20" bind:value={maxSteps} class="w-11 bg-surface-container-low border border-outline-variant rounded-lg px-1.5 py-1 text-center text-[11px] text-on-surface font-mono outline-none focus:border-primary" />
+        <label for="browser-max-steps" class="font-medium">Steps</label>
+        <input id="browser-max-steps" type="number" min="1" max="20" bind:value={maxSteps} class="w-11 bg-surface-container-low border border-outline-variant rounded-lg px-1.5 py-1 text-center text-xs text-on-surface font-mono outline-none focus:border-primary" />
       </div>
 
       <label class="flex items-center gap-1.5 cursor-pointer select-none">
-        <input type="checkbox" bind:checked={takeScreenshot} class="rounded accent-primary" />
-        <span>Screenshot</span>
+        <input type="checkbox" bind:checked={takeScreenshot} class="accent-primary" />
+        <span>Chụp màn hình</span>
       </label>
 
       <!-- Headless is ignored while the persistent profile is on (you must be able
            to see the window to sign in), so don't offer a control that does nothing. -->
       {#if !usePersistentProfile}
         <label class="flex items-center gap-1.5 cursor-pointer select-none">
-          <input type="checkbox" bind:checked={isHeadless} class="rounded accent-primary" />
+          <input type="checkbox" bind:checked={isHeadless} class="accent-primary" />
           <span>Chạy ngầm</span>
         </label>
       {/if}
 
       <label class="flex items-center gap-1.5 cursor-pointer select-none">
-        <input type="checkbox" bind:checked={usePersistentProfile} class="rounded accent-primary" />
+        <input type="checkbox" bind:checked={usePersistentProfile} class="accent-primary" />
         <span>Profile riêng (nhớ đăng nhập)</span>
       </label>
 
@@ -330,7 +315,7 @@
           type="button"
           on:click={handleOpenAgentChrome}
           disabled={isOpeningChrome}
-          class="ml-auto flex items-center gap-1 text-primary font-semibold hover:underline disabled:opacity-50 cursor-pointer">
+          class="ml-auto flex items-center gap-1 text-primary font-medium hover:underline disabled:opacity-50 cursor-pointer">
           <span class="material-symbols-outlined text-sm">open_in_new</span>
           {isOpeningChrome ? 'Đang mở…' : chromeAgentReady ? 'Mở lại cửa sổ Chrome Agent' : 'Đăng nhập trong Chrome Agent'}
         </button>
@@ -340,47 +325,44 @@
 
   <!-- Real-time Live Log Stream Console -->
   {#if isRunning || liveLogs.length > 0}
-    <div class="bg-slate-950 border border-slate-800 p-4 rounded-2xl shadow-inner space-y-2 text-xs font-mono">
-      <div class="flex items-center justify-between font-sans pb-2 border-b border-slate-800 text-slate-300">
+    <div class="bg-surface-container-highest border border-outline-variant p-4 rounded-xl space-y-2 text-xs font-mono">
+      <div class="flex items-center justify-between font-sans pb-2 border-b border-outline-variant text-on-surface-variant">
         <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full {isRunning ? 'bg-emerald-500 animate-ping' : 'bg-slate-500'}"></span>
-          <span class="font-bold text-xs">Live Execution Logs Stream ({liveLogs.length}):</span>
+          <span class="w-2 h-2 rounded-full {isRunning ? 'bg-success' : 'bg-outline'}"></span>
+          <span class="font-semibold text-xs text-on-surface">Nhật ký thực thi ({liveLogs.length})</span>
         </div>
         {#if isRunning}
-          <span class="text-[10px] text-emerald-400 font-bold tracking-wider">● RUNNING CHROME CDP IN REALTIME</span>
+          <span class="text-[11px] text-on-surface-variant">Đang chạy</span>
         {/if}
       </div>
       <!-- What the agent is looking at right now. A headless run used to be
            entirely invisible until the single screenshot at the end. -->
       {#if liveFrame}
-        <div class="mb-3 rounded-lg overflow-hidden border border-slate-700">
-          <div class="px-2 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 flex items-center justify-between">
+        <div class="mb-3 rounded-lg overflow-hidden border border-outline-variant">
+          <div class="px-2 py-1 bg-surface-container-high text-[11px] font-medium text-on-surface-variant flex items-center justify-between font-sans">
             <span>Màn hình agent — bước {liveFrameStep}</span>
             {#if isRunning}
-              <span class="text-emerald-400">● trực tiếp</span>
+              <span class="text-success">trực tiếp</span>
             {/if}
           </div>
-          <img src={liveFrame} alt="Ảnh màn hình trình duyệt của agent ở bước {liveFrameStep}" class="w-full max-h-72 object-contain bg-black" />
+          <img src={liveFrame} alt="Ảnh màn hình trình duyệt của agent ở bước {liveFrameStep}" class="w-full max-h-72 object-contain bg-surface-container" />
         </div>
       {/if}
 
-      <div class="max-h-48 overflow-y-auto space-y-1.5 leading-relaxed text-emerald-400 pr-2">
+      <div class="max-h-48 overflow-y-auto space-y-1 leading-relaxed text-on-surface-variant pr-2">
         {#each liveLogs as log}
-          <div class="flex items-start gap-2">
-            <span class="text-slate-500 text-[10px] select-none">❯</span>
-            <span class="whitespace-pre-wrap break-all">{log}</span>
-          </div>
+          <div class="whitespace-pre-wrap break-all">{log}</div>
         {/each}
       </div>
 
       <!-- Agent is parked waiting on this answer; it resumes the same run. -->
       {#if pendingAsk}
-        <div class="mt-3 bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 space-y-3 font-sans">
-          <div class="flex items-start gap-2 text-amber-300">
-            <span class="material-symbols-outlined text-base flex-shrink-0">contact_support</span>
+        <div class="mt-3 bg-warning/10 border border-warning/30 rounded-xl p-3 space-y-3 font-sans">
+          <div class="flex items-start gap-2 text-on-surface">
+            <span class="material-symbols-outlined text-base flex-shrink-0 text-warning">contact_support</span>
             <div class="space-y-0.5">
-              <div class="font-bold text-xs">Agent đang chờ bạn quyết định</div>
-              <p class="text-[11px] text-amber-200/90 whitespace-pre-wrap leading-relaxed">{pendingAsk.question}</p>
+              <div class="font-semibold text-xs">Agent đang chờ bạn quyết định</div>
+              <p class="text-xs text-on-surface-variant whitespace-pre-wrap leading-relaxed">{pendingAsk.question}</p>
             </div>
           </div>
 
@@ -391,7 +373,7 @@
                   type="button"
                   on:click={() => submitAsk(opt.value)}
                   disabled={submittingAsk}
-                  class="bg-amber-500/20 text-amber-100 border border-amber-500/40 px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-amber-500/30 disabled:opacity-50 cursor-pointer transition-all">
+                  class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer">
                   {opt.label}
                 </button>
               {/each}
@@ -400,20 +382,20 @@
 
           {#if pendingAsk.allowOther}
             <div class="flex items-center gap-2">
-              <span class="text-[11px] font-bold text-amber-300 whitespace-nowrap">Khác:</span>
+              <span class="text-xs font-medium text-on-surface-variant whitespace-nowrap">Khác:</span>
               <input
                 type="text"
                 bind:value={otherAnswer}
                 on:keydown={(e) => { if (e.key === 'Enter') submitAsk(otherAnswer); }}
-                placeholder="Nhập chỉ dẫn của bạn, AI sẽ làm theo..."
+                placeholder="Nhập chỉ dẫn của bạn, AI sẽ làm theo…"
                 disabled={submittingAsk}
-                class="flex-1 bg-slate-900 border border-amber-500/30 rounded-lg px-3 py-1.5 text-[11px] text-amber-100 outline-none focus:border-amber-400 disabled:opacity-50"
+                class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary disabled:opacity-50"
               />
               <button
                 type="button"
                 on:click={() => submitAsk(otherAnswer)}
                 disabled={submittingAsk || !otherAnswer.trim()}
-                class="bg-amber-500 text-slate-950 px-3 py-1.5 rounded-lg text-[11px] font-bold hover:opacity-90 disabled:opacity-40 cursor-pointer transition-all whitespace-nowrap">
+                class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer whitespace-nowrap">
                 Gửi
               </button>
             </div>
@@ -425,11 +407,11 @@
 
   <!-- User Intervention Warning Alert Banner -->
   {#if result && (result.status === 'need_user_intervention' || result.user_intervention)}
-    <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-3 text-amber-600 dark:text-amber-400">
-      <span class="material-symbols-outlined text-xl flex-shrink-0">warning</span>
+    <div class="p-4 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-3 text-on-surface">
+      <span class="material-symbols-outlined text-base flex-shrink-0 text-warning">warning</span>
       <div class="space-y-1 text-xs">
-        <div class="font-bold text-sm">🛑 AI Dừng Vòng Lặp: Yêu Cầu Người Dùng Can Thiệp!</div>
-        <p class="leading-relaxed">{result.user_intervention || 'AI phát hiện trang web cần đăng nhập, xác thực CAPTCHA/2FA hoặc không thể tìm thấy nút tương tác.'}</p>
+        <div class="font-semibold text-sm">Agent đã dừng — cần bạn can thiệp</div>
+        <p class="leading-relaxed text-on-surface-variant">{result.user_intervention || 'AI phát hiện trang web cần đăng nhập, xác thực CAPTCHA/2FA hoặc không tìm thấy nút để tương tác.'}</p>
       </div>
     </div>
   {/if}
@@ -438,98 +420,101 @@
   {#if result}
     <div class="space-y-4">
       <!-- Status Summary Card -->
-      <div class="bg-surface-container-low border border-outline-variant p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
         <div class="space-y-1">
-          <div class="font-bold text-on-surface text-sm flex items-center gap-2">
-            {result.title || 'Untitled Page'}
+          <div class="font-semibold text-on-surface text-sm flex items-center gap-2">
+            {result.title || 'Trang không có tiêu đề'}
+            <!-- Trạng thái thật của lần chạy. Trước đây badge ghi cứng "200 OK"
+                 dù component không hề nhận HTTP status nào từ backend. -->
             {#if result.success}
-              <span class="text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">200 OK</span>
+              <span class="text-[11px] bg-success/10 text-success border border-success/30 px-2 py-0.5 rounded-full font-medium">Thành công</span>
             {:else}
-              <span class="text-[10px] bg-rose-500/15 text-rose-600 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold">FAILED</span>
+              <span class="text-[11px] bg-error/10 text-error border border-error/30 px-2 py-0.5 rounded-full font-medium">Thất bại</span>
             {/if}
           </div>
           <div class="font-mono text-on-surface-variant text-[11px]">{result.url}</div>
         </div>
 
-        <div class="flex gap-1.5 bg-surface-container-lowest p-1 rounded-xl border border-outline-variant">
+        <div class="flex gap-1.5 bg-surface-container-lowest p-1 rounded-lg border border-outline-variant">
           {#if result.ai_response}
             <button
               type="button"
               on:click={() => activeTab = 'ai'}
-              class="px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {activeTab === 'ai' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-              🧠 AI Response & Plan
+              class="px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 {activeTab === 'ai' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+              <span class="material-symbols-outlined text-sm">psychology</span> Phản hồi AI
             </button>
           {/if}
           <button
             type="button"
             on:click={() => activeTab = 'preview'}
-            class="px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {activeTab === 'preview' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-            📋 Execution Stream ({result.logs.length})
+            class="px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 {activeTab === 'preview' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+            <span class="material-symbols-outlined text-sm">terminal</span> Nhật ký ({result.logs.length})
           </button>
           {#if result.screenshot_base64}
             <button
               type="button"
               on:click={() => activeTab = 'screenshot'}
-              class="px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {activeTab === 'screenshot' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-              📸 Screenshot
+              class="px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 {activeTab === 'screenshot' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+              <span class="material-symbols-outlined text-sm">image</span> Ảnh màn hình
             </button>
           {/if}
           <button
             type="button"
             on:click={() => activeTab = 'dom'}
-            class="px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {activeTab === 'dom' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-            🧱 DOM Snippet
+            class="px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 {activeTab === 'dom' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+            <span class="material-symbols-outlined text-sm">code</span> DOM
           </button>
           <button
             type="button"
             on:click={() => activeTab = 'text'}
-            class="px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {activeTab === 'text' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-            📝 Text Content
+            class="px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 {activeTab === 'text' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+            <span class="material-symbols-outlined text-sm">notes</span> Văn bản
           </button>
         </div>
       </div>
 
       <!-- Tab Content Area -->
-      <div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-xs">
+      <div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-xl">
         {#if activeTab === 'ai'}
           <div class="space-y-3">
             <div class="flex items-center justify-between">
-              <div class="text-xs font-bold text-on-surface flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-sm">psychology</span>
-                Phản hồi & Phân tích từ Bộ não AI ({selectedModel}):
+              <div class="text-sm font-semibold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-on-surface-variant text-base">psychology</span>
+                Phản hồi và phân tích của AI ({selectedModel})
               </div>
-              <span class="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-mono">{selectedRole}</span>
+              <span class="text-[11px] bg-surface-container-high text-on-surface-variant border border-outline-variant px-2 py-0.5 rounded-full font-mono">{selectedRole}</span>
             </div>
-            <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant text-on-surface text-xs whitespace-pre-wrap leading-relaxed font-sans shadow-inner">
+            <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant text-on-surface text-xs whitespace-pre-wrap leading-relaxed font-sans">
               {result.ai_response}
             </div>
           </div>
         {:else if activeTab === 'preview'}
-          <div class="space-y-2 font-mono text-xs">
-            <div class="text-xs font-bold text-on-surface mb-2 font-sans">Dòng thời gian thực thi (Chrome DevTools Protocol Execution Stream):</div>
-            {#each result.logs as log}
-              <div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/60 text-on-surface flex items-start gap-2">
-                <span class="material-symbols-outlined text-sm text-primary flex-shrink-0">task_alt</span>
-                <span class="leading-relaxed">{log}</span>
-              </div>
-            {/each}
+          <div class="space-y-2">
+            <div class="text-sm font-semibold text-on-surface mb-2">Dòng thời gian thực thi</div>
+            <!-- Danh sách dòng mono, không bọc mỗi dòng log trong một khung
+                 riêng: hàng chục khung viền cho hàng chục dòng chỉ tạo nhiễu. -->
+            <div class="bg-surface-container-highest border border-outline-variant rounded-xl p-3 font-mono text-xs text-on-surface-variant space-y-1 max-h-96 overflow-y-auto">
+              {#each result.logs as log}
+                <div class="leading-relaxed whitespace-pre-wrap break-all">{log}</div>
+              {/each}
+            </div>
           </div>
         {:else if activeTab === 'screenshot'}
           <div class="space-y-2">
-            <div class="text-xs font-bold text-on-surface mb-2">Ảnh màn hình Full-Page do Chrome CDP tự động chụp:</div>
-            <div class="border border-outline-variant rounded-xl overflow-hidden max-h-[600px] overflow-y-auto bg-black/40 p-2">
-              <img src={result.screenshot_base64} alt="Browser Agent Screenshot" class="w-full h-auto rounded-lg shadow-md" />
+            <div class="text-sm font-semibold text-on-surface mb-2">Ảnh màn hình toàn trang</div>
+            <div class="border border-outline-variant rounded-xl overflow-hidden max-h-[600px] overflow-y-auto bg-surface-container p-2">
+              <img src={result.screenshot_base64} alt="Ảnh màn hình do Browser Agent chụp" class="w-full h-auto rounded-lg" />
             </div>
           </div>
         {:else if activeTab === 'dom'}
-          <div class="space-y-2 font-mono text-xs">
-            <div class="text-xs font-bold text-on-surface mb-2 font-sans">Cấu trúc DOM trích xuất (HTML Snippet):</div>
-            <textarea readonly class="w-full bg-slate-950 text-emerald-400 p-4 rounded-xl font-mono text-xs h-96 outline-none border border-slate-800 leading-relaxed whitespace-pre font-normal">{result.html_snippet}</textarea>
+          <div class="space-y-2">
+            <div class="text-sm font-semibold text-on-surface mb-2">Cấu trúc DOM trích xuất</div>
+            <textarea readonly class="w-full bg-surface-container-highest text-on-surface p-4 rounded-xl font-mono text-xs h-96 border border-outline-variant leading-relaxed whitespace-pre font-normal">{result.html_snippet}</textarea>
           </div>
         {:else if activeTab === 'text'}
-          <div class="space-y-2 font-mono text-xs">
-            <div class="text-xs font-bold text-on-surface mb-2 font-sans">Nội dung văn bản bóc tách từ Body (Text Content):</div>
-            <textarea readonly class="w-full bg-surface-container-low text-on-surface p-4 rounded-xl font-mono text-xs h-96 outline-none border border-outline-variant leading-relaxed whitespace-pre font-normal">{result.text_content}</textarea>
+          <div class="space-y-2">
+            <div class="text-sm font-semibold text-on-surface mb-2">Nội dung văn bản của trang</div>
+            <textarea readonly class="w-full bg-surface-container-low text-on-surface p-4 rounded-xl font-mono text-xs h-96 border border-outline-variant leading-relaxed whitespace-pre font-normal">{result.text_content}</textarea>
           </div>
         {/if}
       </div>

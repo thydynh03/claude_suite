@@ -8,7 +8,7 @@
   const docSections = [
     {
       id: 'quickstart',
-      title: 'Hướng Dẫn Nhanh & Workspace Setup',
+      title: 'Hướng dẫn nhanh và thiết lập Workspace',
       category: 'quickstart',
       icon: 'rocket_launch',
       content: `
@@ -25,7 +25,7 @@ Nhấn **Execute Plan** hoặc **Start Orchestrator**. Các Corporate Agent sẽ
     },
     {
       id: 'agents',
-      title: 'Quản Lý Corporate Agent Roles & Custom Personas',
+      title: 'Quản lý agent roles và persona tuỳ biến',
       category: 'agents',
       icon: 'smart_toy',
       content: `
@@ -43,7 +43,7 @@ Vào tab **Studio & Settings** -> **Agents Registry**, chọn agent và chỉnh 
     },
     {
       id: 'kanban',
-      title: 'Kanban Board, Ưu Tiên & Phụ Thuộc (Depends On)',
+      title: 'Kanban Board, ưu tiên và phụ thuộc (depends on)',
       category: 'kanban',
       icon: 'assignment',
       content: `
@@ -63,7 +63,7 @@ Click trực tiếp vào thẻ Task trên bảng Kanban để mở cửa sổ mo
     },
     {
       id: 'cli',
-      title: 'CLI Engines: Claude CLI & Antigravity CLI',
+      title: 'CLI engines: Claude CLI và Antigravity CLI',
       category: 'cli',
       icon: 'terminal',
       content: `
@@ -77,7 +77,7 @@ Nếu Agent gặp lỗi hết Quota/Token limit 429 trên Claude, hệ thống s
     },
     {
       id: 'mcp',
-      title: 'Webhook & MCP (Model Context Protocol) API',
+      title: 'Webhook và MCP (Model Context Protocol) API',
       category: 'mcp',
       icon: 'hub',
       content: `
@@ -110,30 +110,31 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold flex items-center gap-2 text-on-surface">
-        <span class="material-symbols-outlined text-primary">description</span>
-        Tài Liệu Hướng Dẫn & Documentation Center
+      <h1 class="text-lg font-semibold flex items-center gap-2 text-on-surface">
+        <span class="material-symbols-outlined text-lg text-on-surface-variant">description</span>
+        Tài liệu hướng dẫn
       </h1>
-      <p class="text-on-surface-variant text-sm mt-0.5">Hướng dẫn chi tiết sử dụng Claude Suite, AI Orchestrator, CLI Engines & Integration APIs.</p>
+      <p class="text-on-surface-variant text-sm mt-0.5">Hướng dẫn chi tiết cách dùng Claude Suite: orchestrator, CLI engine và các API tích hợp.</p>
     </div>
 
     <button
       type="button"
       on:click={() => activeTab.set('support')}
-      class="bg-secondary-container text-on-secondary-container px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all cursor-pointer">
-      <span class="material-symbols-outlined text-sm">help</span> Cần Hỗ Trợ Kỹ Thuật?
+      class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-surface-container-high transition-colors cursor-pointer">
+      <span class="material-symbols-outlined text-sm">help</span> Cần hỗ trợ kỹ thuật?
     </button>
   </div>
 
-  <!-- Search & Category Filter -->
-  <div class="flex flex-wrap items-center justify-between gap-4 bg-surface-container-low p-4 rounded-2xl border border-outline-variant">
+  <!-- Search & Category Filter. These controls used to sit inside their own
+       filled, bordered panel — a box around a box; whitespace separates them. -->
+  <div class="flex flex-wrap items-center justify-between gap-4">
     <div class="relative flex-1 max-w-md">
-      <span class="material-symbols-outlined absolute left-3 top-2.5 text-sm text-outline">search</span>
+      <span class="material-symbols-outlined absolute left-3 top-2 text-sm text-outline">search</span>
       <input
         type="text"
         bind:value={searchQuery}
         placeholder="Tìm kiếm tài liệu (ví dụ: Agent, Fallback, Webhook, Kanban)..."
-        class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl pl-9 pr-3 py-2 text-xs text-on-surface outline-none focus:border-primary font-medium"
+        class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary"
       />
     </div>
 
@@ -149,8 +150,8 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
         <button
           type="button"
           on:click={() => selectedCategory = cat.id as any}
-          class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer
-          {selectedCategory === cat.id ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-highest text-on-surface-variant hover:text-on-surface'}"
+          class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer
+          {selectedCategory === cat.id ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container-high'}"
         >
           {cat.label}
         </button>
@@ -161,10 +162,10 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
   <!-- Docs Articles Grid -->
   <div class="space-y-6">
     {#each filteredDocs as doc}
-      <div class="bg-surface border border-outline-variant rounded-2xl p-6 shadow-sm space-y-4">
-        <div class="flex items-center gap-3 pb-3 border-b border-outline-variant">
-          <span class="material-symbols-outlined text-primary text-2xl">{doc.icon}</span>
-          <h2 class="text-lg font-bold text-on-surface">{doc.title}</h2>
+      <div class="bg-surface border border-outline-variant rounded-xl p-6 space-y-4">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-outline-variant">
+          <span class="material-symbols-outlined text-base text-on-surface-variant">{doc.icon}</span>
+          <h2 class="text-sm font-semibold text-on-surface">{doc.title}</h2>
         </div>
 
         <!-- Rendered, not printed. This block used to be whitespace-pre-wrap
@@ -175,44 +176,34 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
         </div>
       </div>
     {:else}
-      <div class="text-center py-12 bg-surface-container-low rounded-2xl border border-outline-variant">
-        <span class="material-symbols-outlined text-4xl text-outline mb-2">find_in_page</span>
-        <p class="text-sm font-bold text-on-surface">Không tìm thấy tài liệu phù hợp</p>
-        <p class="text-xs text-on-surface-variant mt-1">Vui lòng nhập từ khóa khác hoặc chuyển danh mục.</p>
+      <div class="text-center py-12 rounded-xl border border-outline-variant">
+        <p class="text-sm font-medium text-on-surface">Không tìm thấy tài liệu phù hợp</p>
+        <p class="text-xs text-on-surface-variant mt-1">Vui lòng nhập từ khoá khác hoặc chuyển danh mục.</p>
       </div>
     {/each}
   </div>
 
-  <!-- Keyboard Shortcuts Cheatsheet Card -->
-  <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 space-y-3">
-    <h3 class="text-sm font-bold text-on-surface flex items-center gap-2">
-      <span class="material-symbols-outlined text-secondary">keyboard</span> Bảng Phím Tắt Hệ Thống (Shortcuts Cheatsheet)
+  <!-- Keyboard shortcuts. Six individually bordered+filled boxes inside an
+       already bordered card is a double border on every row; a plain list of
+       label/key pairs reads faster. -->
+  <div class="bg-surface border border-outline-variant rounded-xl p-6 space-y-3">
+    <h3 class="text-sm font-semibold text-on-surface flex items-center gap-2">
+      <span class="material-symbols-outlined text-base text-on-surface-variant">keyboard</span> Phím tắt
     </h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
-      <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang AI Cockpit:</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 1</kbd>
-      </div>
-      <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang Task Board:</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 2</kbd>
-      </div>
-      <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang Code Studio:</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 3</kbd>
-      </div>
-      <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang Source Control:</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 4</kbd>
-      </div>
-      <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Chuyển sang Scheduler:</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + 5</kbd>
-      </div>
-      <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant flex justify-between items-center">
-        <span class="text-on-surface-variant">Bảng lệnh (Command Palette):</span>
-        <kbd class="bg-surface-container-highest px-2 py-1 rounded font-bold text-primary">Ctrl + K</kbd>
-      </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-8">
+      {#each [
+        { label: 'Chuyển sang AI Cockpit', key: 'Ctrl + 1' },
+        { label: 'Chuyển sang Task Board', key: 'Ctrl + 2' },
+        { label: 'Chuyển sang Code Studio', key: 'Ctrl + 3' },
+        { label: 'Chuyển sang Source Control', key: 'Ctrl + 4' },
+        { label: 'Chuyển sang Scheduler', key: 'Ctrl + 5' },
+        { label: 'Bảng lệnh (Command Palette)', key: 'Ctrl + K' }
+      ] as sc}
+        <div class="flex justify-between items-center gap-3 py-2 border-b border-outline-variant last:border-b-0">
+          <span class="text-xs text-on-surface-variant">{sc.label}</span>
+          <kbd class="text-[11px] font-mono text-on-surface-variant bg-surface-container-high border border-outline-variant px-1.5 py-0.5 rounded-lg whitespace-nowrap">{sc.key}</kbd>
+        </div>
+      {/each}
     </div>
   </div>
 </div>

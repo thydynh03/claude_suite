@@ -8,6 +8,7 @@
   import { buildTree, fuzzyMatch, matchScore } from '../../lib/fileTree';
   import { countDiffChunks } from '../../lib/diffStats';
   import { addLog, addToast } from '../../lib/stores/appState';
+  import { theme } from '../../lib/stores/theme';
 
   interface OpenTab {
     path: string;
@@ -55,8 +56,11 @@
   let isReading = false;
   let isSaving = false;
 
-  // Editor Preferences
-  let codeTheme: 'antigravity-dark' | 'vscode-dark' | 'github-light' | 'monokai' = 'antigravity-dark';
+  // Editor Preferences. The editor follows the app's light/dark theme by
+  // default — a light shell used to render a dark editor, splitting the window
+  // into two colour worlds. The dropdown is an explicit override, nothing more.
+  let codeTheme: 'auto' | 'dark' | 'light' = 'auto';
+  $: editorDark = codeTheme === 'auto' ? $theme === 'dark' : codeTheme === 'dark';
   let fontSize = 14; // px
   let viewMode: 'code' | 'diff' | 'preview' = 'code';
 
@@ -282,7 +286,7 @@
       time: timeStr,
       fileSnapshots: { [activeTabPath]: initialOriginal },
       logs: [],
-      output: '🤖 Agent đang thực thi...',
+      output: 'Agent đang thực thi...',
       linesAdded: 0,
       linesRemoved: 0,
       status: 'running',
@@ -376,18 +380,18 @@
 
             // Automated Chrome CDP Web Verification Test
             if (autoWebTest && webTestUrl) {
-              addTurnLog('thinking', `🌐 Kích hoạt Chrome CDP Agent tự động mở & chụp ảnh kiểm thử tại ${webTestUrl}...`);
+              addTurnLog('thinking', `Kích hoạt Chrome CDP Agent tự động mở & chụp ảnh kiểm thử tại ${webTestUrl}...`);
               try {
                 if ((AppBindings as any).RunBrowserTask) {
                   const bRes = await (AppBindings as any).RunBrowserTask(webTestUrl, true);
                   if (bRes && bRes.success) {
-                    addTurnLog('success', `📸 Chrome CDP đã tự động kiểm thử & chụp ảnh Web thành công!`);
+                    addTurnLog('success', `Chrome CDP đã tự động kiểm thử & chụp ảnh Web thành công.`);
                     if (targetTurn) {
                       targetTurn.webScreenshot = bRes.screenshot_base64;
                       targetTurn.webTitle = bRes.title;
                     }
                   } else {
-                    addTurnLog('error', `⚠️ Không thể kiểm thử ${webTestUrl}: ${bRes?.error || 'Chưa bật dev server'}`);
+                    addTurnLog('error', `Không thể kiểm thử ${webTestUrl}: ${bRes?.error || 'Chưa bật dev server'}`);
                   }
                 }
               } catch (bErr: any) {
@@ -409,7 +413,7 @@
       } else if (res && res.error) {
         if (targetTurn) {
           targetTurn.status = 'error';
-          targetTurn.output = '❌ Lỗi từ Agent: ' + res.error;
+          targetTurn.output = 'Lỗi từ Agent: ' + res.error;
         }
         addTurnLog('error', `Lỗi từ Agent: ${res.error}`);
       }
@@ -468,17 +472,15 @@
   // from the markup: Svelte reads a template function call untracked.)
   $: changedChunkCount = countDiffChunks(originalContent, fileContent);
 
-  function getThemeClasses(theme: string) {
-    switch (theme) {
-      case 'vscode-dark':
-        return 'bg-[#1e1e1e] text-[#d4d4d4]';
-      case 'monokai':
-        return 'bg-[#272822] text-[#f8f8f2]';
-      case 'github-light':
-        return 'bg-[#ffffff] text-[#24292e]';
-      case 'antigravity-dark':
-      default:
-        return 'bg-[#0f172a] text-[#e2e8f0]';
+  // One neutral glyph per log kind. The rows used to carry a five-hue tinted
+  // box each; the icon says the same thing without repainting the panel.
+  function logIcon(type: AiLogItem['type']): string {
+    switch (type) {
+      case 'edit': return 'edit';
+      case 'diff': return 'difference';
+      case 'success': return 'check_circle';
+      case 'error': return 'error';
+      default: return 'neurology';
     }
   }
 
@@ -501,7 +503,7 @@
           html += '</code></pre>\n';
           inCodeBlock = false;
         } else {
-          html += `<pre class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs my-3 overflow-x-auto border border-slate-700"><code>`;
+          html += `<pre class="bg-surface-container-highest text-on-surface p-4 rounded-xl font-mono text-xs my-3 overflow-x-auto border border-outline-variant"><code>`;
           inCodeBlock = true;
         }
         continue;
@@ -513,13 +515,13 @@
       }
 
       if (line.startsWith('# ')) {
-        html += `<h1 class="text-2xl font-bold text-primary my-4 pb-2 border-b border-outline-variant">${escapeHtml(line.substring(2))}</h1>`;
+        html += `<h1 class="text-lg font-semibold text-on-surface my-4 pb-2 border-b border-outline-variant">${escapeHtml(line.substring(2))}</h1>`;
       } else if (line.startsWith('## ')) {
-        html += `<h2 class="text-xl font-bold text-secondary my-3 pb-1 border-b border-outline-variant/60">${escapeHtml(line.substring(3))}</h2>`;
+        html += `<h2 class="text-base font-semibold text-on-surface my-3 pb-1 border-b border-outline-variant">${escapeHtml(line.substring(3))}</h2>`;
       } else if (line.startsWith('### ')) {
-        html += `<h3 class="text-lg font-bold text-on-surface my-2">${escapeHtml(line.substring(4))}</h3>`;
+        html += `<h3 class="text-sm font-semibold text-on-surface my-2">${escapeHtml(line.substring(4))}</h3>`;
       } else if (line.startsWith('> ')) {
-        html += `<blockquote class="border-l-4 border-primary pl-4 py-1.5 my-2 bg-primary/5 italic text-on-surface-variant rounded-r-lg">${escapeHtml(line.substring(2))}</blockquote>`;
+        html += `<blockquote class="border-l-2 border-outline-variant pl-4 py-1.5 my-2 italic text-on-surface-variant">${escapeHtml(line.substring(2))}</blockquote>`;
       } else if (line.startsWith('- ') || line.startsWith('* ')) {
         html += `<li class="ml-5 list-disc text-on-surface my-1">${escapeHtml(line.substring(2))}</li>`;
       } else if (line.trim() === '---') {
@@ -529,7 +531,7 @@
       } else {
         let parsedStr = escapeHtml(line)
           .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/`(.*?)`/g, '<code class="bg-surface-container-high text-primary px-1.5 py-0.5 rounded font-mono text-xs">$1</code>');
+          .replace(/`(.*?)`/g, '<code class="bg-surface-container-high text-on-surface px-1.5 py-0.5 rounded-lg font-mono text-xs">$1</code>');
         html += `<p class="text-sm text-on-surface leading-relaxed my-1">${parsedStr}</p>`;
       }
     }
@@ -540,68 +542,62 @@
 
 <div class="h-[calc(100vh-105px)] flex flex-col space-y-3 font-sans">
   <!-- IDE Top Action Toolbar & Theme Selector -->
-  <div class="flex flex-wrap items-center justify-between gap-3 bg-surface-container-low p-3 rounded-2xl border border-outline-variant shadow-xs">
+  <div class="flex flex-wrap items-center justify-between gap-3 bg-surface-container-low p-3 rounded-xl border border-outline-variant">
     <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-        <span class="material-symbols-outlined text-lg">code_blocks</span>
-      </div>
+      <span class="material-symbols-outlined text-lg text-on-surface-variant">code_blocks</span>
       <div>
-        <h1 class="text-sm font-bold text-on-surface flex items-center gap-2">
-          Antigravity AI Code IDE
-          <span class="text-[10px] bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-full font-bold">v2.8 Enterprise</span>
-        </h1>
+        <h1 class="text-lg font-semibold text-on-surface">Code Studio</h1>
         <p class="text-[11px] text-on-surface-variant font-mono truncate max-w-sm">
           {activeTabPath ? activeTabPath : 'Chưa chọn file'}
         </p>
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+    <div class="flex flex-wrap items-center gap-2 text-xs">
       <!-- Mode Toggle: Code vs Diff vs Markdown Preview -->
-      <div class="bg-surface-container-lowest p-1 rounded-xl border border-outline-variant flex gap-1">
+      <div class="bg-surface-container-lowest p-1 rounded-lg border border-outline-variant flex gap-1">
         <button
           type="button"
           on:click={() => viewMode = 'code'}
-          class="px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1
-          {viewMode === 'code' ? 'bg-primary text-on-primary font-bold shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-          <span class="material-symbols-outlined text-sm">edit_note</span> Code Editor
+          class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1.5
+          {viewMode === 'code' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container-high'}">
+          <span class="material-symbols-outlined text-sm">edit_note</span> Editor
         </button>
 
         {#if isMarkdown}
           <button
             type="button"
             on:click={() => viewMode = 'preview'}
-            class="px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1
-            {viewMode === 'preview' ? 'bg-emerald-600 text-white font-bold shadow-xs' : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'}">
-            <span class="material-symbols-outlined text-sm">menu_book</span> Markdown Preview
+            class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1.5
+            {viewMode === 'preview' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container-high'}">
+            <span class="material-symbols-outlined text-sm">menu_book</span> Preview
           </button>
         {/if}
 
         <button
           type="button"
           on:click={() => viewMode = 'diff'}
-          class="px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1
-          {viewMode === 'diff' ? 'bg-primary text-on-primary font-bold shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-          <span class="material-symbols-outlined text-sm">difference</span> Visual Diff ({changedChunkCount})
+          class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1.5
+          {viewMode === 'diff' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container-high'}">
+          <span class="material-symbols-outlined text-sm">difference</span> Diff ({changedChunkCount})
         </button>
       </div>
 
-      <!-- Code Theme Selector -->
-      <div class="flex items-center gap-1 bg-surface-container-lowest border border-outline-variant px-2.5 py-1 rounded-xl">
-        <span class="material-symbols-outlined text-sm text-secondary">palette</span>
-        <select bind:value={codeTheme} class="bg-transparent text-xs text-on-surface font-semibold outline-none border-none cursor-pointer">
-          <option value="antigravity-dark">🌌 Antigravity Dark</option>
-          <option value="vscode-dark">💻 VS Code Dark</option>
-          <option value="monokai">🎨 Monokai Pro</option>
-          <option value="github-light">☀️ GitHub Light</option>
+      <!-- Editor theme override: 'auto' follows the app theme -->
+      <div class="flex items-center gap-1.5 bg-surface-container-lowest border border-outline-variant px-2.5 py-1.5 rounded-lg">
+        <span class="material-symbols-outlined text-sm text-on-surface-variant">palette</span>
+        <select bind:value={codeTheme} title="Giao diện editor" class="bg-transparent text-xs text-on-surface font-medium border-none cursor-pointer">
+          <option value="auto">Theo giao diện app</option>
+          <option value="dark">Nền tối</option>
+          <option value="light">Nền sáng</option>
         </select>
       </div>
 
       <!-- Font Size Toggle -->
-      <div class="flex items-center gap-1 bg-surface-container-lowest border border-outline-variant px-2 py-1 rounded-xl text-on-surface">
-        <button type="button" on:click={() => fontSize = Math.max(10, fontSize - 1)} class="px-1.5 hover:bg-surface-container-high rounded cursor-pointer font-bold">-</button>
+      <div class="flex items-center gap-1 bg-surface-container-lowest border border-outline-variant px-2 py-1 rounded-lg text-on-surface">
+        <button type="button" on:click={() => fontSize = Math.max(10, fontSize - 1)} title="Giảm cỡ chữ" class="px-1.5 hover:bg-surface-container-high rounded-lg cursor-pointer font-medium">-</button>
         <span class="font-mono text-[11px] px-1">{fontSize}px</span>
-        <button type="button" on:click={() => fontSize = Math.min(22, fontSize + 1)} class="px-1.5 hover:bg-surface-container-high rounded cursor-pointer font-bold">+</button>
+        <button type="button" on:click={() => fontSize = Math.min(22, fontSize + 1)} title="Tăng cỡ chữ" class="px-1.5 hover:bg-surface-container-high rounded-lg cursor-pointer font-medium">+</button>
       </div>
 
       <!-- Save Button -->
@@ -609,7 +605,7 @@
         type="button"
         on:click={handleSaveFile}
         disabled={!isDirty || isSaving}
-        class="bg-primary text-on-primary px-4 py-1.5 rounded-xl font-bold hover:opacity-90 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-40 cursor-pointer">
+        class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg font-medium hover:bg-surface-container-high transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
         <span class="material-symbols-outlined text-sm">save</span>
         {isSaving ? 'Đang lưu...' : 'Lưu File (Ctrl+S)'}
       </button>
@@ -619,25 +615,25 @@
   <!-- Main 3-Panel IDE Workspace Grid -->
   <div class="flex-1 grid grid-cols-12 gap-3 overflow-hidden">
     <!-- Left Column: File Explorer (col-span-3) -->
-    <div class="col-span-3 bg-surface-container-lowest border border-outline-variant rounded-2xl flex flex-col overflow-hidden shadow-xs">
+    <div class="col-span-3 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden">
       <div class="p-3 border-b border-outline-variant flex items-center justify-between">
-        <span class="text-xs font-bold text-on-surface flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-sm text-primary">folder_open</span>
-          Workspace Explorer ({files.length})
+        <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">folder_open</span>
+          Workspace ({files.length})
         </span>
-        <button type="button" on:click={refreshFiles} title="Quét lại file" class="text-on-surface-variant hover:text-primary cursor-pointer">
+        <button type="button" on:click={refreshFiles} title="Quét lại file" class="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">
           <span class="material-symbols-outlined text-base">sync</span>
         </button>
       </div>
 
-      <div class="p-2 border-b border-outline-variant bg-surface-container-low/30">
+      <div class="p-2 border-b border-outline-variant">
         <div class="relative">
-          <span class="material-symbols-outlined absolute left-2.5 top-2 text-xs text-outline">search</span>
+          <span class="material-symbols-outlined absolute left-2.5 top-1.5 text-sm text-outline">search</span>
           <input
             type="text"
             bind:value={fileQuery}
             placeholder="Tìm tệp tin..."
-            class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl pl-7 pr-2 py-1 text-xs text-on-surface outline-none focus:border-primary font-mono"
+            class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-2 py-1 text-xs text-on-surface outline-none focus:border-primary font-mono"
           />
         </div>
       </div>
@@ -651,13 +647,13 @@
             <button
               type="button"
               on:click={() => openFileInTab(file)}
-              class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 truncate transition-all cursor-pointer
-              {activeTabPath === file ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}"
+              class="w-full text-left px-2.5 py-1.5 rounded-lg flex items-center gap-2 truncate transition-colors cursor-pointer
+              {activeTabPath === file ? 'bg-secondary-container text-on-secondary-container font-medium' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}"
               title={file}
             >
               <span class="truncate flex-1">{file}</span>
               {#if dirtyPaths.has(file)}
-                <span class="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-warning flex-shrink-0" title="Chưa lưu"></span>
               {/if}
             </button>
           {:else}
@@ -681,36 +677,46 @@
     </div>
 
     <!-- Center Column: Multi-Tab Editor / Diff View / Markdown Preview (col-span-6) -->
-    <div class="col-span-6 bg-surface-container-lowest border border-outline-variant rounded-2xl flex flex-col overflow-hidden shadow-xs relative">
+    <div class="col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden relative">
       {#if isReading}
         <div class="absolute inset-0 bg-surface/80 z-30 flex items-center justify-center">
-          <span class="material-symbols-outlined animate-spin text-primary text-3xl">sync</span>
+          <span class="material-symbols-outlined animate-spin text-on-surface-variant text-lg">sync</span>
         </div>
       {/if}
 
-      <!-- Multi-Tab Navigation Bar -->
+      <!-- Multi-Tab Navigation Bar. The close control is a sibling button, not a
+           span nested inside the tab button: an interactive element inside a
+           <button> is invalid, and the keyboard could focus a control that was
+           invisible until the pointer hovered it. -->
       <div class="bg-surface-container-low border-b border-outline-variant flex items-center gap-1 px-2 pt-2 overflow-x-auto select-none">
         {#each openTabs as tab}
-          <button
-            type="button"
-            on:click={() => activeTabPath = tab.path}
-            class="group flex items-center gap-2 px-3 py-1.5 rounded-t-xl text-xs font-mono border-t border-x transition-all cursor-pointer max-w-[180px]
-            {activeTabPath === tab.path ? 'bg-surface-container-lowest border-outline-variant text-on-surface font-bold shadow-xs' : 'bg-surface-container-low/60 border-transparent text-on-surface-variant hover:bg-surface-container-high'}"
+          <div
+            class="group flex items-center flex-shrink-0 rounded-t-xl border-t border-x transition-colors max-w-[200px]
+            {activeTabPath === tab.path ? 'bg-surface-container-lowest border-outline-variant text-on-surface' : 'border-transparent text-on-surface-variant hover:bg-surface-container-high'}"
           >
-            <span class="material-symbols-outlined text-xs text-amber-500 flex-shrink-0">description</span>
-            <span class="truncate flex-1">{tab.path.split(/[\/\\]/).pop()}</span>
-            {#if tab.isDirty}
-              <span class="text-amber-500 font-bold text-xs">*</span>
-            {/if}
-            <span
-              role="button"
-              tabindex="0"
+            <button
+              type="button"
+              on:click={() => activeTabPath = tab.path}
+              class="flex items-center gap-2 min-w-0 pl-3 pr-1.5 py-1.5 text-xs font-mono cursor-pointer
+              {activeTabPath === tab.path ? 'font-medium' : ''}"
+              title={tab.path}
+            >
+              <span class="material-symbols-outlined text-sm flex-shrink-0">description</span>
+              <span class="truncate">{tab.path.split(/[\/\\]/).pop()}</span>
+              {#if tab.isDirty}
+                <span class="w-1.5 h-1.5 rounded-full bg-warning flex-shrink-0" title="Chưa lưu"></span>
+              {/if}
+            </button>
+            <button
+              type="button"
               on:click={(e) => closeTab(tab.path, e)}
-              on:keydown={(e) => { if (e.key === 'Enter') closeTab(tab.path, e); }}
-              class="opacity-0 group-hover:opacity-100 hover:bg-surface-container-highest rounded p-0.5 transition-all text-outline hover:text-rose-600">
-              <span class="material-symbols-outlined text-xs block">close</span>
-            </span>
-          </button>
+              title="Đóng tab"
+              aria-label="Đóng tab {tab.path}"
+              class="w-6 h-6 mr-1 flex items-center justify-center flex-shrink-0 rounded-lg opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-on-surface-variant hover:bg-surface-container-highest hover:text-error transition-opacity cursor-pointer"
+            >
+              <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
         {:else}
           <div class="py-1.5 px-3 text-xs text-on-surface-variant italic">Chưa mở tab nào</div>
         {/each}
@@ -731,10 +737,10 @@
             placeholder="Thay thế bằng..."
             class="bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1 text-xs text-on-surface font-mono outline-none focus:border-primary"
           />
-          <button type="button" on:click={handleSearchReplace} class="bg-primary text-on-primary px-3 py-1 rounded-lg font-bold hover:opacity-90 cursor-pointer">
-            Replace All
+          <button type="button" on:click={handleSearchReplace} class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg font-medium hover:bg-surface-container-high transition-colors cursor-pointer">
+            Thay tất cả
           </button>
-          <button type="button" on:click={() => showSearch = false} class="text-on-surface-variant hover:text-on-surface p-1">
+          <button type="button" on:click={() => showSearch = false} title="Đóng" class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg cursor-pointer">
             <span class="material-symbols-outlined text-sm">close</span>
           </button>
         </div>
@@ -750,7 +756,8 @@
           <CodeEditor
             value={fileContent}
             path={activeTabPath}
-            dark={codeTheme !== 'github-light'}
+            dark={editorDark}
+            {fontSize}
             on:change={(e) => { fileContent = e.detail; handleContentChange(); }}
             on:save={handleSaveFile}
             on:cursor={(e) => { cursorLine = e.detail.line; cursorCol = e.detail.col; }}
@@ -761,14 +768,14 @@
         <div class="flex-1 p-6 overflow-y-auto bg-surface-container-lowest border-t border-outline-variant">
           <div class="max-w-3xl mx-auto space-y-3 font-sans">
             <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
-              <span class="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-sm">visibility</span> Live Markdown Preview
+              <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sm text-on-surface-variant">visibility</span> Markdown preview
               </span>
               <button
                 type="button"
                 on:click={() => viewMode = 'code'}
-                class="text-xs bg-surface-container-high px-3 py-1 rounded-lg font-bold text-on-surface hover:bg-surface-container-highest cursor-pointer">
-                Sửa Markdown ➔
+                class="text-xs border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg font-medium hover:bg-surface-container-high transition-colors cursor-pointer">
+                Sửa Markdown
               </button>
             </div>
 
@@ -782,16 +789,16 @@
              i against line i, so one inserted line marked everything below it
              and nothing got syntax colours. -->
         <div class="flex-1 flex flex-col overflow-hidden">
-          <div class="flex text-[11px] font-bold font-mono border-b border-outline-variant">
-            <div class="w-1/2 px-3 py-1.5 bg-surface-container-low text-on-surface-variant border-r border-outline-variant">Gốc (Original File)</div>
-            <div class="w-1/2 px-3 py-1.5 bg-surface-container-low text-emerald-500">Đã sửa trực tiếp / AI Auto-Save</div>
+          <div class="flex text-[11px] font-medium font-mono border-b border-outline-variant">
+            <div class="w-1/2 px-3 py-1.5 bg-surface-container-low text-on-surface-variant border-r border-outline-variant">Bản gốc</div>
+            <div class="w-1/2 px-3 py-1.5 bg-surface-container-low text-on-surface-variant">Sau khi sửa</div>
           </div>
           <div class="flex-1 overflow-hidden">
             <DiffView
               original={originalContent}
               modified={fileContent}
               path={activeTabPath}
-              dark={codeTheme !== 'github-light'}
+              dark={editorDark}
             />
           </div>
         </div>
@@ -800,7 +807,7 @@
       <!-- IDE Status Footer Bar -->
       <div class="bg-surface-container-low px-4 py-1.5 border-t border-outline-variant flex items-center justify-between text-[11px] font-mono text-on-surface-variant select-none">
         <div class="flex items-center gap-4">
-          <span class="font-bold text-on-surface">{activeTabPath ? activeTabPath.split(/[\/\\]/).pop() : 'No file'}</span>
+          <span class="font-medium text-on-surface">{activeTabPath ? activeTabPath.split(/[\/\\]/).pop() : 'Chưa mở file'}</span>
           <span>Ln {cursorLine}, Col {cursorCol}</span>
         </div>
         <div class="flex items-center gap-4">
@@ -812,15 +819,15 @@
     </div>
 
     <!-- Right Column: Conversation Turn Sections & Revert (col-span-3) -->
-    <div class="col-span-3 bg-surface-container-lowest border border-outline-variant rounded-2xl flex flex-col overflow-hidden shadow-xs">
-      <div class="p-3 border-b border-outline-variant flex items-center justify-between">
-        <span class="text-xs font-bold text-on-surface flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-sm text-primary">auto_awesome</span>
-          AI Agent Conversation Turns ({turns.length})
+    <div class="col-span-3 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden">
+      <div class="p-3 border-b border-outline-variant flex items-center justify-between gap-2">
+        <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">auto_awesome</span>
+          AI Assistant ({turns.length})
         </span>
         <ModelSelect
           bind:value={aiModel}
-          selectClass="bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-[11px] font-mono text-on-surface outline-none"
+          selectClass="bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] font-mono text-on-surface"
         />
       </div>
 
@@ -831,67 +838,67 @@
             type="button"
             on:click={() => handleAskAI('refactor')}
             disabled={isAiRunning}
-            class="bg-surface-container-highest text-on-surface-variant hover:text-on-surface border border-outline-variant px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:bg-surface-container-high cursor-pointer">
-            ⚡ Refactor Code
+            class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">build</span> Refactor Code
           </button>
           <button
             type="button"
             on:click={() => handleAskAI('explain')}
             disabled={isAiRunning}
-            class="bg-surface-container-highest text-on-surface-variant hover:text-on-surface border border-outline-variant px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:bg-surface-container-high cursor-pointer">
-            🔍 Giải thích Logic
+            class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">help</span> Giải thích Logic
           </button>
           <button
             type="button"
             on:click={() => handleAskAI('test')}
             disabled={isAiRunning}
-            class="bg-surface-container-highest text-on-surface-variant hover:text-on-surface border border-outline-variant px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:bg-surface-container-high cursor-pointer">
-            🧪 Viết Unit Test
+            class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">science</span> Viết Unit Test
           </button>
         </div>
 
         <div class="space-y-1.5">
-          <div class="flex items-center justify-between gap-2 bg-surface-container-low px-2.5 py-1.5 rounded-xl border border-outline-variant/60 text-[11px]">
-            <label class="flex items-center gap-1.5 font-bold text-on-surface cursor-pointer select-none">
-              <input type="checkbox" bind:checked={autoWebTest} class="rounded accent-primary" />
-              <span>🌐 Chrome CDP Auto-Test</span>
+          <div class="flex items-center justify-between gap-2 bg-surface-container-low px-2.5 py-1.5 rounded-lg border border-outline-variant text-[11px]">
+            <label class="flex items-center gap-1.5 font-medium text-on-surface cursor-pointer select-none">
+              <input type="checkbox" bind:checked={autoWebTest} class="accent-primary" />
+              <span>Chrome CDP Auto-Test</span>
             </label>
             <input
               type="text"
               bind:value={webTestUrl}
               placeholder="http://localhost:5173"
-              class="w-32 bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5 text-[10px] font-mono text-on-surface outline-none"
+              aria-label="URL kiểm thử"
+              class="w-32 bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-0.5 text-[11px] font-mono text-on-surface outline-none focus:border-primary"
             />
           </div>
 
           <textarea
             bind:value={aiPrompt}
             placeholder="Nhập yêu cầu AI chỉnh sửa code trực tiếp..."
-            class="w-full bg-surface-container-low border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface h-20 outline-none focus:border-primary resize-none font-sans"
+            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-xs text-on-surface h-20 outline-none focus:border-primary resize-none font-sans"
           ></textarea>
           <button
             type="button"
             on:click={() => handleAskAI()}
             disabled={isAiRunning || !aiPrompt.trim()}
-            class="w-full bg-secondary text-on-secondary py-2 rounded-xl text-xs font-bold hover:brightness-110 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs">
+            class="w-full bg-primary text-on-primary py-2 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer">
             <span class="material-symbols-outlined text-sm {isAiRunning ? 'animate-spin' : ''}">
               {isAiRunning ? 'sync' : 'auto_fix_high'}
             </span>
-            {isAiRunning ? '🤖 AI đang thực thi & sửa file...' : 'Yêu cầu AI Sửa Trực Tiếp'}
+            {isAiRunning ? 'AI đang thực thi & sửa file...' : 'Yêu cầu AI sửa trực tiếp'}
           </button>
         </div>
 
         <!-- Conversation Turn Feed with Revert Buttons & Screenshot Proof -->
         <div bind:this={turnFeedContainer} class="flex-1 p-2 overflow-y-auto space-y-3">
           {#each turns as turn (turn.id)}
-            <div class="bg-surface-container-low/50 border border-outline-variant rounded-2xl p-3 space-y-2.5 shadow-2xs">
-              <!-- Turn User Message Header + Undo Revert Button -->
-              <div class="bg-surface-container-highest/80 p-2.5 rounded-xl border border-outline-variant/60 flex items-start justify-between gap-2">
+            <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 space-y-2.5">
+              <!-- Turn header: the prompt and the revert action, separated from
+                   the logs by a hairline instead of a second nested box. -->
+              <div class="flex items-start justify-between gap-2">
                 <div class="space-y-0.5 min-w-0">
-                  <div class="text-[10px] font-bold text-primary flex items-center gap-1">
-                    <span class="material-symbols-outlined text-xs">account_circle</span> User Prompt [{turn.time}]
-                  </div>
-                  <div class="text-xs font-semibold text-on-surface line-clamp-2">{turn.userPrompt}</div>
+                  <div class="text-[11px] text-on-surface-variant">Prompt · {turn.time}</div>
+                  <div class="text-xs font-medium text-on-surface line-clamp-2">{turn.userPrompt}</div>
                 </div>
 
                 <!-- Revert Button: Undo changes up to this point -->
@@ -899,66 +906,67 @@
                   type="button"
                   on:click={() => handleRevertTurn(turn.id)}
                   disabled={turn.status === 'reverted'}
-                  title="Undo changes up to this point"
-                  class="flex items-center gap-1 bg-surface-container-lowest border border-outline-variant px-2 py-1 rounded-lg text-[10px] font-bold text-on-surface-variant hover:text-rose-600 hover:border-rose-500/40 hover:bg-rose-500/10 transition-all cursor-pointer flex-shrink-0 disabled:opacity-40"
+                  title="Hoàn tác file về trước lượt này"
+                  class="flex items-center gap-1 border border-outline-variant px-2 py-1 rounded-lg text-[11px] font-medium text-error hover:bg-error/10 transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50"
                 >
-                  <span class="material-symbols-outlined text-xs">undo</span>
-                  {turn.status === 'reverted' ? 'Đã Revert' : 'Undo (Revert)'}
+                  <span class="material-symbols-outlined text-sm">undo</span>
+                  {turn.status === 'reverted' ? 'Đã revert' : 'Revert'}
                 </button>
               </div>
 
-              <!-- Collapsible Realtime Logs -->
-              <div class="space-y-1.5 font-mono text-[11px]">
-                {#each turn.logs as log}
-                  <div class="p-2 rounded-lg border leading-relaxed
-                    {log.type === 'thinking' ? 'bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300' : ''}
-                    {log.type === 'edit' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300' : ''}
-                    {log.type === 'diff' ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold' : ''}
-                    {log.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold' : ''}
-                    {log.type === 'error' ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 font-bold' : ''}
-                  ">
-                    <div class="flex items-center justify-between text-[10px] opacity-70 mb-0.5">
-                      <span>[{log.time}]</span>
-                      <span class="uppercase font-bold">{log.type}</span>
-                    </div>
-                    <div>{log.text}</div>
-                    {#if log.linesAdded || log.linesRemoved}
-                      <div class="mt-1 flex items-center gap-2 text-[11px] font-bold">
-                        <span class="text-emerald-600 dark:text-emerald-400">+{log.linesAdded} lines</span>
-                        <span class="text-rose-600 dark:text-rose-400">-{log.linesRemoved} lines</span>
+              <!-- Realtime logs: plain rows on the panel surface, colour only on
+                   the leading icon for success/error. -->
+              {#if turn.logs.length > 0}
+                <div class="space-y-1 font-mono text-[11px] pt-2 border-t border-outline-variant">
+                  {#each turn.logs as log}
+                    <div class="flex items-start gap-1.5 leading-relaxed text-on-surface-variant">
+                      <span class="material-symbols-outlined text-sm flex-shrink-0 mt-px
+                        {log.type === 'success' ? 'text-success' : log.type === 'error' ? 'text-error' : ''}">
+                        {logIcon(log.type)}
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <div>{log.text}</div>
+                        {#if log.linesAdded || log.linesRemoved}
+                          <div class="mt-0.5 flex items-center gap-2">
+                            <span class="text-success">+{log.linesAdded}</span>
+                            <span class="text-error">-{log.linesRemoved}</span>
+                          </div>
+                        {/if}
                       </div>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
+                      <span class="text-outline flex-shrink-0">{log.time}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
 
               <!-- Chrome CDP Live Web Test Screenshot Proof -->
               {#if turn.webScreenshot}
-                <div class="border border-emerald-500/30 rounded-xl overflow-hidden bg-black/40 p-2 space-y-1">
-                  <div class="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-xs">center_focus_strong</span>
-                    📸 Chrome CDP Web Test Proof: "{turn.webTitle}"
+                <div class="border border-outline-variant rounded-xl overflow-hidden bg-surface-container p-2 space-y-1">
+                  <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-sm">center_focus_strong</span>
+                    Chrome CDP · {turn.webTitle}
                   </div>
-                  <img src={turn.webScreenshot} alt="Chrome CDP Web Proof" class="w-full h-auto rounded border border-white/10" />
+                  <img src={turn.webScreenshot} alt="Ảnh chụp kiểm thử Chrome CDP" class="w-full h-auto rounded-lg border border-outline-variant" />
                 </div>
               {/if}
 
               <!-- Turn Result Badge Footer -->
               {#if turn.status === 'completed'}
-                <div class="flex items-center justify-between pt-1 border-t border-outline-variant/60 text-[11px]">
-                  <span class="font-bold text-emerald-600 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-xs">check_circle</span> 1 file changed (+{turn.linesAdded} -{turn.linesRemoved})
+                <div class="flex items-center justify-between gap-2 pt-2 border-t border-outline-variant text-[11px]">
+                  <span class="text-on-surface-variant flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-sm text-success">check_circle</span>
+                    Đã sửa 1 file (+{turn.linesAdded} -{turn.linesRemoved})
                   </span>
                   <button
                     type="button"
                     on:click={() => viewMode = 'diff'}
-                    class="text-[10px] bg-primary/10 text-primary border border-primary/30 px-2 py-0.5 rounded-md font-bold hover:bg-primary/20 cursor-pointer">
-                    Review Diff ➔
+                    class="text-[11px] border border-outline-variant text-on-surface-variant px-2 py-1 rounded-lg font-medium hover:bg-surface-container-high transition-colors cursor-pointer flex-shrink-0">
+                    Xem diff
                   </button>
                 </div>
               {:else if turn.status === 'reverted'}
-                <div class="text-[11px] text-amber-600 font-bold flex items-center gap-1 pt-1 border-t border-outline-variant/60">
-                  <span class="material-symbols-outlined text-xs">history</span> Đã khôi phục file về trước lượt này
+                <div class="text-[11px] text-on-surface-variant flex items-center gap-1.5 pt-2 border-t border-outline-variant">
+                  <span class="material-symbols-outlined text-sm text-warning">history</span> Đã khôi phục file về trước lượt này
                 </div>
               {/if}
             </div>

@@ -1,17 +1,36 @@
 <script lang="ts">
-  import { renderMarkdown } from '../../lib/markdown';
   import { onMount } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
-  import { addLog } from '../../lib/stores/appState';
+  import { addLog, addToast } from '../../lib/stores/appState';
 
-  let appVersion = 'v2.4.0';
+  /**
+   * Diagnostics that can fail.
+   *
+   * Every card here used to be decorative: `sqliteHealthy` was assigned `true`
+   * unconditionally after any successful call, two CLI flags were inferred from
+   * "at least one agent row exists" and then never rendered, and each card
+   * carried a hardcoded caption ("Wails Go IPC Bridge v2.13",
+   * "PRAGMA busy_timeout=5000", "Latest Release") presented as a live reading.
+   * A panel that cannot report a problem is not a diagnostic.
+   */
+  type Health = 'unknown' | 'ok' | 'error';
+
+  let appVersion = '';
   let isDiagnosticsRunning = false;
-  let diagStatus = {
-    ipcConnected: false,
-    sqliteHealthy: false,
-    claudeCliFound: false,
-    antigravityCliFound: false,
-    workspacePath: ''
+  let ipcHealth: Health = 'unknown';
+  let dbHealth: Health = 'unknown';
+  let workspacePath = '';
+  let lastRunAt = '';
+
+  const HEALTH_ICON: Record<Health, string> = {
+    unknown: 'help',
+    ok: 'check_circle',
+    error: 'cancel',
+  };
+  const HEALTH_CLASS: Record<Health, string> = {
+    unknown: 'text-on-surface-variant',
+    ok: 'text-success',
+    error: 'text-error',
   };
 
   onMount(async () => {
@@ -20,33 +39,69 @@
 
   async function runDiagnostics() {
     isDiagnosticsRunning = true;
-    try {
-      if ((AppBindings as any).GetAppVersion) {
-        appVersion = await (AppBindings as any).GetAppVersion();
-      }
-      if ((AppBindings as any).Ping) {
-        diagStatus.ipcConnected = await (AppBindings as any).Ping();
-      }
-      const cfg = await AppBindings.GetWorkspaceConfig();
-      diagStatus.workspacePath = cfg?.last_workspace_folder || 'Chưa chọn Workspace';
-      diagStatus.sqliteHealthy = true;
+    ipcHealth = 'unknown';
+    dbHealth = 'unknown';
 
-      // Check agents count
-      const agents = await AppBindings.GetAgents();
-      if (agents && agents.length > 0) {
-        diagStatus.claudeCliFound = true;
-        diagStatus.antigravityCliFound = true;
+    try {
+      appVersion = (await (AppBindings as any).GetAppVersion?.()) || '';
+    } catch (e) {
+      appVersion = '';
+    }
+
+    // IPC: only the round trip itself proves the bridge is up.
+    try {
+      if ((AppBindings as any).Ping) {
+        ipcHealth = (await (AppBindings as any).Ping()) ? 'ok' : 'error';
       }
     } catch (e) {
-      console.error('Diagnostics error:', e);
-    } finally {
-      isDiagnosticsRunning = false;
+      ipcHealth = 'error';
     }
+
+    // Database: a real read against SQLite, reported as it comes back.
+    try {
+      await AppBindings.GetAgents();
+      dbHealth = 'ok';
+    } catch (e) {
+      dbHealth = 'error';
+    }
+
+    try {
+      const cfg = await AppBindings.GetWorkspaceConfig();
+      workspacePath = cfg?.last_workspace_folder || '';
+    } catch (e) {
+      workspacePath = '';
+    }
+
+    lastRunAt = new Date().toLocaleTimeString();
+    isDiagnosticsRunning = false;
   }
 
-  function handleExportLogs() {
-    addLog('Exporting system diagnostics bundle...', 'INFO');
-    alert('Đã xuất báo cáo chẩn đoán vào bộ nhớ tạm hệ thống.');
+  function diagnosticsReport(): string {
+    const label = (h: Health) => (h === 'ok' ? 'ok' : h === 'error' ? 'error' : 'unknown');
+    return [
+      'Claude Suite — báo cáo chẩn đoán',
+      `Thời điểm: ${new Date().toISOString()}`,
+      `Phiên bản app: ${appVersion || 'không đọc được'}`,
+      `IPC backend: ${label(ipcHealth)}`,
+      `SQLite: ${label(dbHealth)}`,
+      `Workspace: ${workspacePath || 'chưa chọn'}`,
+      `User agent: ${navigator.userAgent}`,
+    ].join('\n');
+  }
+
+  // The button used to write one log line and then fire a native alert claiming
+  // the report had been copied. Nothing was copied. Now it either copies or says
+  // it failed.
+  async function handleExportLogs() {
+    const report = diagnosticsReport();
+    try {
+      await navigator.clipboard.writeText(report);
+      addLog('Đã chép báo cáo chẩn đoán vào clipboard.', 'SUCCESS');
+      addToast('Đã chép báo cáo chẩn đoán vào clipboard.', 'SUCCESS');
+    } catch (e) {
+      addLog(`Không chép được báo cáo chẩn đoán: ${e}`, 'ERROR');
+      addToast('Không chép được báo cáo vào clipboard.', 'ERROR');
+    }
   }
 
   const faqs = [
@@ -73,9 +128,9 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold flex items-center gap-2 text-on-surface">
-        <span class="material-symbols-outlined text-secondary">help</span>
-        Hỗ Trợ Kỹ Thuật & System Diagnostics
+      <h1 class="text-lg font-semibold flex items-center gap-2 text-on-surface">
+        <span class="material-symbols-outlined text-lg text-on-surface-variant">help</span>
+        Hỗ trợ kỹ thuật
       </h1>
       <p class="text-on-surface-variant text-sm mt-0.5">Kiểm tra trạng thái hệ thống, chẩn đoán sự cố, câu hỏi thường gặp và liên hệ trợ giúp.</p>
     </div>
@@ -84,68 +139,69 @@
       type="button"
       on:click={runDiagnostics}
       disabled={isDiagnosticsRunning}
-      class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+      class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50">
       <span class="material-symbols-outlined text-sm {isDiagnosticsRunning ? 'animate-spin' : ''}">refresh</span>
-      {isDiagnosticsRunning ? 'Đang kiểm tra...' : 'Kiểm tra Hệ thống'}
+      {isDiagnosticsRunning ? 'Đang kiểm tra...' : 'Kiểm tra hệ thống'}
     </button>
   </div>
 
-  <!-- Diagnostics Status Cards -->
+  <!-- Diagnostics status cards -->
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-2">
-      <div class="flex items-center justify-between text-xs text-on-surface-variant">
-        <span>Kết nối IPC Backend</span>
-        <span class="material-symbols-outlined {diagStatus.ipcConnected ? 'text-emerald-500' : 'text-rose-500'} text-base">
-          {diagStatus.ipcConnected ? 'check_circle' : 'cancel'}
-        </span>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
+      <div class="flex items-center justify-between gap-2 text-xs font-medium text-on-surface-variant">
+        <span>Kết nối IPC backend</span>
+        <span class="material-symbols-outlined text-base {HEALTH_CLASS[ipcHealth]}">{HEALTH_ICON[ipcHealth]}</span>
       </div>
-      <p class="text-base font-bold text-on-surface">{diagStatus.ipcConnected ? 'Đã sẵn sàng' : 'Mất kết nối'}</p>
-      <p class="text-[10px] text-on-surface-variant">Wails Go IPC Bridge v2.13</p>
+      <p class="text-sm font-medium text-on-surface">
+        {ipcHealth === 'ok' ? 'Đã sẵn sàng' : ipcHealth === 'error' ? 'Mất kết nối' : 'Chưa kiểm tra'}
+      </p>
     </div>
 
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-2">
-      <div class="flex items-center justify-between text-xs text-on-surface-variant">
-        <span>SQLite WAL Database</span>
-        <span class="material-symbols-outlined {diagStatus.sqliteHealthy ? 'text-emerald-500' : 'text-rose-500'} text-base">
-          {diagStatus.sqliteHealthy ? 'check_circle' : 'cancel'}
-        </span>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
+      <div class="flex items-center justify-between gap-2 text-xs font-medium text-on-surface-variant">
+        <span>SQLite database</span>
+        <span class="material-symbols-outlined text-base {HEALTH_CLASS[dbHealth]}">{HEALTH_ICON[dbHealth]}</span>
       </div>
-      <p class="text-base font-bold text-on-surface">{diagStatus.sqliteHealthy ? 'Hoạt động tốt' : 'Lỗi Database'}</p>
-      <p class="text-[10px] text-on-surface-variant">PRAGMA busy_timeout=5000</p>
+      <p class="text-sm font-medium text-on-surface">
+        {dbHealth === 'ok' ? 'Đọc ghi được' : dbHealth === 'error' ? 'Không đọc được' : 'Chưa kiểm tra'}
+      </p>
     </div>
 
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-2">
-      <div class="flex items-center justify-between text-xs text-on-surface-variant">
-        <span>Workspace Đang Chọn</span>
-        <span class="material-symbols-outlined text-primary text-base">folder</span>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
+      <div class="flex items-center justify-between gap-2 text-xs font-medium text-on-surface-variant">
+        <span>Workspace đang chọn</span>
+        <span class="material-symbols-outlined text-base text-on-surface-variant">folder</span>
       </div>
-      <p class="text-xs font-bold text-primary truncate">{diagStatus.workspacePath}</p>
-      <p class="text-[10px] text-on-surface-variant">Context Scan Enabled</p>
+      <p class="text-xs font-medium text-on-surface truncate" title={workspacePath}>
+        {workspacePath || 'Chưa chọn workspace'}
+      </p>
     </div>
 
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-2">
-      <div class="flex items-center justify-between text-xs text-on-surface-variant">
-        <span>Phiên Bản App</span>
-        <span class="material-symbols-outlined text-secondary text-base">verified</span>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
+      <div class="flex items-center justify-between gap-2 text-xs font-medium text-on-surface-variant">
+        <span>Phiên bản app</span>
+        <span class="material-symbols-outlined text-base text-on-surface-variant">verified</span>
       </div>
-      <p class="text-base font-bold text-on-surface">{appVersion}</p>
-      <p class="text-[10px] text-emerald-600 font-bold">Latest Release</p>
+      <p class="text-sm font-medium text-on-surface">{appVersion || 'Không đọc được'}</p>
+      {#if lastRunAt}
+        <p class="text-[11px] text-on-surface-variant">Kiểm tra lúc {lastRunAt}</p>
+      {/if}
     </div>
   </div>
 
-  <!-- FAQs Accordion -->
-  <div class="bg-surface border border-outline-variant rounded-2xl p-6 space-y-4">
-    <h2 class="text-base font-bold text-on-surface flex items-center gap-2">
-      <span class="material-symbols-outlined text-primary">quiz</span> Câu Hỏi Thường Gặp (FAQs)
+  <!-- FAQs. Each answer used to be a filled, bordered box inside an already
+       bordered card; a divided list carries the same content without the
+       double frame. -->
+  <div class="bg-surface border border-outline-variant rounded-xl p-6 space-y-4">
+    <h2 class="text-sm font-semibold text-on-surface flex items-center gap-2">
+      <span class="material-symbols-outlined text-base text-on-surface-variant">quiz</span> Câu hỏi thường gặp
     </h2>
 
-    <div class="space-y-3">
+    <div class="divide-y divide-outline-variant">
       {#each faqs as faq}
-        <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant space-y-2">
-          <h3 class="text-xs font-bold text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-sm">help_outline</span> {faq.q}
-          </h3>
-          <p class="text-xs text-on-surface-variant leading-relaxed pl-6 whitespace-pre-wrap">
+        <div class="py-3 first:pt-0 last:pb-0 space-y-1.5">
+          <h3 class="text-xs font-medium text-on-surface">{faq.q}</h3>
+          <p class="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap">
             {faq.a}
           </p>
         </div>
@@ -153,29 +209,27 @@
     </div>
   </div>
 
-  <!-- Direct Support & GitHub Channel -->
-  <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4">
+  <!-- Direct support & GitHub channel -->
+  <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-wrap items-center justify-between gap-4">
     <div class="space-y-1">
-      <h3 class="text-sm font-bold text-on-surface flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary">forum</span> Cần Hỗ Trợ Trực Tiếp / Khai Báo Lỗi?
-      </h3>
+      <h3 class="text-sm font-semibold text-on-surface">Cần hỗ trợ trực tiếp hoặc báo lỗi?</h3>
       <p class="text-xs text-on-surface-variant">Nếu bạn phát hiện lỗi hoặc muốn đóng góp ý kiến cải tiến dự án Claude Suite.</p>
     </div>
 
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
         on:click={handleExportLogs}
-        class="bg-surface-container-high text-on-surface px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-surface-container-highest transition-all cursor-pointer">
-        <span class="material-symbols-outlined text-sm">download</span> Xuất Báo Cáo Chẩn Đoán
+        class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-surface-container-high transition-colors cursor-pointer">
+        <span class="material-symbols-outlined text-sm">content_copy</span> Chép báo cáo chẩn đoán
       </button>
 
       <a
         href="https://github.com/thydynh03/claude_suite/issues"
         target="_blank"
         rel="noreferrer"
-        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all cursor-pointer">
-        <span class="material-symbols-outlined text-sm">bug_report</span> GitHub Issues & Support
+        class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-surface-container-high transition-colors cursor-pointer">
+        <span class="material-symbols-outlined text-sm">bug_report</span> GitHub Issues
       </a>
     </div>
   </div>

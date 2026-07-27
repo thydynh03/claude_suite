@@ -43,6 +43,11 @@
   let approvalAgent = '';
   let approvalTask = '';
   let approvalTaskId = '';
+  let approvalRejectEl: HTMLButtonElement | null = null;
+
+  // The safest action takes focus when the dialog appears, so a stray Enter
+  // never approves a task the user has not read yet.
+  $: if (showApprovalModal && approvalRejectEl) approvalRejectEl.focus();
 
   // The sidebar and the docs page both advertise Ctrl+1..0, and nothing
   // implemented them — the tooltip promised a shortcut that did nothing.
@@ -57,6 +62,13 @@
   ];
 
   function handleGlobalKeydown(e: KeyboardEvent) {
+    // Escape closes the approval dialog. Closing it without an answer would
+    // leave the waiting task blocked forever, so Escape means "reject".
+    if (showApprovalModal && e.key === 'Escape') {
+      e.preventDefault();
+      resolveApproval(false);
+      return;
+    }
     if (!e.ctrlKey && !e.metaKey) return;
     if (e.altKey || e.shiftKey) return;
 
@@ -196,7 +208,7 @@
 
 <svelte:window on:keydown={handleGlobalKeydown} />
 
-<div class="flex flex-col h-screen font-body-md text-on-surface bg-background">
+<div class="flex flex-col h-screen text-on-surface bg-background">
   <!-- Top Bar -->
   <TopNavBar />
 
@@ -242,39 +254,42 @@
 <OnboardingTour open={showOnboarding} on:close={closeOnboarding} />
 
 {#if showApprovalModal}
-<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-  <div class="bg-surface border border-border rounded-xl shadow-2xl p-6 w-[450px]">
-    <div class="flex items-center gap-3 mb-4">
-      <span class="text-3xl">⚠️</span>
-      <h2 class="text-xl font-bold text-on-surface">Yêu cầu xác nhận (Approval)</h2>
-    </div>
-    
-    <p class="text-on-surface-muted mb-4">
-      Agent <strong class="text-accent">{approvalAgent}</strong> yêu cầu sự đồng ý của bạn trước khi thực thi task:
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div
+    class="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 w-[450px] max-w-full"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="approval-title"
+  >
+    <h2 id="approval-title" class="text-base font-semibold text-on-surface mb-3">Yêu cầu xác nhận</h2>
+
+    <p class="text-sm text-on-surface-variant mb-4">
+      Agent <strong class="text-primary font-medium">{approvalAgent}</strong> cần bạn đồng ý trước khi thực thi task:
     </p>
-    
-    <div class="bg-background border border-border p-3 rounded-lg mb-6">
-      <p class="font-mono text-sm text-on-surface">{approvalTask}</p>
+
+    <div class="bg-surface-container-highest border border-outline-variant p-3 rounded-lg mb-6">
+      <p class="font-mono text-xs text-on-surface break-words">{approvalTask}</p>
     </div>
 
     <div class="flex flex-wrap justify-end gap-2">
-      <button 
+      <button
         type="button"
-        class="px-4 py-2 rounded-xl font-bold text-xs bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer"
+        bind:this={approvalRejectEl}
+        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
         on:click={() => resolveApproval(false)}>
-        Từ chối (Reject)
+        Từ chối
       </button>
-      <button 
+      <button
         type="button"
-        class="px-4 py-2 rounded-xl font-bold text-xs bg-emerald-600/10 text-emerald-600 border border-emerald-600/30 hover:bg-emerald-600/20 transition-all cursor-pointer flex items-center gap-1"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1.5"
         on:click={resolveApprovalAlways}>
-        <span class="material-symbols-outlined text-sm">all_inclusive</span> Luôn luôn cho phép
+        <span class="material-symbols-outlined text-sm">all_inclusive</span> Luôn cho phép
       </button>
-      <button 
+      <button
         type="button"
-        class="px-4 py-2 rounded-xl font-bold text-xs bg-primary text-on-primary hover:opacity-90 transition-all shadow-sm cursor-pointer"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-on-primary hover:opacity-90 transition-opacity cursor-pointer"
         on:click={() => resolveApproval(true)}>
-        Cho phép (Approve)
+        Cho phép
       </button>
     </div>
   </div>

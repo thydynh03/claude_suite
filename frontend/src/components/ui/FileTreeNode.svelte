@@ -31,28 +31,28 @@
   type="button"
   on:click={() => (node.isDir ? onToggle(node.path) : onOpen(node.path))}
   style="padding-left: {depth * 12 + 8}px"
-  class="w-full text-left pr-2 py-1 rounded-lg flex items-center gap-1.5 truncate transition-all cursor-pointer
+  class="w-full text-left pr-2 py-1 rounded-lg flex items-center gap-1.5 truncate transition-colors cursor-pointer
   {activePath === node.path
-    ? 'bg-primary-container text-on-primary-container font-bold'
+    ? 'bg-secondary-container text-on-secondary-container font-medium'
     : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}"
   title={node.path}
 >
   {#if node.isDir}
-    <span class="material-symbols-outlined text-[15px] flex-shrink-0 text-on-surface-variant">
+    <span class="material-symbols-outlined text-sm flex-shrink-0">
       {isOpen ? 'expand_more' : 'chevron_right'}
     </span>
-    <span class="material-symbols-outlined text-[15px] flex-shrink-0 text-amber-500">
+    <span class="material-symbols-outlined text-sm flex-shrink-0">
       {isOpen ? 'folder_open' : 'folder'}
     </span>
   {:else}
-    <span class="w-[15px] flex-shrink-0"></span>
-    <span class="material-symbols-outlined text-[15px] flex-shrink-0 text-primary">{iconFor(node.name)}</span>
+    <span class="w-3.5 flex-shrink-0"></span>
+    <span class="material-symbols-outlined text-sm flex-shrink-0">{iconFor(node.name)}</span>
   {/if}
 
   <span class="truncate flex-1">{node.name}</span>
 
   {#if !node.isDir && dirtyPaths.has(node.path)}
-    <span class="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" title="Chưa lưu"></span>
+    <span class="w-1.5 h-1.5 rounded-full bg-warning flex-shrink-0" title="Chưa lưu"></span>
   {/if}
 </button>
 

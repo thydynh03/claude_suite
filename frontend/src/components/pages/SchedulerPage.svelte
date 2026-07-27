@@ -197,13 +197,13 @@
 <div class="max-w-7xl mx-auto space-y-4 pb-12">
   <div class="flex items-center justify-between bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
     <div class="flex items-center gap-3">
-      <span class="material-symbols-outlined text-2xl text-primary">schedule</span>
+      <span class="material-symbols-outlined text-lg text-on-surface-variant">schedule</span>
       <div>
-        <h1 class="text-lg font-bold text-on-surface">Lịch tự động</h1>
+        <h1 class="text-lg font-semibold text-on-surface">Lịch tự động</h1>
         <p class="text-xs text-on-surface-variant">Đặt việc chạy khi bạn không ngồi trước máy. Lịch được lưu lại sau khi tắt app.</p>
       </div>
     </div>
-    <span class="text-xs font-bold text-on-surface-variant bg-surface-container-high border border-outline-variant px-3 py-1.5 rounded-lg">
+    <span class="text-xs font-medium text-on-surface-variant bg-surface-container-high border border-outline-variant px-3 py-1.5 rounded-lg">
       {jobs.length} lịch
     </span>
   </div>
@@ -212,7 +212,7 @@
     <!-- Create -->
     <div class="col-span-12 lg:col-span-5 space-y-4">
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
-        <span class="text-xs font-bold uppercase text-on-surface-variant">Loại công việc</span>
+        <span class="text-xs font-medium text-on-surface-variant">Loại công việc</span>
         <div class="grid grid-cols-1 gap-1.5">
           {#each KINDS as k}
             <button
@@ -223,9 +223,9 @@
                 ? 'border-primary bg-primary/10'
                 : 'border-outline-variant hover:bg-surface-container-low'}"
             >
-              <span class="material-symbols-outlined text-lg {kind === k.id ? 'text-primary' : 'text-on-surface-variant'}">{k.icon}</span>
+              <span class="material-symbols-outlined text-base {kind === k.id ? 'text-primary' : 'text-on-surface-variant'}">{k.icon}</span>
               <span class="min-w-0">
-                <span class="block text-xs font-bold {kind === k.id ? 'text-primary' : 'text-on-surface'}">{k.label}</span>
+                <span class="block text-xs font-medium {kind === k.id ? 'text-primary' : 'text-on-surface'}">{k.label}</span>
                 <span class="block text-[11px] leading-snug text-on-surface-variant">{k.blurb}</span>
               </span>
             </button>
@@ -235,7 +235,7 @@
 
       {#if needsPrompt}
         <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
-          <span class="text-xs font-bold uppercase text-on-surface-variant">
+          <span class="text-xs font-medium text-on-surface-variant">
             {kind === 'plan' ? 'Mô tả việc cần làm' : kind === 'e2e' ? 'Yêu cầu kiểm thử' : 'Nội dung prompt'}
           </span>
           <textarea
@@ -246,18 +246,17 @@
               : kind === 'e2e'
                 ? 'Ví dụ: Mở http://localhost:5173 và [EXPECT: Đăng nhập]'
                 : 'Ví dụ: Rà soát code trong workspace và đề xuất cải thiện...'}
-            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-3 text-xs text-on-surface outline-none focus:border-primary resize-none font-mono leading-relaxed"
+            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-3 text-xs text-on-surface focus:border-primary resize-none font-mono leading-relaxed"
           ></textarea>
         </div>
       {/if}
 
       {#if needsModel}
         <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
-          <span class="text-xs font-bold uppercase text-on-surface-variant">Chạy bằng</span>
+          <span class="text-xs font-medium text-on-surface-variant">Chạy bằng</span>
           <ModelSelect
             value={schedulerModel}
             on:change={onSchedulerModelChange}
-            selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-semibold text-on-surface outline-none focus:border-primary cursor-pointer"
           />
           <p class="text-[11px] text-on-surface-variant">
             Hai nhà cung cấp có hạn mức riêng — hẹn việc nặng vào bên vừa reset quota.
@@ -266,7 +265,7 @@
             <label class="flex items-start gap-2 cursor-pointer pt-1">
               <input type="checkbox" bind:checked={waitForQuota} class="w-4 h-4 rounded accent-primary cursor-pointer mt-0.5" />
               <span class="min-w-0">
-                <span class="block text-xs font-medium text-on-surface">⏳ Chờ quota hồi rồi mới chạy</span>
+                <span class="block text-xs font-medium text-on-surface">Chờ quota hồi rồi mới chạy</span>
                 <span class="block text-[11px] leading-snug text-on-surface-variant">
                   Đến giờ mà cả pool đang cạn (bị 429 trong vòng 24h đo được), lịch sẽ đợi và
                   tự chạy ngay khi có tài khoản sẵn sàng — không đốt lượt chạy vào tường.
@@ -279,18 +278,18 @@
 
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-bold uppercase text-on-surface-variant">Thời điểm</span>
+          <span class="text-xs font-medium text-on-surface-variant">Thời điểm</span>
           <div class="flex gap-1 bg-surface-container-high rounded-lg p-0.5">
             <button
               type="button"
               on:click={() => (mode = 'time')}
-              class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer
+              class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer
               {mode === 'time' ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant'}"
             >Giờ cụ thể</button>
             <button
               type="button"
               on:click={() => (mode = 'countdown')}
-              class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer
+              class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer
               {mode === 'countdown' ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant'}"
             >Đếm ngược</button>
           </div>
@@ -299,13 +298,13 @@
         {#if mode === 'time'}
           <div class="flex items-center gap-2">
             <input type="number" min="0" max="23" bind:value={timeHour}
-              class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-lg font-bold text-primary outline-none focus:border-primary" />
-            <span class="text-lg font-bold text-on-surface-variant">:</span>
+              class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-sm text-on-surface focus:border-primary" />
+            <span class="text-sm text-on-surface-variant">:</span>
             <input type="number" min="0" max="59" bind:value={timeMin}
-              class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-lg font-bold text-primary outline-none focus:border-primary" />
+              class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-sm text-on-surface focus:border-primary" />
             <div class="flex gap-1 ml-2">
               {#each ['02:00', '08:00', '18:00'] as preset}
-                <button type="button" class="px-2 py-1 text-[11px] font-bold rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
+                <button type="button" class="px-2 py-1 text-[11px] font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
                   on:click={() => { [timeHour, timeMin] = preset.split(':'); }}>{preset}</button>
               {/each}
             </div>
@@ -314,13 +313,13 @@
           <div class="flex items-end gap-2">
             {#each [['Giờ', 'cdHour'], ['Phút', 'cdMin'], ['Giây', 'cdSec']] as [label, field]}
               <div class="flex flex-col gap-1">
-                <span class="text-[10px] uppercase font-bold text-on-surface-variant">{label}</span>
+                <span class="text-[11px] font-medium text-on-surface-variant">{label}</span>
                 {#if field === 'cdHour'}
-                  <input type="number" min="0" max="99" bind:value={cdHour} class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-lg font-bold text-primary outline-none focus:border-primary" />
+                  <input type="number" min="0" max="99" bind:value={cdHour} class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-sm text-on-surface focus:border-primary" />
                 {:else if field === 'cdMin'}
-                  <input type="number" min="0" max="59" bind:value={cdMin} class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-lg font-bold text-primary outline-none focus:border-primary" />
+                  <input type="number" min="0" max="59" bind:value={cdMin} class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-sm text-on-surface focus:border-primary" />
                 {:else}
-                  <input type="number" min="0" max="59" bind:value={cdSec} class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-lg font-bold text-primary outline-none focus:border-primary" />
+                  <input type="number" min="0" max="59" bind:value={cdSec} class="w-16 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-center font-mono text-sm text-on-surface focus:border-primary" />
                 {/if}
               </div>
             {/each}
@@ -328,7 +327,7 @@
         {/if}
 
         <label class="flex items-center gap-2 cursor-pointer pt-1">
-          <input type="checkbox" bind:checked={repeat} class="w-4 h-4 rounded accent-primary cursor-pointer" />
+          <input type="checkbox" bind:checked={repeat} class="w-4 h-4 accent-primary cursor-pointer" />
           <span class="text-xs font-medium text-on-surface">Lặp lại hằng ngày</span>
         </label>
 
@@ -336,10 +335,10 @@
           type="button"
           on:click={schedule}
           disabled={busy}
-          class="w-full bg-primary text-on-primary py-2.5 rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+          class="w-full bg-primary text-on-primary py-2 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <span class="material-symbols-outlined text-sm">{busy ? 'sync' : 'alarm_add'}</span>
-          {busy ? 'Đang đặt...' : 'Đặt lịch'}
+          <span class="material-symbols-outlined text-sm {busy ? 'animate-spin' : ''}">{busy ? 'progress_activity' : 'alarm_add'}</span>
+          {busy ? 'Đang đặt…' : 'Đặt lịch'}
         </button>
       </div>
     </div>
@@ -352,15 +351,15 @@
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-3">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-lg text-primary">visibility</span>
+            <span class="material-symbols-outlined text-base text-on-surface-variant">visibility</span>
             <div>
-              <span class="block text-xs font-bold text-on-surface">Canh chừng Git</span>
+              <span class="block text-xs font-medium text-on-surface">Canh chừng Git</span>
               <span class="block text-[11px] text-on-surface-variant">Workspace bẩn quá lâu chưa commit thì nhắc — hoặc để AI tự commit.</span>
             </div>
           </div>
           <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" bind:checked={gw.enabled} class="w-4 h-4 rounded accent-primary cursor-pointer" />
-            <span class="text-xs font-bold {gw.enabled ? 'text-primary' : 'text-on-surface-variant'}">{gw.enabled ? 'BẬT' : 'TẮT'}</span>
+            <input type="checkbox" bind:checked={gw.enabled} class="w-4 h-4 accent-primary cursor-pointer" />
+            <span class="text-xs font-medium {gw.enabled ? 'text-primary' : 'text-on-surface-variant'}">{gw.enabled ? 'Bật' : 'Tắt'}</span>
           </label>
         </div>
         {#if gw.enabled}
@@ -368,11 +367,11 @@
             <label class="flex items-center gap-2 text-xs text-on-surface">
               Ngưỡng
               <input type="number" min="1" max="72" bind:value={gw.threshold_hours}
-                class="w-14 bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-center font-mono font-bold text-primary outline-none focus:border-primary" />
+                class="w-14 bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-center font-mono text-on-surface focus:border-primary" />
               giờ bẩn liên tục
             </label>
             <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-              <input type="checkbox" bind:checked={gw.auto_commit} class="w-4 h-4 rounded accent-primary cursor-pointer" />
+              <input type="checkbox" bind:checked={gw.auto_commit} class="w-4 h-4 accent-primary cursor-pointer" />
               Tự commit (AI soạn message) thay vì chỉ nhắc
             </label>
           </div>
@@ -381,32 +380,32 @@
           type="button"
           on:click={saveGitWatch}
           disabled={gwSaving}
-          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer"
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
         >
-          {gwSaving ? 'Đang lưu...' : 'Lưu cài đặt'}
+          {gwSaving ? 'Đang lưu…' : 'Lưu cài đặt'}
         </button>
       </div>
 
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
-        <span class="text-xs font-bold uppercase text-on-surface-variant">Lịch đã đặt</span>
+        <span class="text-xs font-medium text-on-surface-variant">Lịch đã đặt</span>
         <div class="space-y-2 max-h-[420px] overflow-y-auto">
           {#each jobs as job (job.id)}
             {@const info = kindOf(job.kind)}
             <div class="border border-outline-variant rounded-xl p-3 space-y-2 {job.enabled ? '' : 'opacity-60'}">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex items-start gap-2.5 min-w-0">
-                  <span class="material-symbols-outlined text-lg text-primary mt-0.5">{info.icon}</span>
+                  <span class="material-symbols-outlined text-base text-on-surface-variant mt-0.5">{info.icon}</span>
                   <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
-                      <span class="text-xs font-bold text-on-surface">{info.label}</span>
+                      <span class="text-xs font-medium text-on-surface">{info.label}</span>
                       {#if job.repeat}
-                        <span class="text-[10px] font-bold uppercase text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded">↻ hằng ngày</span>
+                        <span class="text-[11px] font-medium text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded-full">hằng ngày</span>
                       {/if}
                       {#if job.wait_for_quota}
-                        <span class="text-[10px] font-bold uppercase text-amber-600 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded" title="Đến giờ mà pool cạn quota thì lịch đợi, chạy ngay khi quota hồi">⏳ chờ quota</span>
+                        <span class="text-[11px] font-medium text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded-full" title="Đến giờ mà pool cạn quota thì lịch đợi, chạy ngay khi quota hồi">chờ quota</span>
                       {/if}
                       {#if !job.enabled}
-                        <span class="text-[10px] font-bold uppercase text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded">tạm dừng</span>
+                        <span class="text-[11px] font-medium text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded-full">tạm dừng</span>
                       {/if}
                     </div>
                     {#if job.prompt}
@@ -425,20 +424,20 @@
                     <span class="material-symbols-outlined text-base">{job.enabled ? 'pause' : 'play_arrow'}</span>
                   </button>
                   <button type="button" on:click={() => cancelJob(job.id)} title="Xoá lịch"
-                    class="p-1.5 rounded-lg text-rose-600 hover:bg-rose-500/10 cursor-pointer">
+                    class="p-1.5 rounded-lg text-error hover:bg-error/10 cursor-pointer">
                     <span class="material-symbols-outlined text-base">delete</span>
                   </button>
                 </div>
               </div>
 
               {#if hasRun(job)}
-                <div class="flex items-start gap-1.5 text-[11px] border-t border-outline-variant/60 pt-2">
-                  <span class="material-symbols-outlined text-sm {job.last_status === 'ok' ? 'text-emerald-600' : 'text-rose-600'}">
+                <div class="flex items-start gap-1.5 text-[11px] border-t border-outline-variant pt-2">
+                  <span class="material-symbols-outlined text-sm {job.last_status === 'ok' ? 'text-success' : 'text-error'}">
                     {job.last_status === 'ok' ? 'check_circle' : 'error'}
                   </span>
                   <span class="text-on-surface-variant">
                     Lần chạy gần nhất {whenLabel(job.last_run_at)} · đã chạy {job.run_count} lần
-                    {#if job.last_error}<span class="block text-rose-600 font-mono break-all mt-0.5">{job.last_error}</span>{/if}
+                    {#if job.last_error}<span class="block text-error font-mono break-all mt-0.5">{job.last_error}</span>{/if}
                   </span>
                 </div>
               {/if}
@@ -453,20 +452,20 @@
 
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-bold uppercase text-on-surface-variant">Nhật ký ({logs.length})</span>
+          <span class="text-xs font-medium text-on-surface-variant">Nhật ký ({logs.length})</span>
           <button type="button" on:click={() => (logs = [])}
-            class="text-[11px] font-bold text-on-surface-variant hover:text-on-surface cursor-pointer">Xoá</button>
+            class="text-[11px] font-medium text-on-surface-variant hover:text-on-surface cursor-pointer">Xoá</button>
         </div>
-        <div class="bg-black/90 rounded-lg p-3 font-mono text-[11px] h-40 overflow-y-auto space-y-1">
+        <div class="bg-surface-container-highest border border-outline-variant rounded-lg p-3 font-mono text-[11px] h-40 overflow-y-auto space-y-1">
           {#each logs as log}
             <div class="flex gap-2">
-              <span class="text-slate-500 flex-shrink-0">[{log.time}]</span>
-              <span class={log.level === 'SUCCESS' ? 'text-emerald-400' : log.level === 'ERROR' ? 'text-rose-400' : log.level === 'WARN' ? 'text-amber-300' : 'text-slate-300'}>
+              <span class="text-on-surface-variant flex-shrink-0">[{log.time}]</span>
+              <span class={log.level === 'SUCCESS' ? 'text-success' : log.level === 'ERROR' ? 'text-error' : log.level === 'WARN' ? 'text-warning' : 'text-on-surface'}>
                 {log.msg}
               </span>
             </div>
           {:else}
-            <div class="text-slate-600 italic">Chưa có hoạt động nào.</div>
+            <div class="text-on-surface-variant italic">Chưa có hoạt động nào.</div>
           {/each}
         </div>
       </div>

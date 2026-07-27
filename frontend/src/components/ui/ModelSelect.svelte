@@ -39,8 +39,13 @@
   export let value = '';
   /** Limit the list to one provider ('' shows both, grouped). */
   export let provider: '' | 'claude' | 'anti' = '';
+  /**
+   * Shared input recipe. Call sites used to pass their own string each time and
+   * the same control ended up a different size and a different border on every
+   * page, so overriding this is a last resort.
+   */
   export let selectClass =
-    'w-full px-3 py-2 rounded-lg bg-background border border-border text-sm text-on-surface';
+    'w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-xs text-on-surface focus:border-primary';
 
   const CUSTOM = '__custom__';
   const dispatch = createEventDispatcher<{ change: { value: string; provider: 'claude' | 'anti' } }>();

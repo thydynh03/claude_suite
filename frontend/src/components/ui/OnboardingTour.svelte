@@ -148,43 +148,33 @@
 </script>
 
 {#if open}
-  <!-- Backdrop: hazy, blurred veil -->
+  <!-- Backdrop: plain scrim. This used to carry three drifting gradient orbs
+       (#4f7cff / #22d3ee / #a855f7), an animated grid veil, a shimmer sweeping
+       the dialog edge and a pulsing halo — colours outside the token system and
+       continuous decorative motion on the app's first screen. -->
   <div
-    class="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-    transition:fade={{ duration: 260 }}
+    class="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+    transition:fade={{ duration: 200 }}
     role="presentation"
     on:click|self={finish}
   >
-    <!-- Ambient tech aura -->
-    <div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      <div class="orb orb-a"></div>
-      <div class="orb orb-b"></div>
-      <div class="orb orb-c"></div>
-      <div class="grid-veil"></div>
-    </div>
-
     <div
-      class="relative w-full max-w-2xl rounded-3xl border border-outline-variant bg-surface shadow-2xl overflow-hidden"
-      in:scale={{ duration: 420, start: 0.94, opacity: 0, easing: quintOut }}
-      out:scale={{ duration: 200, start: 0.97, opacity: 0, easing: cubicOut }}
+      class="relative w-full max-w-2xl rounded-xl border border-outline-variant bg-surface shadow-lg overflow-hidden"
+      in:scale={{ duration: 260, start: 0.97, opacity: 0, easing: quintOut }}
+      out:scale={{ duration: 160, start: 0.98, opacity: 0, easing: cubicOut }}
       role="dialog"
       aria-modal="true"
       aria-label="Hướng dẫn sử dụng"
     >
-      <!-- Shimmer sweep along the top edge -->
-      <div class="sweep" aria-hidden="true"></div>
-
       <!-- Header -->
       <div class="relative flex items-start justify-between gap-4 px-7 pt-6 pb-4">
         <div class="flex items-center gap-3 min-w-0">
-          <div class="halo flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20">
-            <span class="material-symbols-outlined text-xl">{step.icon}</span>
-          </div>
+          <span class="material-symbols-outlined text-lg text-on-surface-variant">{step.icon}</span>
           <div class="min-w-0">
-            <span class="inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary border border-primary/20">
+            <span class="text-xs font-medium text-primary">
               {step.badge}
             </span>
-            <p class="mt-1 text-[11px] text-on-surface-variant">
+            <p class="mt-0.5 text-[11px] text-on-surface-variant">
               {index + 1} / {steps.length}
             </p>
           </div>
@@ -207,16 +197,16 @@
             out:fly={{ x: direction * -18, duration: 160, easing: cubicOut, opacity: 0 }}
             class="space-y-4"
           >
-            <h2 class="text-xl font-bold leading-snug text-on-surface">{step.title}</h2>
+            <h2 class="text-lg font-semibold leading-snug text-on-surface">{step.title}</h2>
             <p class="text-sm leading-relaxed text-on-surface-variant">{step.subtitle}</p>
 
             <ul class="space-y-2.5 pt-1">
               {#each step.points as p, i}
                 <li
-                  class="flex items-start gap-3 rounded-xl border border-outline-variant/60 bg-surface-container-low/50 px-3.5 py-2.5"
+                  class="flex items-start gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2.5"
                   in:fly={{ y: 10, duration: 320, delay: 150 + i * 70, easing: quintOut, opacity: 0 }}
                 >
-                  <span class="material-symbols-outlined mt-0.5 text-base text-secondary">{p.icon}</span>
+                  <span class="material-symbols-outlined mt-0.5 text-base text-on-surface-variant">{p.icon}</span>
                   <span class="text-[13px] leading-relaxed text-on-surface">{p.text}</span>
                 </li>
               {/each}
@@ -253,7 +243,7 @@
           <button
             type="button"
             on:click={finish}
-            class="rounded-xl px-3 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors cursor-pointer"
+            class="rounded-lg px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors cursor-pointer"
           >
             Bỏ qua
           </button>
@@ -261,7 +251,7 @@
             <button
               type="button"
               on:click={prev}
-              class="flex items-center gap-1 rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2 text-xs font-bold text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+              class="flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
             >
               <span class="material-symbols-outlined text-sm">arrow_back</span> Quay lại
             </button>
@@ -269,7 +259,7 @@
           <button
             type="button"
             on:click={next}
-            class="flex items-center gap-1 rounded-xl bg-primary px-5 py-2 text-xs font-bold text-on-primary shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+            class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-on-primary hover:opacity-90 transition-opacity cursor-pointer"
           >
             {isLast ? 'Bắt đầu ngay' : 'Tiếp tục'}
             <span class="material-symbols-outlined text-sm">{isLast ? 'rocket_launch' : 'arrow_forward'}</span>
@@ -280,113 +270,3 @@
   </div>
 {/if}
 
-<style>
-  /* Slow-drifting blurred orbs give the backdrop a hazy, high-tech depth. */
-  .orb {
-    position: absolute;
-    border-radius: 9999px;
-    filter: blur(72px);
-    opacity: 0.42;
-    will-change: transform;
-  }
-  .orb-a {
-    width: 30rem;
-    height: 30rem;
-    top: -8rem;
-    left: -6rem;
-    background: radial-gradient(circle at 30% 30%, #4f7cff, transparent 68%);
-    animation: drift-a 20s ease-in-out infinite;
-  }
-  .orb-b {
-    width: 26rem;
-    height: 26rem;
-    bottom: -7rem;
-    right: -5rem;
-    background: radial-gradient(circle at 60% 40%, #22d3ee, transparent 68%);
-    animation: drift-b 24s ease-in-out infinite;
-  }
-  .orb-c {
-    width: 20rem;
-    height: 20rem;
-    top: 38%;
-    right: 26%;
-    background: radial-gradient(circle at 50% 50%, #a855f7, transparent 70%);
-    opacity: 0.26;
-    animation: drift-c 28s ease-in-out infinite;
-  }
-  @keyframes drift-a {
-    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-    50% { transform: translate3d(3rem, 2rem, 0) scale(1.08); }
-  }
-  @keyframes drift-b {
-    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-    50% { transform: translate3d(-2.5rem, -2rem, 0) scale(1.1); }
-  }
-  @keyframes drift-c {
-    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-    50% { transform: translate3d(-2rem, 2.5rem, 0) scale(0.92); }
-  }
-
-  /* Faint engineering grid over the veil. */
-  .grid-veil {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(to right, rgba(148, 163, 184, 0.11) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(148, 163, 184, 0.11) 1px, transparent 1px);
-    background-size: 46px 46px;
-    mask-image: radial-gradient(ellipse at center, black 8%, transparent 72%);
-    animation: grid-breathe 12s ease-in-out infinite;
-  }
-  @keyframes grid-breathe {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 0.85; }
-  }
-
-  /* A light sweeping across the dialog's top edge. */
-  .sweep {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 1px;
-    width: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      transparent 30%,
-      var(--primary) 50%,
-      transparent 70%,
-      transparent 100%
-    );
-    opacity: 0.9;
-    animation: sweep 4.5s ease-in-out infinite;
-  }
-  @keyframes sweep {
-    0% { transform: translateX(-100%); }
-    60%, 100% { transform: translateX(100%); }
-  }
-
-  /* Soft pulsing halo behind the step icon. */
-  .halo {
-    position: relative;
-  }
-  .halo::after {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border-radius: inherit;
-    border: 1px solid var(--primary);
-    opacity: 0;
-    animation: halo 3.2s ease-out infinite;
-  }
-  @keyframes halo {
-    0% { transform: scale(0.9); opacity: 0.5; }
-    70%, 100% { transform: scale(1.25); opacity: 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .orb, .grid-veil, .sweep, .halo::after {
-      animation: none;
-    }
-  }
-</style>

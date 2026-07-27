@@ -23,6 +23,9 @@
   export let path = '';
   export let dark = true;
   export let readOnly = false;
+  /** Editor font size in px. The toolbar stepper drives it; it used to be
+      hardcoded here, so the stepper changed a number and nothing else. */
+  export let fontSize = 13;
 
   const dispatch = createEventDispatcher<{ change: string; save: void; cursor: { line: number; col: number } }>();
 
@@ -32,6 +35,14 @@
   const language = new Compartment();
   const theme = new Compartment();
   const editable = new Compartment();
+  const metrics = new Compartment();
+
+  function metricsTheme(px: number) {
+    return EditorView.theme({
+      '&': { height: '100%', fontSize: `${px}px` },
+      '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+    });
+  }
 
   // Language selection lives in lib/editorLang.ts, shared with DiffView so
   // the same file highlights identically in both panes.
@@ -83,10 +94,7 @@
           dispatch('cursor', { line: line.number, col: pos - line.from + 1 });
         }
       }),
-      EditorView.theme({
-        '&': { height: '100%', fontSize: '13px' },
-        '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
-      }),
+      metrics.of(metricsTheme(fontSize)),
     ];
   }
 
@@ -121,6 +129,10 @@
 
   $: if (view) {
     view.dispatch({ effects: editable.reconfigure(EditorView.editable.of(!readOnly)) });
+  }
+
+  $: if (view) {
+    view.dispatch({ effects: metrics.reconfigure(metricsTheme(fontSize)) });
   }
 </script>
 

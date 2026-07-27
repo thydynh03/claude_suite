@@ -19,6 +19,9 @@
   let selectedIds: string[] = [];
   let isWarming = false;
   let bulkBusy = false;
+  // Xác nhận xoá bằng modal trong app. confirm() là hộp thoại của hệ điều hành:
+  // nó không theo giao diện app và khoá luôn luồng WebView2 trong lúc mở.
+  let confirmDelete: { title: string; body: string; run: () => void } | null = null;
 
   // Every account currently visible under the search box and tier filter. Bulk
   // actions operate on the intersection with selectedIds, never on rows the user
@@ -165,17 +168,25 @@
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa tài khoản "${name}" khỏi Pool?`)) return;
+  function handleDelete(id: string, name: string) {
+    confirmDelete = {
+      title: 'Xoá tài khoản khỏi pool?',
+      body: `Tài khoản "${name}" sẽ bị gỡ khỏi pool. Thao tác này không hoàn tác được.`,
+      run: () => doDelete(id, name),
+    };
+  }
+
+  async function doDelete(id: string, name: string) {
     try {
       if ((AppBindings as any).DeleteAntiAccountKey) {
         await (AppBindings as any).DeleteAntiAccountKey(id);
-        addLog(`Đã xóa tài khoản: ${name}`, 'INFO');
+        addLog(`Đã xoá tài khoản: ${name}`, 'INFO');
+        addToast(`Đã xoá tài khoản: ${name}`, 'SUCCESS');
         await loadAccounts();
       }
     } catch (e) {
-      addLog(`Lỗi xóa tài khoản: ${e}`, 'ERROR');
-      addToast(`Lỗi xóa tài khoản: ${e}`, 'ERROR');
+      addLog(`Lỗi xoá tài khoản: ${e}`, 'ERROR');
+      addToast(`Lỗi xoá tài khoản: ${e}`, 'ERROR');
     }
   }
 
@@ -304,8 +315,13 @@
   function bulkDelete() {
     // Deleting accounts cannot be undone from the UI, and the pool is the only
     // copy of an imported refresh token.
-    if (!confirm(`Xoá ${selectedVisible.length} tài khoản khỏi pool? Không hoàn tác được.`)) return;
-    return runBulk('Xoá', (id) => (AppBindings as any).DeleteAntiAccountKey(id));
+    const count = selectedVisible.length;
+    if (count === 0) return;
+    confirmDelete = {
+      title: `Xoá ${count} tài khoản khỏi pool?`,
+      body: 'Pool là bản duy nhất giữ refresh token đã nhập — xoá rồi không lấy lại được.',
+      run: () => runBulk('Xoá', (id) => (AppBindings as any).DeleteAntiAccountKey(id)),
+    };
   }
 
   function copyText(text: string, label: string) {
@@ -337,14 +353,15 @@
 
 <div class="space-y-4">
   <!-- Top Control Banner -->
-  <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 shadow-sm space-y-4">
+  <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">key</span> Multi-Account Google OAuth Pool & Hạn Mức Model
+        <h3 class="text-sm font-semibold text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-base text-on-surface-variant">key</span> Pool tài khoản Google OAuth &amp; API key
         </h3>
         <p class="text-xs text-on-surface-variant mt-0.5">
-          Quản lý danh sách tài khoản Google OAuth, API Keys, hạn mức từng Model (Gemini 3.1/3.6, Claude, GPT) và tự động xoay vòng khi dính Rate Limit 429.
+          Đăng nhập Google để tự động thêm tài khoản vào pool. App tự xoay vòng sang tài khoản
+          khác khi tài khoản đang dùng bị rate limit 429.
         </p>
       </div>
 
@@ -352,54 +369,54 @@
         <button
           type="button"
           on:click={onOpenGoogleLogin}
-          class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5"
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5"
         >
-          <span class="material-symbols-outlined text-base">login</span> 🌐 + Đăng Nhập Google (Tự Động Lấy Key)
+          <span class="material-symbols-outlined text-sm">login</span> Đăng nhập Google
         </button>
         <button
           type="button"
           on:click={handleWarmupAll}
           disabled={isWarming}
-          class="disabled:opacity-60 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
-          <span class="material-symbols-outlined text-base {isWarming ? 'animate-spin' : ''}">{isWarming ? 'progress_activity' : 'local_fire_department'}</span>
-          {isWarming ? 'Đang làm nóng…' : 'Làm Nóng (Warmup) Tất Cả'}
+          <span class="material-symbols-outlined text-sm {isWarming ? 'animate-spin' : ''}">{isWarming ? 'progress_activity' : 'local_fire_department'}</span>
+          {isWarming ? 'Đang làm nóng…' : 'Làm nóng tất cả'}
         </button>
         <button
           type="button"
           on:click={handleManualRefresh}
           disabled={isLoading}
-          class="disabled:opacity-60 bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant transition-all cursor-pointer flex items-center gap-1.5"
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
-          <span class="material-symbols-outlined text-base {isLoading ? 'animate-spin' : ''}">refresh</span> Làm Mới
+          <span class="material-symbols-outlined text-sm {isLoading ? 'animate-spin' : ''}">refresh</span> Làm mới
         </button>
       </div>
     </div>
 
     {#if !gcpClientId || showGcpSettings}
-      <div class="p-4 bg-surface-container-low border border-amber-500/30 rounded-xl space-y-3 mt-4">
+      <div class="p-4 bg-surface-container-low border border-warning/30 rounded-xl space-y-3 mt-4">
         <div class="flex items-center justify-between">
-          <h4 class="text-xs font-bold text-amber-500 flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-sm">warning</span> 
-            {gcpClientId ? 'Cấu hình GCP OAuth Credentials' : 'Thiếu GCP OAuth Credentials'}
+          <h4 class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-warning">warning</span>
+            {gcpClientId ? 'Cấu hình GCP OAuth credentials' : 'Thiếu GCP OAuth credentials'}
           </h4>
-          <button type="button" on:click={() => showGcpSettings = false} class="text-on-surface-variant hover:text-on-surface">
+          <button type="button" on:click={() => showGcpSettings = false} class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined text-sm">close</span>
           </button>
         </div>
         <!-- The credentials cannot ship with the app: they would be identical in
              every download, extractable by anyone, and revoked by Google once
              noticed. So each user creates their own, and these are the steps. -->
-        <p class="text-[11px] text-on-surface-variant">
+        <p class="text-xs text-on-surface-variant">
           App không kèm sẵn Client ID/Secret — nếu nhúng vào bản cài thì ai tải về
           cũng rút ra được và Google sẽ thu hồi. Mỗi người tự tạo một bộ riêng,
           làm một lần là xong:
         </p>
 
-        <ol class="text-[11px] text-on-surface-variant space-y-2 list-decimal pl-4">
+        <ol class="text-xs text-on-surface-variant space-y-2 list-decimal pl-4">
           <li>
             Mở
-            <button type="button" on:click={() => openExternal('https://console.cloud.google.com/apis/credentials')} class="text-primary hover:underline font-bold cursor-pointer">Google Cloud Console → Credentials</button>,
+            <button type="button" on:click={() => openExternal('https://console.cloud.google.com/apis/credentials')} class="text-primary hover:underline font-medium cursor-pointer">Google Cloud Console → Credentials</button>,
             tạo project mới nếu chưa có.
           </li>
           <li>
@@ -413,98 +430,100 @@
               type="button"
               on:click={importCredsFile}
               disabled={isImportingCreds}
-              class="ml-1 px-2 py-1 rounded-lg bg-primary text-on-primary font-bold disabled:opacity-60 cursor-pointer"
+              class="ml-1 px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer"
             >
               {isImportingCreds ? 'Đang đọc tệp…' : 'Nhập tệp client_secret.json'}
             </button>
           </li>
         </ol>
 
-        <p class="text-[11px] text-on-surface-variant pt-1 border-t border-outline-variant/50">
+        <p class="text-xs text-on-surface-variant pt-1 border-t border-outline-variant/50">
           Hoặc dán thủ công hai giá trị bên dưới:
         </p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label for="gcp-client-id" class="text-[10px] font-bold text-on-surface block mb-1">GCP Client ID</label>
-            <input id="gcp-client-id" type="text" bind:value={gcpClientId} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="1234...apps.googleusercontent.com" />
+            <label for="gcp-client-id" class="text-xs font-medium text-on-surface-variant block mb-1">GCP Client ID</label>
+            <input id="gcp-client-id" type="text" bind:value={gcpClientId} class="w-full bg-surface-container-highest border border-outline-variant rounded-lg p-2 text-xs font-mono text-on-surface" placeholder="1234...apps.googleusercontent.com" />
           </div>
           <div>
-            <label for="gcp-client-secret" class="text-[10px] font-bold text-on-surface block mb-1">GCP Client Secret</label>
-            <input id="gcp-client-secret" type="text" bind:value={gcpClientSecret} class="w-full bg-surface-container-highest border border-outline-variant rounded p-2 text-xs font-mono" placeholder="GOCSPX-..." />
+            <label for="gcp-client-secret" class="text-xs font-medium text-on-surface-variant block mb-1">GCP Client Secret</label>
+            <input id="gcp-client-secret" type="text" bind:value={gcpClientSecret} class="w-full bg-surface-container-highest border border-outline-variant rounded-lg p-2 text-xs font-mono text-on-surface" placeholder="GOCSPX-..." />
           </div>
         </div>
         <div class="flex justify-end pt-1">
-          <button type="button" on:click={saveGcpCreds} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm" disabled={isSavingGcp}>
-            {isSavingGcp ? 'Đang lưu...' : 'Lưu Cấu Hình'}
+          <button type="button" on:click={saveGcpCreds} class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer" disabled={isSavingGcp}>
+            {isSavingGcp ? 'Đang lưu…' : 'Lưu cấu hình'}
           </button>
         </div>
       </div>
     {:else}
       <div class="flex justify-end mt-2">
-        <button type="button" on:click={() => showGcpSettings = true} class="text-[10px] text-on-surface-variant hover:text-primary flex items-center gap-1">
-          <span class="material-symbols-outlined text-[12px]">settings</span> Đổi GCP Credentials
+        <button type="button" on:click={() => showGcpSettings = true} class="text-xs text-on-surface-variant hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">settings</span> Đổi GCP credentials
         </button>
       </div>
     {/if}
 
     <div class="mt-4 pt-4 border-t border-outline-variant">
       <div class="flex items-center justify-between mb-3">
-        <h5 class="text-xs font-bold text-on-surface flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-sm">add_circle</span> Thêm Tài Khoản Dự Phòng
+        <h5 class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-on-surface-variant">add_circle</span> Thêm tài khoản dự phòng
         </h5>
-        <div class="flex bg-surface-container-high p-0.5 rounded-lg border border-outline-variant text-[11px]">
-          <button type="button" on:click={() => newAuthType = 'api_key'} class="px-2.5 py-1 rounded font-bold transition-all {newAuthType === 'api_key' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-            🔑 API Key
+        <div class="flex bg-surface-container-high p-0.5 rounded-lg border border-outline-variant text-xs">
+          <button type="button" on:click={() => newAuthType = 'api_key'} class="px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer {newAuthType === 'api_key' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+            API key
           </button>
-          <button type="button" on:click={() => newAuthType = 'oauth_token'} class="px-2.5 py-1 rounded font-bold transition-all {newAuthType === 'oauth_token' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}">
-            🔐 OAuth Token
+          <button type="button" on:click={() => newAuthType = 'oauth_token'} class="px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer {newAuthType === 'oauth_token' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}">
+            OAuth token
           </button>
         </div>
       </div>
       <div class="flex gap-2">
-        <input type="text" bind:value={newKeyName} placeholder={newAuthType === 'oauth_token' ? 'Tên Tài khoản OAuth' : 'Tên API Key'} class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs" />
-        <input type="text" bind:value={newKeyValue} placeholder={newAuthType === 'oauth_token' ? 'OAuth Session / Access Token' : 'API Key'} class="flex-2 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-mono" />
-        <button type="button" on:click={handleAddAntiKey} class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">Thêm</button>
+        <input type="text" bind:value={newKeyName} placeholder={newAuthType === 'oauth_token' ? 'Tên tài khoản OAuth' : 'Tên API key'} class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs text-on-surface" />
+        <input type="text" bind:value={newKeyValue} placeholder={newAuthType === 'oauth_token' ? 'OAuth session / access token' : 'API key'} class="flex-2 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-mono text-on-surface" />
+        <button type="button" on:click={handleAddAntiKey} class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors cursor-pointer whitespace-nowrap">Thêm</button>
       </div>
     </div>
 
     <!-- Filters and Search Bar -->
     <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-outline-variant text-xs mt-4">
-      <div class="flex items-center gap-1.5 bg-surface-container-low p-1 rounded-xl border border-outline-variant">
+      <!-- Một trạng thái active duy nhất cho cả bộ lọc: gói của tài khoản là dữ
+           liệu trong bảng, không phải màu của thanh lọc. -->
+      <div class="flex items-center gap-1.5 bg-surface-container-low p-1 rounded-lg border border-outline-variant">
         <button
           type="button"
           on:click={() => activeFilter = 'all'}
-          class="px-3 py-1 rounded-lg font-bold transition-all cursor-pointer {activeFilter === 'all' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}"
+          class="px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer {activeFilter === 'all' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}"
         >
           Tất cả <span class="ml-1 opacity-80 font-mono">({accounts.length})</span>
         </button>
         <button
           type="button"
           on:click={() => activeFilter = 'PRO'}
-          class="px-3 py-1 rounded-lg font-bold transition-all cursor-pointer {activeFilter === 'PRO' ? 'bg-purple-600 text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}"
+          class="px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer {activeFilter === 'PRO' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}"
         >
           PRO <span class="ml-1 opacity-80 font-mono">({proCount})</span>
         </button>
         <button
           type="button"
           on:click={() => activeFilter = 'ULTRA'}
-          class="px-3 py-1 rounded-lg font-bold transition-all cursor-pointer {activeFilter === 'ULTRA' ? 'bg-blue-600 text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}"
+          class="px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer {activeFilter === 'ULTRA' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}"
         >
           ULTRA <span class="ml-1 opacity-80 font-mono">({ultraCount})</span>
         </button>
         <button
           type="button"
           on:click={() => activeFilter = 'FREE'}
-          class="px-3 py-1 rounded-lg font-bold transition-all cursor-pointer {activeFilter === 'FREE' ? 'bg-slate-600 text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}"
+          class="px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer {activeFilter === 'FREE' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}"
         >
-          MIỄN PHÍ <span class="ml-1 opacity-80 font-mono">({freeCount})</span>
+          FREE <span class="ml-1 opacity-80 font-mono">({freeCount})</span>
         </button>
         <button
           type="button"
           on:click={() => activeFilter = 'UNKNOWN'}
-          class="px-3 py-1 rounded-lg font-bold transition-all cursor-pointer {activeFilter === 'UNKNOWN' ? 'bg-amber-600 text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}"
+          class="px-3 py-1 rounded-lg font-medium transition-colors cursor-pointer {activeFilter === 'UNKNOWN' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface'}"
         >
-          CHƯA RÕ <span class="ml-1 opacity-80 font-mono">({unknownTierCount})</span>
+          Chưa rõ <span class="ml-1 opacity-80 font-mono">({unknownTierCount})</span>
         </button>
       </div>
 
@@ -513,8 +532,8 @@
         <input
           type="text"
           bind:value={searchQuery}
-          placeholder="Tìm kiếm email tài khoản..."
-          class="w-full bg-surface-container-low border border-outline-variant rounded-xl pl-9 pr-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
+          placeholder="Tìm theo email tài khoản…"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-9 pr-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
         />
       </div>
     </div>
@@ -524,7 +543,7 @@
        occupies space it is not using. -->
   {#if selectedVisible.length > 0}
     <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/5 border border-primary/30 rounded-xl">
-      <span class="text-xs font-bold text-on-surface">
+      <span class="text-xs font-medium text-on-surface">
         Đã chọn {selectedVisible.length} tài khoản
       </span>
       <div class="flex items-center gap-2">
@@ -532,15 +551,15 @@
           type="button"
           on:click={bulkToggleStatus}
           disabled={bulkBusy}
-          class="px-3 py-1.5 rounded-lg text-xs font-bold border border-outline-variant bg-surface-container-high hover:bg-surface-container-highest disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
-          <span class="material-symbols-outlined text-sm">toggle_on</span> Bật / Tắt
+          <span class="material-symbols-outlined text-sm">toggle_on</span> Bật / tắt
         </button>
         <button
           type="button"
           on:click={handleWarmupAll}
           disabled={bulkBusy || isWarming}
-          class="px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
           <span class="material-symbols-outlined text-sm">local_fire_department</span> Làm nóng
         </button>
@@ -548,14 +567,14 @@
           type="button"
           on:click={bulkDelete}
           disabled={bulkBusy}
-          class="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-error hover:bg-error/10 transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
           <span class="material-symbols-outlined text-sm">delete</span> Xoá
         </button>
         <button
           type="button"
           on:click={() => (selectedIds = [])}
-          class="px-3 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
         >
           Bỏ chọn
         </button>
@@ -564,49 +583,49 @@
   {/if}
 
   <!-- Accounts & Quotas Main Table -->
-  <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
+  <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
-          <tr class="bg-surface-container-low text-on-surface-variant font-bold border-b border-outline-variant uppercase text-[11px] tracking-wider">
+          <tr class="bg-surface-container-low text-on-surface-variant font-medium border-b border-outline-variant text-xs">
             <th class="p-3 w-10 text-center">
               <input
                 type="checkbox"
-                class="rounded accent-primary cursor-pointer"
+                class="accent-primary cursor-pointer"
                 checked={allVisibleSelected}
                 indeterminate={someVisibleSelected}
                 on:change={toggleSelectAll}
                 title="Chọn tất cả tài khoản đang hiển thị"
               />
             </th>
-            <th class="p-3 min-w-[200px]">EMAIL & TRẠNG THÁI</th>
-            <th class="p-3 min-w-[420px]">HẠN MỨC MODEL (MODEL QUOTA)</th>
-            <th class="p-3 w-36 whitespace-nowrap">DÙNG LẦN CUỐI</th>
-            <th class="p-3 w-36 text-right">THAO TÁC</th>
+            <th class="p-3 min-w-[200px] font-medium">Email &amp; trạng thái</th>
+            <th class="p-3 min-w-[420px] font-medium">Mức dùng</th>
+            <th class="p-3 w-36 whitespace-nowrap font-medium">Dùng lần cuối</th>
+            <th class="p-3 w-36 text-right font-medium">Thao tác</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-outline-variant/60 font-mono">
+        <tbody class="divide-y divide-outline-variant/60">
           {#each filteredAccounts as acc, i (acc.id || acc.email || i)}
-            <tr class="hover:bg-surface-container-low/50 transition-all {acc.is_current ? 'bg-primary/5' : ''}">
+            <tr class="hover:bg-surface-container-low/50 transition-colors {acc.is_current ? 'bg-primary/5' : ''}">
               <!-- Checkbox -->
               <td class="p-3 text-center">
                 <input
                   type="checkbox"
-                  class="rounded accent-primary cursor-pointer"
+                  class="accent-primary cursor-pointer"
                   checked={selectedIds.includes(acc.id)}
                   on:change={() => toggleOne(acc.id)}
                 />
               </td>
 
               <!-- Email & Badges -->
-              <td class="p-3 align-top space-y-1.5 font-sans">
+              <td class="p-3 align-top space-y-1.5">
                 <div class="flex items-center gap-2">
-                  <span class="font-bold text-sm text-on-surface truncate max-w-[180px]" title={acc.email || acc.name}>
+                  <span class="font-medium text-sm text-on-surface truncate max-w-[180px]" title={acc.email || acc.name}>
                     {acc.email || acc.name}
                   </span>
                   {#if acc.is_current}
-                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                      HIỆN TẠI
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
+                      Hiện tại
                     </span>
                   {/if}
                   <!-- Editable, because the tier is not fetched from anywhere.
@@ -617,28 +636,21 @@
                     on:click|stopPropagation
                     on:change={(e) => handleSetTier(acc.id, (e.target as HTMLSelectElement).value)}
                     title={acc.tier_source === 'user' ? 'Bạn đã gán gói này' : 'Chưa xác định — chọn để gán'}
-                    class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border cursor-pointer bg-transparent
-                    {acc.tier === 'PRO'
-                      ? 'border-purple-500/30 bg-purple-500/20 text-purple-600 dark:text-purple-400'
-                      : acc.tier === 'ULTRA'
-                        ? 'border-blue-500/30 bg-blue-500/20 text-blue-600 dark:text-blue-400'
-                        : acc.tier === 'FREE'
-                          ? 'border-slate-500/30 bg-slate-500/20 text-slate-400'
-                          : 'border-outline-variant text-on-surface-variant'}"
+                    class="px-1.5 py-0.5 rounded-lg text-[11px] font-medium border border-outline-variant bg-surface-container-low text-on-surface-variant cursor-pointer"
                   >
-                    <option value="UNKNOWN">CHƯA RÕ</option>
+                    <option value="UNKNOWN">Chưa rõ</option>
                     <option value="FREE">FREE</option>
                     <option value="PRO">PRO</option>
                     <option value="ULTRA">ULTRA</option>
                   </select>
                 </div>
 
-                <div class="flex items-center gap-2 text-[11px] text-on-surface-variant font-mono">
-                  <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase {acc.type === 'oauth_token' ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20' : 'bg-blue-500/10 text-blue-600 border border-blue-500/20'}">
-                    {acc.type === 'oauth_token' ? 'OAuth Token' : 'API Key'}
+                <div class="flex items-center gap-2 text-[11px] text-on-surface-variant">
+                  <span class="px-1.5 py-0.5 rounded-full text-[11px] font-medium border border-outline-variant text-on-surface-variant">
+                    {acc.type === 'oauth_token' ? 'OAuth token' : 'API key'}
                   </span>
                   {#if acc.oauth_token || acc.api_key}
-                    <span class="truncate max-w-[120px] text-slate-400">{(acc.oauth_token || acc.api_key).substring(0, 10)}...</span>
+                    <span class="truncate max-w-[120px] font-mono text-on-surface-variant">{(acc.oauth_token || acc.api_key).substring(0, 10)}…</span>
                   {/if}
                 </div>
               </td>
@@ -648,24 +660,24 @@
                    compile-time constant: every account showed the same 53%, and
                    nothing had ever asked Google for a quota. -->
               <td class="p-3 align-top">
-                <div class="flex flex-wrap items-center gap-2 text-[10px] mb-2">
-                  <span class="px-2 py-1 rounded-lg bg-surface-container-low border border-outline-variant/50 font-mono">
+                <div class="flex flex-wrap items-center gap-2 text-[11px] mb-2">
+                  <span class="px-2 py-1 rounded-lg bg-surface-container-low border border-outline-variant/50">
                     <span class="text-on-surface-variant">Request đã gửi:</span>
-                    <span class="font-bold text-on-surface">{acc.usage?.requests ?? 0}</span>
+                    <span class="font-medium font-mono text-on-surface">{acc.usage?.requests ?? 0}</span>
                   </span>
-                  <span class="px-2 py-1 rounded-lg border font-mono
+                  <span class="px-2 py-1 rounded-lg border
                     {(acc.usage?.rate_limit_hits ?? 0) > 0
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                      ? 'bg-error/10 border-error/30 text-error'
                       : 'bg-surface-container-low border-outline-variant/50 text-on-surface-variant'}">
-                    Dính 429: <span class="font-bold">{acc.usage?.rate_limit_hits ?? 0}</span>
+                    Dính 429: <span class="font-medium font-mono">{acc.usage?.rate_limit_hits ?? 0}</span>
                     {#if acc.usage?.last_rate_limit_at && !String(acc.usage.last_rate_limit_at).startsWith('0001')}
                       <span class="opacity-70">· {new Date(acc.usage.last_rate_limit_at).toLocaleString('vi-VN')}</span>
                     {/if}
                   </span>
                 </div>
 
-                <div class="flex items-start gap-1.5 text-[10px] text-on-surface-variant">
-                  <span class="material-symbols-outlined text-[13px] mt-px">info</span>
+                <div class="flex items-start gap-1.5 text-[11px] text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">info</span>
                   <span>
                     Hạn mức từng model chưa lấy được — app chưa có API quota của Google.
                     Số ở trên là do app tự đo trong lúc chạy.
@@ -685,8 +697,8 @@
                     <button
                       type="button"
                       on:click={() => handleSetCurrent(acc.id)}
-                      title="Đặt làm Tài khoản Hiện Tại"
-                      class="p-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-all cursor-pointer"
+                      title="Đặt làm tài khoản hiện tại"
+                      class="p-1.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
                     >
                       <span class="material-symbols-outlined text-sm">check_circle</span>
                     </button>
@@ -694,9 +706,9 @@
 
                   <button
                     type="button"
-                    on:click={() => copyText(acc.oauth_token || acc.api_key, acc.type === 'oauth_token' ? 'OAuth Token' : 'API Key')}
-                    title="Sao chép Token/Key"
-                    class="p-1.5 bg-surface-container-high text-on-surface hover:bg-surface-container-highest rounded-lg transition-all cursor-pointer"
+                    on:click={() => copyText(acc.oauth_token || acc.api_key, acc.type === 'oauth_token' ? 'OAuth token' : 'API key')}
+                    title="Sao chép token/key"
+                    class="p-1.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
                   >
                     <span class="material-symbols-outlined text-sm">content_copy</span>
                   </button>
@@ -704,10 +716,10 @@
                   <button
                     type="button"
                     on:click={() => handleToggleStatus(acc.id)}
-                    title="Đổi trạng thái Active/Disabled"
-                    class="p-1.5 bg-surface-container-high text-on-surface hover:bg-surface-container-highest rounded-lg transition-all cursor-pointer"
+                    title={acc.status === 'active' ? 'Đang bật — bấm để tắt' : 'Đang tắt — bấm để bật'}
+                    class="p-1.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
                   >
-                    <span class="material-symbols-outlined text-sm {acc.status === 'active' ? 'text-emerald-500' : 'text-amber-500'}">
+                    <span class="material-symbols-outlined text-sm {acc.status === 'active' ? 'text-success' : ''}">
                       {acc.status === 'active' ? 'toggle_on' : 'toggle_off'}
                     </span>
                   </button>
@@ -715,8 +727,8 @@
                   <button
                     type="button"
                     on:click={() => handleDelete(acc.id, acc.name)}
-                    title="Xóa khỏi Pool"
-                    class="p-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 rounded-lg transition-all cursor-pointer"
+                    title="Xoá khỏi pool"
+                    class="p-1.5 text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
                   >
                     <span class="material-symbols-outlined text-sm">delete</span>
                   </button>
@@ -724,26 +736,80 @@
               </td>
             </tr>
           {:else}
-            <tr>
-              <td colspan="5" class="p-8 text-center text-on-surface-variant font-sans italic">
-                Chưa có tài khoản nào trong Key Pool. Hãy bấm <strong>"🌐 + Đăng Nhập Google"</strong> trên để tự động thêm tài khoản!
-              </td>
-            </tr>
+            <!-- Lúc đang tải mà hiện "chưa có tài khoản nào" là nói sai với
+                 người dùng: pool có thể đang đầy, chỉ là chưa đọc xong. -->
+            {#if isLoading}
+              <tr>
+                <td colspan="5" class="p-8 text-center text-on-surface-variant">
+                  <span class="inline-flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                    Đang tải danh sách tài khoản…
+                  </span>
+                </td>
+              </tr>
+            {:else}
+              <tr>
+                <td colspan="5" class="p-8 text-center text-on-surface-variant">
+                  <div class="space-y-3">
+                    <p>
+                      {accounts.length === 0
+                        ? 'Chưa có tài khoản nào trong pool.'
+                        : 'Không có tài khoản nào khớp bộ lọc hiện tại.'}
+                    </p>
+                    {#if accounts.length === 0}
+                      <button
+                        type="button"
+                        on:click={onOpenGoogleLogin}
+                        class="inline-flex items-center gap-1.5 border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors cursor-pointer"
+                      >
+                        <span class="material-symbols-outlined text-sm">login</span> Đăng nhập Google
+                      </button>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
     </div>
 
-    <!-- Table Footer Pagination -->
-    <div class="p-3 bg-surface-container-low border-t border-outline-variant flex items-center justify-between text-xs text-on-surface-variant font-sans">
-      <div>
-        Hiển thị <strong>1 đến {filteredAccounts.length}</strong> trong tổng số <strong>{accounts.length}</strong> mục
-      </div>
-      <div class="flex items-center gap-1 font-mono text-[11px]">
-        <button class="px-2 py-1 rounded bg-surface-container-high text-on-surface cursor-pointer">&lt;</button>
-        <span class="px-3 py-1 rounded bg-primary text-on-primary font-bold">1</span>
-        <button class="px-2 py-1 rounded bg-surface-container-high text-on-surface cursor-pointer">&gt;</button>
-      </div>
+    <!-- Bảng không phân trang, nên chỉ hiện số lượng thật thay vì bộ nút trang
+         bấm không ăn. -->
+    <div class="p-3 bg-surface-container-low border-t border-outline-variant text-xs text-on-surface-variant">
+      {#if accounts.length === 0}
+        Hiển thị 0 mục
+      {:else}
+        Hiển thị <strong class="font-medium text-on-surface">{filteredAccounts.length}</strong>
+        trong tổng số <strong class="font-medium text-on-surface">{accounts.length}</strong> mục
+      {/if}
     </div>
   </div>
 </div>
+
+<!-- Hỏi lại trước khi xoá, bằng modal của app thay cho confirm() của webview. -->
+{#if confirmDelete}
+  {@const cd = confirmDelete}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div class="w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">
+      <h4 class="text-sm font-semibold text-on-surface">{cd.title}</h4>
+      <p class="text-xs text-on-surface-variant">{cd.body}</p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          on:click={() => (confirmDelete = null)}
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors cursor-pointer"
+        >
+          Huỷ
+        </button>
+        <button
+          type="button"
+          on:click={() => { confirmDelete = null; cd.run(); }}
+          class="border border-outline-variant text-error px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-error/10 transition-colors cursor-pointer"
+        >
+          Xoá
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

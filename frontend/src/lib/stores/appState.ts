@@ -45,6 +45,10 @@ export function addTaskLog(taskId: string, msg: string, level = 'INFO', time = '
 // Set to true to (re)open the onboarding tour from anywhere (e.g. command palette).
 export const onboardingOpen = writable<boolean>(false);
 
+// Set to true to open the command palette from outside it — the File menu's
+// "Command Palette" item used to just switch to the Settings tab.
+export const commandPaletteOpen = writable<boolean>(false);
+
 // Transient toast notifications.
 export type Toast = { id: number; message: string; level: string };
 export const toasts = writable<Toast[]>([]);

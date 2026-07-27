@@ -9,7 +9,23 @@
   import ModelSelect, { loadModelCatalog } from '../ui/ModelSelect.svelte';
   import OAuthPoolDashboard from './OAuthPoolDashboard.svelte';
 
-  let subTab: 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' | 'memory' = 'oauth_pool';
+  // A named type, not `typeof subTab`: TypeScript answers a type query with the
+  // variable's NARROWED type, which after the initializer is just 'oauth_pool',
+  // so every other entry in the list below failed to typecheck.
+  type SubTab = 'agents' | 'oauth_pool' | 'cli' | 'logs' | 'updates' | 'integrations' | 'memory';
+  let subTab: SubTab = 'oauth_pool';
+
+  // One list, one active treatment: the tabs used to be seven hand-written
+  // buttons and the OAuth one had drifted into a filled pill with its own icon.
+  const SUB_TABS: { id: SubTab; label: string }[] = [
+    { id: 'oauth_pool', label: 'OAuth Pool' },
+    { id: 'agents', label: 'Agents' },
+    { id: 'cli', label: 'Quick CLI' },
+    { id: 'logs', label: 'Log hệ thống' },
+    { id: 'updates', label: 'Cập nhật' },
+    { id: 'integrations', label: 'Webhook & MCP' },
+    { id: 'memory', label: 'Memory' },
+  ];
   // Use global store so agent list persists across tab switches
   let agents: Agent[] = [];
   const unsubscribeAgents = agentsStore.subscribe((v) => { agents = v as Agent[]; });
@@ -203,7 +219,7 @@
         if (!loaded || loaded.length === 0) {
           await AppBindings.ResetAgentsToDefaults();
           loaded = await AppBindings.GetAgents();
-          addLog('Auto-seeded 8 default corporate agents.', 'INFO');
+          addLog(`Chưa có agent nào — đã tạo ${(loaded || []).length} agent mặc định.`, 'INFO');
           addToast('Chưa có agent nào — đã tạo bộ agent mặc định.', 'INFO');
         }
         agentsStore.set(loaded || []);
@@ -217,7 +233,7 @@
     await AppBindings.ResetAgentsToDefaults();
     const loaded = await AppBindings.GetAgents();
     agentsStore.set(loaded || []);
-    addLog(`Reset agents to ${(loaded || []).length} default corporate roles`, 'SUCCESS');
+    addLog(`Đã khôi phục ${(loaded || []).length} agent mặc định.`, 'SUCCESS');
     addToast(`Đã khôi phục ${(loaded || []).length} agent mặc định.`, 'SUCCESS');
   }
 
@@ -396,7 +412,7 @@
     isUpdating = true;
     updateStatusMessage = 'Đang tải bản cập nhật từ GitHub...';
     updateStatusType = 'info';
-    addLog('Downloading update from ' + updateInfo.download_url, 'INFO');
+    addLog('Đang tải bản cập nhật từ ' + updateInfo.download_url, 'INFO');
 
     try {
       // Show installing message before calling backend
@@ -409,7 +425,7 @@
       if (res && !res.success) {
         updateStatusMessage = 'Cập nhật thất bại: ' + (res?.error || 'Không xác định');
         updateStatusType = 'error';
-        addLog('Update failed: ' + (res?.error || 'Unknown error'), 'ERROR');
+        addLog('Cập nhật thất bại: ' + (res?.error || 'Không xác định'), 'ERROR');
         addToast('Cập nhật thất bại: ' + (res?.error || 'Không xác định'), 'ERROR');
         isUpdating = false;
       }
@@ -419,7 +435,7 @@
       // Portable copy: the updater .bat swaps the exe and relaunches.
       updateStatusMessage = 'Đã tải xong! App sẽ đóng để cập nhật — nếu trình cài đặt hiện ra, làm theo các bước.';
       updateStatusType = 'success';
-      addLog('Update downloaded; app is closing to apply it.', 'SUCCESS');
+      addLog('Đã tải xong bản cập nhật — app sẽ đóng để cài đặt.', 'SUCCESS');
       addToast('Đã tải xong bản cập nhật — app sẽ đóng để cài đặt.', 'SUCCESS');
       // Do NOT set isUpdating = false — app is mid-restart
     }
@@ -431,66 +447,27 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold flex items-center gap-2 text-on-surface">
-        <span class="material-symbols-outlined text-primary">settings</span>
-        Studio & Settings — Cài đặt hệ thống
+      <h1 class="text-lg font-semibold flex items-center gap-2 text-on-surface">
+        <span class="material-symbols-outlined text-lg text-on-surface-variant">settings</span>
+        Cài đặt hệ thống
       </h1>
-      <p class="text-on-surface-variant text-sm mt-0.5">Manage agents, run quick CLI, view system logs & updates.</p>
+      <p class="text-on-surface-variant text-xs mt-0.5">Quản lý agent, chạy nhanh CLI, xem log hệ thống và cập nhật.</p>
     </div>
   </div>
 
   <!-- Sub-Tabs Navigation -->
-  <div class="flex justify-center">
-    <div class="bg-surface-container-high p-1 rounded-xl flex gap-1 border border-outline-variant">
-      <button
-        on:click={() => (subTab = 'oauth_pool')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5
-        {subTab === 'oauth_pool' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        <span class="material-symbols-outlined text-sm">key</span> Multi-Account OAuth Pool
-      </button>
-      <button
-        on:click={() => (subTab = 'agents')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
-        {subTab === 'agents' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        Agents Registry
-      </button>
-      <button
-        on:click={() => (subTab = 'cli')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
-        {subTab === 'cli' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        Quick CLI
-      </button>
-      <button
-        on:click={() => (subTab = 'logs')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
-        {subTab === 'logs' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        Live System Log
-      </button>
-      <button
-        on:click={() => (subTab = 'updates')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
-        {subTab === 'updates' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        Info & Updates
-      </button>
-      <button
-        on:click={() => (subTab = 'integrations')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
-        {subTab === 'integrations' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        Integrations (Webhook/MCP)
-      </button>
-      <button
-        on:click={() => (subTab = 'memory')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all
-        {subTab === 'memory' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
-      >
-        Memory
-      </button>
+  <div class="flex justify-center overflow-x-auto">
+    <div class="bg-surface-container-high p-1 rounded-xl flex flex-wrap justify-center gap-1 border border-outline-variant">
+      {#each SUB_TABS as t}
+        <button
+          type="button"
+          on:click={() => (subTab = t.id)}
+          class="px-4 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap
+          {subTab === t.id ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}"
+        >
+          {t.label}
+        </button>
+      {/each}
     </div>
   </div>
 
@@ -500,32 +477,32 @@
     <!-- Agents Registry View -->
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="font-bold text-sm text-on-surface">Corporate Agent Roles ({agents.length})</h3>
-        <button on:click={handleResetAgents} class="bg-surface-container-highest border border-outline-variant px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-surface-container-high transition-all flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">restart_alt</span> Reset Defaults
+        <h3 class="font-semibold text-sm text-on-surface">Agents ({agents.length})</h3>
+        <button on:click={handleResetAgents} class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">restart_alt</span> Khôi phục mặc định
         </button>
       </div>
 
       <!-- Add new agent (persists + syncs to 3D office, Kanban, Cockpit) -->
-      <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-container-low/50 border border-outline-variant rounded-xl p-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-container-low border border-outline-variant rounded-xl p-3">
         <span class="text-xs text-on-surface-variant flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary text-lg">person_add</span>
+          <span class="material-symbols-outlined text-base text-on-surface-variant">person_add</span>
           Tạo agent mới với đầy đủ provider, model, persona và giới hạn token.
         </span>
         <button on:click={openNewAgentForm}
-          class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all cursor-pointer flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">add</span> Tạo Agent
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">add</span> Tạo agent
         </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         {#each agents as agent}
-          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-sm hover:shadow-md transition-all">
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 hover:bg-surface-container-low transition-colors">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <span class="material-symbols-outlined text-2xl text-primary">{agent.icon || 'smart_toy'}</span>
+                <span class="material-symbols-outlined text-base text-on-surface-variant">{agent.icon || 'smart_toy'}</span>
                 <div>
-                  <h4 class="font-bold text-sm text-on-surface">{agent.name}</h4>
+                  <h4 class="font-semibold text-sm text-on-surface">{agent.name}</h4>
                   <p class="text-xs text-on-surface-variant line-clamp-1">{agent.role}</p>
                 </div>
               </div>
@@ -546,31 +523,23 @@
                 >
                   <span class="material-symbols-outlined text-base">content_copy</span>
                 </button>
-                <span class="w-2.5 h-2.5 rounded-full {agent.status === 'running' ? 'bg-primary animate-pulse' : agent.status === 'error' ? 'bg-rose-500' : 'bg-slate-400'}"></span>
+                <span class="w-2.5 h-2.5 rounded-full {agent.status === 'running' ? 'bg-primary' : agent.status === 'error' ? 'bg-error' : 'bg-outline'}"></span>
               </div>
             </div>
 
-            <div class="bg-surface-container-low/50 p-3 rounded-lg text-xs space-y-3 font-mono">
+            <div class="text-xs space-y-3">
               <div class="flex flex-col gap-1">
-                <div class="flex items-center justify-between">
-                  <span class="text-on-surface-variant font-bold">System Prompt / Persona:</span>
-                  <button 
-                    type="button"
-                    on:click={() => handleSaveAgent(agent)}
-                    class="text-[10px] bg-primary text-on-primary px-2 py-0.5 rounded font-bold hover:opacity-90 transition-all cursor-pointer">
-                    Lưu Agent
-                  </button>
-                </div>
+                <span class="text-xs font-medium text-on-surface-variant">System prompt / persona</span>
                 <textarea
                   value={personaDrafts[agent.agent_id] ?? agent.system}
                   on:input={(e) => setPersonaDraft(agent.agent_id, (e.currentTarget as HTMLTextAreaElement).value)}
-                  class="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 h-16 resize-none focus:ring-1 focus:ring-primary outline-none text-on-surface text-[11px]"
-                  placeholder="Enter system prompt for agent..."
+                  class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 h-16 resize-none focus:border-primary text-on-surface text-[11px]"
+                  placeholder="Nhập system prompt cho agent…"
                 ></textarea>
               </div>
 
               <div class="flex justify-between items-center text-on-surface-variant gap-2">
-                <span>Agent Type:</span>
+                <span class="font-medium">Loại agent</span>
                 <div class="w-32">
                   <Dropdown
                     options={[
@@ -584,26 +553,25 @@
               </div>
 
               <div class="flex justify-between items-center text-on-surface-variant gap-2">
-                <span>Model:</span>
+                <span class="font-medium">Model</span>
                 <div class="w-40">
                   <ModelSelect
                     bind:value={agent.model}
                     provider={agent.provider === 'anti_cli' ? 'anti' : 'claude'}
-                    selectClass="w-full bg-surface-container-low border border-outline-variant p-1.5 rounded-lg text-xs outline-none focus:border-primary"
                   />
                 </div>
               </div>
 
               <div class="flex justify-between text-on-surface-variant mt-2 pt-2 border-t border-outline-variant">
-                <span>Tokens Used:</span>
-                <span>{agent.tokens_used.toLocaleString()}</span>
+                <span class="font-medium">Token đã dùng</span>
+                <span class="font-mono text-on-surface">{agent.tokens_used.toLocaleString()}</span>
               </div>
               <div class="flex justify-end gap-2 pt-2">
-                <button on:click={() => handleDeleteAgent(agent)} class="bg-rose-500/10 text-rose-600 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1">
-                  <span class="material-symbols-outlined text-sm">delete</span> Xóa
+                <button on:click={() => handleDeleteAgent(agent)} class="border border-outline-variant text-error px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-error/10 transition-colors cursor-pointer flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm">delete</span> Xoá
                 </button>
-                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer">
-                  Save
+                <button on:click={() => handleSaveAgent(agent)} class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity cursor-pointer">
+                  Lưu
                 </button>
               </div>
             </div>
@@ -614,13 +582,13 @@
   {:else if subTab === 'cli'}
     <!-- Quick CLI View -->
     <div class="space-y-4">
-      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-4 shadow-sm">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-4">
         <div class="flex items-center gap-4">
-          <label for="agent-model-select" class="text-xs font-bold text-on-surface whitespace-nowrap">Agent & Model:</label>
+          <label for="agent-model-select" class="text-xs font-medium text-on-surface-variant whitespace-nowrap">Agent và model</label>
           <div class="flex gap-2 w-full max-w-sm">
             <select id="agent-model-select" bind:value={selectedAgentType}
               on:change={() => selectedModel = selectedAgentType === 'claude' ? 'claude-opus-4-8' : 'gemini-3.1-pro-high'}
-              class="w-1/2 bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary">
+              class="w-1/2 bg-surface-container-low border border-outline-variant px-3 py-2 rounded-lg text-xs text-on-surface focus:border-primary">
               <option value="claude">Claude</option>
               <option value="antigravity">Antigravity</option>
             </select>
@@ -628,20 +596,19 @@
               <ModelSelect
                 bind:value={selectedModel}
                 provider={selectedAgentType === 'claude' ? 'claude' : 'anti'}
-                selectClass="w-full bg-surface-container-low border border-outline-variant p-2 rounded-lg text-xs outline-none focus:border-primary"
               />
             </div>
           </div>
         </div>
 
         <!-- CLI Window Visibility Toggle Switch -->
-        <div class="flex items-center justify-between p-3 bg-surface-container-low/50 rounded-xl border border-outline-variant/60">
+        <div class="flex items-center justify-between gap-3 p-3 bg-surface-container-low rounded-xl border border-outline-variant">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-sm">terminal</span>
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">terminal</span>
             <div>
-              <div class="text-xs font-bold text-on-surface">Hiển thị Cửa Sổ CMD Khi Chạy CLI (Console Window)</div>
+              <div class="text-xs font-medium text-on-surface">Hiển thị cửa sổ CMD khi chạy CLI</div>
               <div class="text-[11px] text-on-surface-variant">
-                {showCLIConsole ? '🟢 ĐANG BẬT: Mở cửa sổ CMD để xem CLI làm việc trực tiếp' : '⚫ ĐANG TẮT: Chạy ngầm 100% không làm phiền màn hình'}
+                {showCLIConsole ? 'Đang bật — mở cửa sổ CMD để xem CLI làm việc trực tiếp.' : 'Đang tắt — chạy ngầm, không chiếm màn hình.'}
               </div>
             </div>
           </div>
@@ -651,13 +618,13 @@
               showCLIConsole = !showCLIConsole;
               if ((AppBindings as any).SetShowCLIConsole) {
                 await (AppBindings as any).SetShowCLIConsole(showCLIConsole);
-                addLog(`Chế độ cửa sổ CLI: ${showCLIConsole ? 'HIỆN (BẬT CMD)' : 'ẨN (TẮT CMD)'}`, 'INFO');
+                addLog(`Chế độ cửa sổ CLI: ${showCLIConsole ? 'hiện cửa sổ CMD' : 'chạy ngầm'}.`, 'INFO');
               }
             }}
-            class="px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 {showCLIConsole ? 'bg-emerald-600 text-white shadow-md' : 'bg-surface-container-highest text-on-surface-variant border border-outline-variant'}"
+            class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0 {showCLIConsole ? 'bg-primary text-on-primary hover:opacity-90' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-high'}"
           >
             <span class="material-symbols-outlined text-sm">{showCLIConsole ? 'visibility' : 'visibility_off'}</span>
-            {showCLIConsole ? 'BẬT (Hiện CMD)' : 'TẮT (Ẩn ngầm)'}
+            {showCLIConsole ? 'Bật (hiện CMD)' : 'Tắt (ẩn ngầm)'}
           </button>
         </div>
 
@@ -669,104 +636,96 @@
               handleRunQuickCLI();
             }
           }}
-          class="w-full bg-surface-container-low/30 h-32 rounded-xl p-4 font-mono text-xs text-on-surface border border-outline-variant focus:ring-2 focus:ring-primary outline-none resize-none"
-          placeholder="Nhập prompt chạy thử CLI trực tiếp... (Nhấn Enter để gửi, Shift+Enter xuống dòng)"
+          class="w-full bg-surface-container-low h-32 rounded-xl p-4 font-mono text-xs text-on-surface border border-outline-variant focus:border-primary resize-none"
+          placeholder="Nhập prompt chạy thử CLI trực tiếp… (Nhấn Enter để gửi, Shift+Enter xuống dòng)"
         ></textarea>
 
-        <button on:click={handleRunQuickCLI} disabled={isQuickRunning} class="bg-primary text-on-primary px-6 py-2 rounded-xl text-xs font-bold disabled:opacity-50">
-          {isQuickRunning ? 'Đang chạy...' : '▶ Chạy CLI Trực Tiếp'}
+        <button on:click={handleRunQuickCLI} disabled={isQuickRunning}
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm {isQuickRunning ? 'animate-spin' : ''}">{isQuickRunning ? 'progress_activity' : 'play_arrow'}</span>
+          {isQuickRunning ? 'Đang chạy…' : 'Chạy CLI trực tiếp'}
         </button>
       </div>
 
       {#if quickOutput}
-        <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs max-h-80 overflow-y-auto whitespace-pre-wrap">
+        <div class="bg-surface-container-highest border border-outline-variant text-on-surface p-4 rounded-xl font-mono text-xs max-h-80 overflow-y-auto whitespace-pre-wrap">
           {quickOutput}
         </div>
       {/if}
     </div>
   {:else if subTab === 'logs'}
     <!-- Live Log View -->
-    <div class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs h-[480px] overflow-y-auto space-y-1">
+    <div class="bg-surface-container-highest border border-outline-variant text-on-surface p-4 rounded-xl font-mono text-xs h-[480px] overflow-y-auto space-y-1">
       {#each $logs as log}
         <div class="flex gap-2">
-          <span class="text-slate-400">[{log.time}]</span>
-          <span class="font-bold">{log.level}</span>
-          <span class="text-slate-200">{log.message}</span>
+          <span class="text-on-surface-variant">[{log.time}]</span>
+          <span class="font-medium {log.level === 'ERROR' ? 'text-error' : log.level === 'WARN' ? 'text-warning' : log.level === 'SUCCESS' ? 'text-success' : 'text-on-surface-variant'}">{log.level}</span>
+          <span class="text-on-surface">{log.message}</span>
         </div>
       {:else}
-        <div class="text-slate-500 italic">Chưa có log entry nào.</div>
+        <div class="text-on-surface-variant italic">Chưa có log entry nào.</div>
       {/each}
     </div>
   {:else if subTab === 'updates'}
     <!-- Info & Updates View -->
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-center space-y-4 max-w-xl mx-auto shadow-sm">
-      <div class="w-12 h-12 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center mx-auto">
-        <span class="material-symbols-outlined text-2xl">system_update</span>
-      </div>
-      <h3 class="font-bold text-lg text-on-surface">Claude Suite Control Center</h3>
-      <p class="text-xs text-on-surface-variant">Phiên bản hiện tại: <strong>{currentAppVersion} (Go + Wails + Svelte)</strong></p>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-center space-y-4 max-w-xl mx-auto">
+      <h3 class="font-semibold text-sm text-on-surface flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-base text-on-surface-variant">system_update</span>
+        Claude Suite Control Center
+      </h3>
+      <p class="text-xs text-on-surface-variant">Phiên bản hiện tại: <span class="font-mono text-on-surface">{currentAppVersion}</span> (Go + Wails + Svelte)</p>
 
-      <button 
-        on:click={handleCheckUpdate} 
+      <button
+        on:click={handleCheckUpdate}
         disabled={isCheckingUpdate || isUpdating}
-        class="bg-primary text-on-primary px-6 py-2 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2 mx-auto transition-all"
+        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 mx-auto"
       >
-        {#if isCheckingUpdate}
-          <span class="material-symbols-outlined text-sm animate-spin">refresh</span>
-          Đang kiểm tra...
-        {:else}
-          🔄 Kiểm tra bản cập nhật
-        {/if}
+        <span class="material-symbols-outlined text-sm {isCheckingUpdate ? 'animate-spin' : ''}">refresh</span>
+        {isCheckingUpdate ? 'Đang kiểm tra…' : 'Kiểm tra bản cập nhật'}
       </button>
 
       {#if updateStatusMessage}
-        <div class="p-3 rounded-xl text-xs font-semibold text-center transition-all
-          {updateStatusType === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
-           updateStatusType === 'success' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
-           'bg-blue-500/10 text-blue-500 border border-blue-500/20'}"
+        <div class="p-3 rounded-lg text-xs font-medium text-center
+          {updateStatusType === 'error' ? 'bg-error/10 text-error border border-error/20' :
+           updateStatusType === 'success' ? 'bg-success/10 text-success border border-success/20' :
+           'bg-surface-container-high text-on-surface-variant border border-outline-variant'}"
         >
           {updateStatusMessage}
         </div>
       {/if}
 
       {#if isUpdating}
-        <div class="space-y-2 pt-2">
-          <div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
-            <div class="bg-primary h-full animate-pulse w-full"></div>
-          </div>
-          <p class="text-[11px] text-on-surface-variant animate-pulse">Vui lòng không tắt ứng dụng trong quá trình cài đặt...</p>
+        <div class="flex items-center justify-center gap-2 pt-2 text-[11px] text-on-surface-variant">
+          <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+          Vui lòng không tắt ứng dụng trong quá trình cài đặt…
         </div>
       {/if}
 
       {#if updateInfo}
         <div class="p-4 bg-surface-container-low rounded-xl text-xs text-left space-y-3">
           {#if updateInfo.has_update}
-            <p class="text-emerald-600 font-bold mb-1">Có phiên bản mới: {updateInfo.version}</p>
+            <p class="text-on-surface font-semibold mb-1">Có phiên bản mới: {updateInfo.version}</p>
             <p class="text-on-surface-variant mb-3">{updateInfo.body}</p>
-            <button 
-              on:click={handleAutoUpdate} 
+            <button
+              on:click={handleAutoUpdate}
               disabled={isUpdating}
-              class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"
+              class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
-              {#if isUpdating}
-                <span class="material-symbols-outlined text-sm animate-spin">sync</span>
-                Đang tải & cài đặt...
-              {:else}
-                🚀 Tự động cập nhật ngay
-              {/if}
+              <span class="material-symbols-outlined text-sm {isUpdating ? 'animate-spin' : ''}">{isUpdating ? 'progress_activity' : 'download'}</span>
+              {isUpdating ? 'Đang tải và cài đặt…' : 'Tự động cập nhật ngay'}
             </button>
           {:else if !updateStatusMessage}
-            <p class="text-emerald-600 font-bold">Bạn đang sử dụng phiên bản mới nhất!</p>
+            <p class="text-success font-medium">Bạn đang sử dụng phiên bản mới nhất!</p>
           {/if}
         </div>
       {/if}
     </div>
   {:else if subTab === 'integrations'}
     <!-- Daily spending cap -->
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-4 max-w-2xl mx-auto shadow-sm mb-4">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-4 max-w-2xl mx-auto mb-4">
       <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary text-2xl">savings</span>
-        <h3 class="font-bold text-lg text-on-surface">Trần chi phí mỗi ngày</h3>
+        <span class="material-symbols-outlined text-base text-on-surface-variant">savings</span>
+        <h3 class="font-semibold text-sm text-on-surface">Trần chi phí mỗi ngày</h3>
       </div>
       <p class="text-xs text-on-surface-variant">
         Orchestrator tự thử lại task thất bại và lịch có thể khởi động nó lúc 2 giờ sáng. Đặt trần để một lỗi
@@ -777,18 +736,18 @@
         <div class="bg-surface-container-low border border-outline-variant rounded-xl p-3 space-y-2">
           <div class="flex items-center justify-between text-xs">
             <span class="text-on-surface-variant">Đã dùng hôm nay</span>
-            <span class="font-mono font-bold text-on-surface">
+            <span class="font-mono font-medium text-on-surface">
               ${budget.spent_usd.toFixed(2)}{#if budget.limit_usd > 0} / ${budget.limit_usd.toFixed(2)}{/if}
             </span>
           </div>
           {#if budget.limit_usd > 0}
             {@const pct = Math.min(100, (budget.spent_usd / budget.limit_usd) * 100)}
             <div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              <div class="h-full rounded-full transition-all duration-500 {pct >= 100 ? 'bg-rose-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}"
+              <div class="h-full rounded-full transition-all duration-500 {pct >= 100 ? 'bg-error' : pct >= 80 ? 'bg-warning' : 'bg-primary'}"
                 style="width: {pct}%"></div>
             </div>
             {#if pct >= 100}
-              <p class="text-[11px] font-bold text-rose-600">Đã chạm trần — không giao việc mới cho tới ngày mai.</p>
+              <p class="text-[11px] font-medium text-error">Đã chạm trần — không giao việc mới cho tới ngày mai.</p>
             {/if}
           {:else}
             <p class="text-[11px] text-on-surface-variant">Chưa đặt trần — agent chạy không giới hạn chi phí.</p>
@@ -798,14 +757,14 @@
 
       <div class="flex items-end gap-2">
         <div class="flex-1 space-y-1">
-          <label for="daily-budget" class="text-xs font-bold text-on-surface">Giới hạn (USD/ngày)</label>
+          <label for="daily-budget" class="text-xs font-medium text-on-surface-variant">Giới hạn (USD/ngày)</label>
           <input id="daily-budget" type="number" min="0" step="0.5" bind:value={budgetLimit}
             placeholder="0 = không giới hạn"
-            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-sm text-on-surface outline-none focus:border-primary" />
+            class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-sm text-on-surface focus:border-primary" />
         </div>
         <button type="button" on:click={saveBudget} disabled={isSavingBudget}
-          class="bg-primary text-on-primary px-5 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer">
-          {isSavingBudget ? 'Đang lưu...' : 'Lưu'}
+          class="bg-primary text-on-primary px-4 py-2.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer">
+          {isSavingBudget ? 'Đang lưu…' : 'Lưu'}
         </button>
       </div>
       <p class="text-[11px] text-on-surface-variant">
@@ -815,21 +774,21 @@
     </div>
 
     <!-- Integrations View -->
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-6 max-w-2xl mx-auto shadow-sm">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-6 max-w-2xl mx-auto">
       <div class="flex items-center gap-2 mb-4">
-        <span class="material-symbols-outlined text-primary text-2xl">cable</span>
-        <h3 class="font-bold text-lg text-on-surface">Webhooks & MCP Configuration</h3>
+        <span class="material-symbols-outlined text-base text-on-surface-variant">cable</span>
+        <h3 class="font-semibold text-sm text-on-surface">Webhook và MCP</h3>
       </div>
-      
+
       <div class="space-y-2">
-        <label for="global-webhook-url" class="text-sm font-bold text-on-surface">Outbound Notification Webhook</label>
-        <p class="text-xs text-on-surface-variant">Khi một task hoàn thành hoặc thất bại, hệ thống sẽ POST JSON tới URL này (Slack Incoming Webhook, Discord, hoặc endpoint tùy chỉnh).</p>
-        <input 
+        <label for="global-webhook-url" class="text-xs font-medium text-on-surface-variant">Webhook thông báo (outbound)</label>
+        <p class="text-xs text-on-surface-variant">Khi một task hoàn thành hoặc thất bại, hệ thống sẽ POST JSON tới URL này (Slack Incoming Webhook, Discord, hoặc endpoint tuỳ chỉnh).</p>
+        <input
           id="global-webhook-url"
-          type="text" 
+          type="text"
           bind:value={webhookUrl}
           placeholder="https://hooks.slack.com/services/..."
-          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary outline-none"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 text-sm text-on-surface focus:border-primary"
         />
       </div>
 
@@ -841,35 +800,35 @@
         <button
           on:click={handleSaveIntegrations}
           disabled={isIntegrationsSaving}
-          class="bg-primary text-on-primary px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
         >
-          {isIntegrationsSaving ? 'Saving...' : 'Save Configuration'}
+          {isIntegrationsSaving ? 'Đang lưu…' : 'Lưu cấu hình'}
         </button>
       </div>
 
 
     </div>
   {:else if subTab === 'memory'}
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-5 max-w-2xl mx-auto shadow-sm">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-5 max-w-2xl mx-auto">
       <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary text-2xl">psychology</span>
-        <h3 class="font-bold text-lg text-on-surface">Memory & Context Pack</h3>
+        <span class="material-symbols-outlined text-base text-on-surface-variant">psychology</span>
+        <h3 class="font-semibold text-sm text-on-surface">Memory và Context Pack</h3>
       </div>
       <p class="text-xs text-on-surface-variant">
         Điều khiển những gì được tiêm vào prompt của sub-agent. Dữ liệu xem tại trang <strong>Memory</strong> (nhóm Giám sát).
       </p>
 
       <div>
-        <label class="text-xs font-bold text-on-surface-variant uppercase" for="pack-budget">Ngân sách context pack (ký tự)</label>
+        <label class="text-xs font-medium text-on-surface-variant" for="pack-budget">Ngân sách context pack (ký tự)</label>
         <input id="pack-budget" type="number" min="0" step="500" bind:value={memoryCfg.context_pack_max_chars}
-          class="w-full mt-1 px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono text-on-surface" />
+          class="w-full mt-1 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-sm font-mono text-on-surface focus:border-primary" />
         <p class="text-[11px] text-on-surface-variant mt-1">
-          Mặc định 12000 (~3k token). Đặt <strong>0</strong> để TẮT hẳn việc tiêm memory vào prompt (kill switch).
+          Mặc định 12000 (~3k token). Đặt <strong>0</strong> để tắt hẳn việc tiêm memory vào prompt (kill switch).
         </p>
       </div>
 
       <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" bind:checked={memoryCfg.auto_summarize} class="mt-0.5 accent-[var(--md-sys-color-primary,#6750a4)]" />
+        <input type="checkbox" bind:checked={memoryCfg.auto_summarize} class="mt-0.5 accent-primary cursor-pointer" />
         <span>
           <span class="text-sm font-semibold text-on-surface block">Tự làm mới summaries (LLM)</span>
           <span class="text-[11px] text-on-surface-variant">Sau mỗi task, các file đổi cấu trúc được model rẻ (Haiku) viết lại summary theo lô — nhỏ giọt, có cooldown 10 phút.</span>
@@ -877,7 +836,7 @@
       </label>
 
       <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" bind:checked={memoryCfg.session_resume} class="mt-0.5 accent-[var(--md-sys-color-primary,#6750a4)]" />
+        <input type="checkbox" bind:checked={memoryCfg.session_resume} class="mt-0.5 accent-primary cursor-pointer" />
         <span>
           <span class="text-sm font-semibold text-on-surface block">Session resume cho agent</span>
           <span class="text-[11px] text-on-surface-variant">Ghi SessionID của run thành công về agent để task sau tiếp tục cùng hội thoại CLI (--resume/--conversation). Context hội thoại sẽ lớn dần và CLI tự nén khó đoán — bật khi muốn đo thử.</span>
@@ -885,7 +844,7 @@
       </label>
 
       <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" bind:checked={memoryCfg.lesson_promotion} class="mt-0.5 accent-[var(--md-sys-color-primary,#6750a4)]" />
+        <input type="checkbox" bind:checked={memoryCfg.lesson_promotion} class="mt-0.5 accent-primary cursor-pointer" />
         <span>
           <span class="text-sm font-semibold text-on-surface block">Promote lesson lên global</span>
           <span class="text-[11px] text-on-surface-variant">Lesson xuất hiện ở ≥2 workspace với confidence trung bình ≥0.8 được nhân bản sang mọi workspace. Tắt mặc định: lesson tồi ở phạm vi global gây hại ở mọi nơi cùng lúc.</span>
@@ -897,18 +856,18 @@
           on:click={handleRefreshGeminiModels}
           disabled={isRefreshingModels}
           title="Gọi Generative Language API bằng API key trong pool để lấy danh sách model Gemini mới nhất"
-          class="bg-surface-container-highest text-on-surface-variant border border-outline-variant px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1 hover:bg-surface-container-high transition-all"
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 cursor-pointer flex items-center gap-1.5 hover:bg-surface-container-high transition-colors"
         >
-          {#if isRefreshingModels}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{:else}<span class="material-symbols-outlined text-base">cloud_sync</span>{/if}
+          <span class="material-symbols-outlined text-sm {isRefreshingModels ? 'animate-spin' : ''}">{isRefreshingModels ? 'progress_activity' : 'cloud_sync'}</span>
           Tải model Gemini từ API
         </button>
         <button
           on:click={handleSaveMemoryCfg}
           disabled={isSavingMemoryCfg}
-          class="bg-primary text-on-primary px-6 py-2 rounded-xl text-sm font-bold disabled:opacity-50 flex items-center gap-1"
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
         >
-          {#if isSavingMemoryCfg}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{/if}
-          {isSavingMemoryCfg ? 'Đang lưu…' : 'Lưu cài đặt Memory'}
+          {#if isSavingMemoryCfg}<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>{/if}
+          {isSavingMemoryCfg ? 'Đang lưu…' : 'Lưu cài đặt memory'}
         </button>
       </div>
     </div>

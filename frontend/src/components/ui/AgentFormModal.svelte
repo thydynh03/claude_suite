@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { Agent } from '../../lib/types';
   import ModelSelect, { providerOfModel } from './ModelSelect.svelte';
 
@@ -71,6 +71,22 @@
   let error = '';
 
   let lastLoadedId: string | null = null;
+  let nameInputEl: HTMLInputElement | null = null;
+
+  // Keyboard handling this dialog used not to have: Escape closes it, and the
+  // name field takes focus when it opens so the form is usable without a mouse.
+  $: if (open && nameInputEl) nameInputEl.focus();
+
+  function onKeydown(e: KeyboardEvent) {
+    if (!open) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      dispatch('close');
+    }
+  }
+
+  onMount(() => window.addEventListener('keydown', onKeydown));
+  onDestroy(() => window.removeEventListener('keydown', onKeydown));
 
   // Reset when the dialog opens, so a cancelled edit does not leak into the next
   // one. Keyed on the agent id rather than on `open` alone: re-running on every
@@ -146,50 +162,52 @@
 </script>
 
 {#if open}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-    on:click={() => dispatch('close')}
-  >
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <!-- The backdrop is deliberately inert: a stray click outside used to discard
+       everything typed into the seven fields with no warning. Escape and the
+       Huỷ button are the ways out. -->
+  <div class="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div
-      class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-xl w-full max-w-2xl max-h-[88vh] overflow-y-auto"
-      on:click|stopPropagation
+      class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg w-full max-w-2xl max-h-[88vh] overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="agent-form-title"
     >
       <div class="flex items-center justify-between px-5 py-4 border-b border-outline-variant sticky top-0 bg-surface-container-lowest z-10">
-        <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">{icon}</span>
+        <h3 id="agent-form-title" class="font-semibold text-sm text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-base text-on-surface-variant">{icon}</span>
           {isEditing ? `Sửa agent: ${agent?.name}` : 'Tạo agent mới'}
         </h3>
         <button
           type="button"
           on:click={() => dispatch('close')}
-          class="text-on-surface-variant hover:text-on-surface cursor-pointer"
+          title="Đóng (Esc)"
+          class="rounded-lg p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors cursor-pointer"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined text-base">close</span>
         </button>
       </div>
 
       <div class="p-5 space-y-5">
         <!-- Identity -->
         <section class="space-y-3">
-          <h4 class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Danh tính</h4>
+          <h4 class="text-xs font-medium text-on-surface-variant">Danh tính</h4>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label for="agent-name" class="text-[10px] font-bold text-on-surface block mb-1">Tên agent</label>
+              <label for="agent-name" class="text-xs font-medium text-on-surface-variant block mb-1">Tên agent</label>
               <input
                 id="agent-name"
+                bind:this={nameInputEl}
                 bind:value={name}
                 placeholder="VD: Back-end Developer"
                 class="w-full bg-surface-container-low border rounded-lg px-3 py-2 text-xs outline-none focus:border-primary
-                {duplicate ? 'border-red-500' : 'border-outline-variant'}"
+                {duplicate ? 'border-error' : 'border-outline-variant'}"
               />
               {#if duplicate}
-                <p class="text-[10px] text-red-500 mt-1">Tên này đã tồn tại.</p>
+                <p class="text-[11px] text-error mt-1">Tên này đã tồn tại.</p>
               {/if}
             </div>
             <div>
-              <label for="agent-role" class="text-[10px] font-bold text-on-surface block mb-1">Vai trò</label>
+              <label for="agent-role" class="text-xs font-medium text-on-surface-variant block mb-1">Vai trò</label>
               <input
                 id="agent-role"
                 bind:value={role}
@@ -200,14 +218,14 @@
           </div>
 
           <div>
-            <span class="text-[10px] font-bold text-on-surface block mb-1.5">Biểu tượng</span>
+            <span class="text-xs font-medium text-on-surface-variant block mb-1.5">Biểu tượng</span>
             <div class="flex flex-wrap gap-1.5">
               {#each ICONS as ic}
                 <button
                   type="button"
                   on:click={() => (icon = ic)}
                   title={ic}
-                  class="w-9 h-9 rounded-lg border flex items-center justify-center transition-all cursor-pointer
+                  class="w-9 h-9 rounded-lg border flex items-center justify-center transition-colors cursor-pointer
                   {icon === ic
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'}"
@@ -221,10 +239,10 @@
 
         <!-- Engine -->
         <section class="space-y-3 pt-1 border-t border-outline-variant">
-          <h4 class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant pt-3">Bộ máy</h4>
+          <h4 class="text-xs font-medium text-on-surface-variant pt-3">Bộ máy</h4>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label for="agent-provider" class="text-[10px] font-bold text-on-surface block mb-1">Provider</label>
+              <label for="agent-provider" class="text-xs font-medium text-on-surface-variant block mb-1">Provider</label>
               <select
                 id="agent-provider"
                 value={provider}
@@ -237,7 +255,7 @@
               </select>
             </div>
             <div>
-              <label for="agent-model" class="text-[10px] font-bold text-on-surface block mb-1">Model</label>
+              <label for="agent-model" class="text-xs font-medium text-on-surface-variant block mb-1">Model</label>
               <ModelSelect
                 bind:value={model}
                 provider={provider === 'anti_cli' ? 'anti' : 'claude'}
@@ -245,7 +263,7 @@
               />
             </div>
             <div>
-              <label for="agent-token-limit" class="text-[10px] font-bold text-on-surface block mb-1">
+              <label for="agent-token-limit" class="text-xs font-medium text-on-surface-variant block mb-1">
                 Giới hạn token (0 = mặc định)
               </label>
               <input
@@ -262,13 +280,13 @@
         <!-- Behaviour -->
         <section class="space-y-3 pt-1 border-t border-outline-variant">
           <div class="flex items-center justify-between pt-3">
-            <h4 class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Hành vi</h4>
+            <h4 class="text-xs font-medium text-on-surface-variant">Hành vi</h4>
             <div class="flex flex-wrap gap-1 justify-end">
               {#each Object.keys(TEMPLATES) as key}
                 <button
                   type="button"
                   on:click={() => applyTemplate(key)}
-                  class="px-2 py-0.5 rounded-md text-[10px] font-bold border border-outline-variant text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
+                  class="px-2 py-1 rounded-lg text-[11px] font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
                 >
                   {key}
                 </button>
@@ -276,7 +294,7 @@
             </div>
           </div>
           <div>
-            <label for="agent-system" class="text-[10px] font-bold text-on-surface block mb-1">
+            <label for="agent-system" class="text-xs font-medium text-on-surface-variant block mb-1">
               System prompt (persona)
             </label>
             <textarea
@@ -286,12 +304,12 @@
               placeholder="Mô tả cách agent này làm việc, giới hạn của nó, và cái nó không được tự ý làm."
               class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs leading-relaxed outline-none focus:border-primary resize-y"
             ></textarea>
-            <p class="text-[10px] text-on-surface-variant mt-1">
+            <p class="text-[11px] text-on-surface-variant mt-1">
               Bỏ trống thì app tự sinh một câu mô tả tối thiểu — nên viết rõ hơn để agent làm đúng việc.
             </p>
           </div>
           <div>
-            <label for="agent-notes" class="text-[10px] font-bold text-on-surface block mb-1">Ghi chú</label>
+            <label for="agent-notes" class="text-xs font-medium text-on-surface-variant block mb-1">Ghi chú</label>
             <input
               id="agent-notes"
               bind:value={notes}
@@ -302,7 +320,7 @@
         </section>
 
         {#if error}
-          <p class="text-xs text-red-500 font-bold">{error}</p>
+          <p class="text-xs text-error font-medium">{error}</p>
         {/if}
       </div>
 
@@ -310,7 +328,7 @@
         <button
           type="button"
           on:click={() => dispatch('close')}
-          class="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
         >
           Huỷ
         </button>
@@ -318,7 +336,7 @@
           type="button"
           on:click={submit}
           disabled={!name.trim() || duplicate}
-          class="px-4 py-2 rounded-lg text-xs font-bold bg-primary text-on-primary disabled:opacity-40 cursor-pointer"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
         >
           {isEditing ? 'Lưu thay đổi' : 'Tạo agent'}
         </button>

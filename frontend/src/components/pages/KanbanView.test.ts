@@ -155,8 +155,8 @@ describe('KanbanView task inspector log stream', () => {
     ;(await screen.findByText('Task a')).click()
     await tick()
 
-    // The drawer is up (header badge) and every duplicate line rendered.
-    expect(await screen.findByText('Task Inspector & Sub-Agent Monitor')).toBeInTheDocument()
+    // The drawer is up (header label) and every duplicate line rendered.
+    expect(await screen.findByText('Task Inspector')).toBeInTheDocument()
     expect(screen.getAllByText('```')).toHaveLength(3)
   })
 
@@ -167,7 +167,7 @@ describe('KanbanView task inspector log stream', () => {
 
     ;(await screen.findByText('Task a')).click()
     await tick()
-    expect(await screen.findByText('Task Inspector & Sub-Agent Monitor')).toBeInTheDocument()
+    expect(await screen.findByText('Task Inspector')).toBeInTheDocument()
 
     // Live stream after the drawer is open, duplicates included.
     for (let i = 0; i < 5; i++) addTaskLog('a', 'progress .', 'INFO', '09:41:01')
@@ -175,8 +175,8 @@ describe('KanbanView task inspector log stream', () => {
 
     expect(screen.getAllByText('progress .')).toHaveLength(5)
     // The close button still works — the app is not frozen behind the overlay.
-    ;(await screen.findByText('Đóng Panel')).click()
+    ;(await screen.findByText('Đóng')).click()
     await tick()
-    expect(screen.queryByText('Task Inspector & Sub-Agent Monitor')).not.toBeInTheDocument()
+    expect(screen.queryByText('Task Inspector')).not.toBeInTheDocument()
   })
 })

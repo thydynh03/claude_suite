@@ -109,7 +109,7 @@
   }
 
   $: agentOptions = [
-    { value: '', label: 'Unassigned (Auto Dispatch)' },
+    { value: '', label: 'Tự động phân công' },
     ...($agentsStore || []).map(a => ({
       value: a.name,
       label: `${a.name}`
@@ -155,8 +155,8 @@
     verifyBuild = !verifyBuild;
     try {
       await (AppBindings as any).SetVerifyBuild(verifyBuild);
-      addLog(`Verify build trước khi Done: ${verifyBuild ? 'BẬT' : 'TẮT'}`, 'INFO');
-      addToast(`Verify build trước khi Done: ${verifyBuild ? 'BẬT' : 'TẮT'}.`, 'SUCCESS');
+      addLog(`Verify build trước khi Done: ${verifyBuild ? 'bật' : 'tắt'}`, 'INFO');
+      addToast(`Verify build trước khi Done: ${verifyBuild ? 'bật' : 'tắt'}.`, 'SUCCESS');
     } catch (e) {
       // Put the toggle back: leaving it on while the backend refused it tells
       // the user their builds are verified when they are not.
@@ -195,13 +195,14 @@
   let newTaskDescription = '';
   let newTaskPriority = 'normal';
   let newTaskAssignedTo = '';
+  let creatingTask = false;
 
   const columns = [
-    { key: 'backlog', title: 'Backlog', icon: 'inventory_2', color: 'text-outline' },
-    { key: 'queued', title: 'Queued', icon: 'hourglass_empty', color: 'text-secondary' },
-    { key: 'running', title: 'Running', icon: 'bolt', color: 'text-primary' },
-    { key: 'done', title: 'Done', icon: 'check_circle', color: 'text-emerald-600' },
-    { key: 'failed', title: 'Failed', icon: 'cancel', color: 'text-rose-600' },
+    { key: 'backlog', title: 'Backlog', icon: 'inventory_2' },
+    { key: 'queued', title: 'Queued', icon: 'hourglass_empty' },
+    { key: 'running', title: 'Running', icon: 'bolt' },
+    { key: 'done', title: 'Done', icon: 'check_circle' },
+    { key: 'failed', title: 'Failed', icon: 'cancel' },
   ];
 
   // A `$:` derivation, not a function called from the template. The columns
@@ -231,16 +232,13 @@
   })();
 
   async function handleAddTask() {
-    if (!newTaskTitle.trim()) return;
+    if (!newTaskTitle.trim() || creatingTask) return;
     const title = newTaskTitle;
     const desc = newTaskDescription || newTaskTitle;
     const priority = newTaskPriority;
     const assignedTo = newTaskAssignedTo;
 
-    newTaskTitle = '';
-    newTaskDescription = '';
-    showAddModal = false;
-
+    creatingTask = true;
     try {
       await AppBindings.CreateTask(models.Task.createFrom({
         task_id: '',
@@ -257,13 +255,20 @@
         session_id: '',
         parent_id: '',
       }));
+      // Only now is the task real: the modal used to close and clear the
+      // fields *before* the await, so a failed CreateTask destroyed the
+      // prompt the user had just written and said nothing.
       newTaskTitle = '';
       newTaskDescription = '';
+      showAddModal = false;
       addLog(`Đã tạo Task mới: ${title}`, 'SUCCESS');
       addToast(`Đã tạo Task mới: ${title}`, 'SUCCESS');
       if (onRefresh) await onRefresh();
     } catch (e) {
-      console.error('CreateTask error:', e);
+      addLog(`Không tạo được task: ${e}`, 'ERROR');
+      addToast(`Không tạo được task: ${e}`, 'ERROR');
+    } finally {
+      creatingTask = false;
     }
   }
 
@@ -296,11 +301,14 @@
     try {
       if ((AppBindings as any).AssignTask) {
         await (AppBindings as any).AssignTask(taskID, assignedTo);
-        addLog(`Task assigned to ${assignedTo || 'Unassigned'}`, 'SUCCESS');
-        addToast(`Task assigned to ${assignedTo || 'Unassigned'}`, 'SUCCESS');
+        addLog(`Đã phân công task cho ${assignedTo || 'tự động'}.`, 'SUCCESS');
+        addToast(`Đã phân công task cho ${assignedTo || 'tự động'}.`, 'SUCCESS');
       }
     } catch (e) {
-      console.error(e);
+      // The card already shows the new assignee; if the backend refused it the
+      // board is lying until the next refresh, so say so out loud.
+      addLog(`Không phân công được task: ${e}`, 'ERROR');
+      addToast(`Không phân công được task: ${e}`, 'ERROR');
     }
     if (onRefresh) onRefresh();
   }
@@ -348,7 +356,8 @@
         addLog('Đã xóa toàn bộ tasks.', 'SUCCESS');
         addToast('Đã xóa toàn bộ tasks.', 'SUCCESS');
       } catch (e) {
-        console.error('ClearAll error:', e);
+        addLog(`Không xoá được toàn bộ task: ${e}`, 'ERROR');
+        addToast(`Không xoá được toàn bộ task: ${e}`, 'ERROR');
       }
     }
   }
@@ -356,16 +365,30 @@
   async function handleDeleteSelected() {
     if (selectedTaskIDs.length === 0) return;
     if (confirm(`Bạn có chắc muốn xóa ${selectedTaskIDs.length} tasks đã chọn?`)) {
-      const removed = selectedTaskIDs.length;
+      const wanted = selectedTaskIDs.length;
+      let removed = 0;
+      let firstError = '';
       for (const id of selectedTaskIDs) {
-        await AppBindings.DeleteTask(id);
+        try {
+          await AppBindings.DeleteTask(id);
+          removed++;
+        } catch (e) {
+          // One bad id used to throw out of the loop and leave the rest
+          // selected, deleted-or-not, with no message at all.
+          if (!firstError) firstError = String(e);
+        }
       }
       selectedTaskIDs = [];
       // The store is the single source now, so refresh it rather than editing a
       // local copy the next board event would overwrite.
       await refreshBoard();
-      addLog(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
-      addToast(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
+      if (removed === wanted) {
+        addLog(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
+        addToast(`Đã xóa ${removed} tasks đã chọn.`, 'SUCCESS');
+      } else {
+        addLog(`Chỉ xoá được ${removed}/${wanted} task: ${firstError}`, 'ERROR');
+        addToast(`Chỉ xoá được ${removed}/${wanted} task: ${firstError}`, 'ERROR');
+      }
     }
   }
 
@@ -397,6 +420,7 @@
       const doneTasks = tasks.filter(t => t.status === 'done');
       if (doneTasks.length === 0) {
         addLog('Không có task nào ở trạng thái Done để xóa.', 'WARN');
+        addToast('Không có task nào ở trạng thái Done để xoá.', 'INFO');
         return;
       }
       await (AppBindings as any).DeleteDoneTasks();
@@ -407,7 +431,8 @@
       addLog(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
       addToast(`Đã dọn dẹp ${doneTasks.length} tasks đã hoàn thành (Done).`, 'SUCCESS');
     } catch (e) {
-      console.error('ClearDone error:', e);
+      addLog(`Không dọn được task đã xong: ${e}`, 'ERROR');
+      addToast(`Không dọn được task đã xong: ${e}`, 'ERROR');
     }
   }
 </script>
@@ -416,44 +441,46 @@
   <!-- Actions & Search Filter Bar -->
   <div class="flex flex-wrap items-center justify-between gap-4">
     <div class="flex items-center gap-2 flex-1 max-w-md">
-      <button 
-        type="button" 
-        on:click|preventDefault={() => showAddModal = true} 
-        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all shadow-sm cursor-pointer whitespace-nowrap">
-        <span class="material-symbols-outlined text-sm font-bold">add</span> Add Task
+      <button
+        type="button"
+        on:click|preventDefault={() => showAddModal = true}
+        class="bg-primary text-on-primary text-xs font-medium px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
+        <span class="material-symbols-outlined text-sm">add</span> Thêm task
       </button>
 
       <!-- Search Input -->
       <div class="relative flex-1">
-        <span class="material-symbols-outlined absolute left-3 top-2.5 text-sm text-outline">search</span>
-        <input 
-          type="text" 
+        <span class="material-symbols-outlined absolute left-2.5 top-2 text-sm text-on-surface-variant">search</span>
+        <input
+          type="text"
           bind:value={searchQuery}
           placeholder="Tìm kiếm task..."
-          class="w-full bg-surface-container-low border border-outline-variant rounded-xl pl-8 pr-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary font-medium"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-8 pr-3 py-1.5 text-xs text-on-surface focus:border-primary"
         />
       </div>
 
       <!-- Priority Filter -->
-      <select 
+      <select
         bind:value={filterPriority}
-        class="bg-surface-container-low border border-outline-variant rounded-xl px-2.5 py-1.5 text-xs text-on-surface font-semibold outline-none cursor-pointer">
-        <option value="all">Tất cả Priority</option>
-        <option value="high">HIGH (Cao)</option>
-        <option value="normal">NORMAL (Bình thường)</option>
-        <option value="low">LOW (Thấp)</option>
+        aria-label="Lọc theo độ ưu tiên"
+        class="bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface cursor-pointer">
+        <option value="all">Tất cả độ ưu tiên</option>
+        <option value="high">Cao</option>
+        <option value="normal">Bình thường</option>
+        <option value="low">Thấp</option>
       </select>
     </div>
 
     <div class="flex items-center gap-2">
       <!-- Parallel agents control -->
-      <div class="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant rounded-xl px-2.5 py-1.5" title="Số sub-agent chạy song song tối đa">
-        <span class="material-symbols-outlined text-sm text-secondary">groups</span>
-        <span class="text-[10px] font-bold text-on-surface-variant uppercase whitespace-nowrap">Song song</span>
+      <div class="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-1.5" title="Số sub-agent chạy song song tối đa">
+        <span class="material-symbols-outlined text-sm text-on-surface-variant">groups</span>
+        <span class="text-[11px] font-medium text-on-surface-variant whitespace-nowrap">Song song</span>
         <select
           value={maxConcurrency}
+          aria-label="Số agent chạy song song"
           on:change={(e) => updateConcurrency(parseInt((e.currentTarget as HTMLSelectElement).value))}
-          class="bg-transparent text-xs font-bold text-on-surface outline-none cursor-pointer">
+          class="bg-transparent text-xs text-on-surface cursor-pointer">
           {#each [1,2,3,4,5,6] as n}
             <option value={n}>{n}</option>
           {/each}
@@ -462,27 +489,30 @@
       <!-- Verify build before Done -->
       <button type="button" on:click={toggleVerify}
         title="Agent tự chạy go build / npm build để verify trước khi báo Done"
-        class="flex items-center gap-1.5 border rounded-xl px-2.5 py-1.5 text-[10px] font-bold uppercase transition-all cursor-pointer
-        {verifyBuild ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-surface-container-low text-on-surface-variant border-outline-variant'}">
+        class="flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer
+        {verifyBuild ? 'bg-secondary-container text-on-secondary-container border-outline-variant' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'}">
         <span class="material-symbols-outlined text-sm">{verifyBuild ? 'verified' : 'block'}</span>
         Verify build
       </button>
       {#if selectedTaskIDs.length > 0}
-        <button type="button" on:click|preventDefault={handleDeleteSelected} class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 animate-pulse cursor-pointer">
-          <span class="material-symbols-outlined text-sm">delete</span> Xóa đã chọn ({selectedTaskIDs.length})
+        <button type="button" on:click|preventDefault={handleDeleteSelected}
+          class="border border-outline-variant text-error hover:bg-error/10 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm">delete</span> Xoá đã chọn ({selectedTaskIDs.length})
         </button>
       {/if}
       <button type="button" on:click|preventDefault={refreshBoard} disabled={refreshing}
         title="Tải lại bảng từ cơ sở dữ liệu"
-        class="bg-surface-container-highest border border-outline-variant px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-surface-container-high disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer">
+        class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
         <span class="material-symbols-outlined text-sm {refreshing ? 'animate-spin' : ''}">refresh</span>
         Tải lại
       </button>
-      <button type="button" on:click|preventDefault={handleClearDone} class="bg-surface-container-highest border border-outline-variant px-3.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-surface-container-high transition-all flex items-center gap-1.5 cursor-pointer">
-        <span class="material-symbols-outlined text-sm">delete_sweep</span> Clear Done
+      <button type="button" on:click|preventDefault={handleClearDone}
+        class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-sm">delete_sweep</span> Dọn task đã xong
       </button>
-      <button type="button" on:click|preventDefault={handleClearAll} class="bg-rose-500/10 text-rose-600 border border-rose-500/30 px-3.5 py-1.5 rounded-xl text-xs font-bold hover:bg-rose-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
-        <span class="material-symbols-outlined text-sm">delete_forever</span> Clear All
+      <button type="button" on:click|preventDefault={handleClearAll}
+        class="border border-outline-variant text-error hover:bg-error/10 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-sm">delete_forever</span> Xoá tất cả
       </button>
     </div>
   </div>
@@ -495,8 +525,8 @@
         <!-- Column Header -->
         <div class="flex items-center justify-between px-1">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined {col.color}">{col.icon}</span>
-            <h3 class="text-xs font-bold uppercase text-on-surface-variant">{col.title} ({colTasks.length})</h3>
+            <span class="material-symbols-outlined text-base text-on-surface-variant">{col.icon}</span>
+            <h3 class="text-sm font-semibold text-on-surface">{col.title} ({colTasks.length})</h3>
           </div>
         </div>
 
@@ -504,38 +534,41 @@
         <div
           role="region"
           aria-label="{col.title} Column"
-          class="min-h-[420px] border border-dashed rounded-xl p-3 space-y-3 overflow-y-auto max-h-[500px] transition-all
-          {dragOverColumn === col.key ? 'bg-primary-container/20 border-primary border-2 scale-[1.01]' : 'bg-surface-container-low/40 border-outline-variant'}"
+          class="min-h-[420px] border border-dashed rounded-xl p-3 space-y-3 overflow-y-auto max-h-[500px] transition-colors
+          {dragOverColumn === col.key ? 'bg-primary/5 border-primary' : 'bg-surface-container-low/40 border-outline-variant'}"
           on:dragover={(e) => handleDragOver(e, col.key)}
           on:dragleave={handleDragLeave}
           on:drop={(e) => handleDrop(e, col.key)}
         >
           {#each colTasks as task (task.task_id)}
             <div
-              role="button"
-              tabindex="0"
+              role="group"
               draggable="true"
-              animate:flip={{ duration: 320 }}
+              animate:flip={{ duration: 180 }}
               in:fade={{ duration: 160 }}
               on:dragstart={(e) => handleDragStart(e, task.task_id)}
-              class="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-primary rounded-xl p-3 space-y-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative"
+              class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 space-y-2 transition-colors cursor-grab active:cursor-grabbing group relative"
             >
-              <div 
-                role="button" 
-                tabindex="0"
-                on:click={() => detailTaskId = task.task_id}
-                on:keydown={(e) => { if (e.key === 'Enter') detailTaskId = task.task_id; }}
-                class="flex items-center justify-between gap-2 cursor-pointer">
-                <div class="flex items-center gap-2 flex-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    value={task.task_id}
-                    bind:group={selectedTaskIDs}
-                    class="rounded border-outline-variant text-primary focus:ring-primary cursor-pointer w-4 h-4"
-                  />
-                  <div class="font-semibold text-xs text-on-surface group-hover:text-primary transition-colors">{task.title}</div>
+              <!-- Exactly one keyboard-activatable element opens the inspector.
+                   The checkbox and the drag handle sit beside it, not inside
+                   it: they used to be nested in a role="button". -->
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  value={task.task_id}
+                  aria-label="Chọn task {task.title}"
+                  bind:group={selectedTaskIDs}
+                  class="accent-primary cursor-pointer w-4 h-4 shrink-0"
+                />
+                <div
+                  role="button"
+                  tabindex="0"
+                  on:click={() => detailTaskId = task.task_id}
+                  on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); detailTaskId = task.task_id; } }}
+                  class="flex-1 min-w-0 font-medium text-xs text-on-surface group-hover:text-primary transition-colors cursor-pointer truncate">
+                  {task.title}
                 </div>
-                <span class="material-symbols-outlined text-sm text-outline group-hover:text-on-surface-variant cursor-grab">drag_indicator</span>
+                <span class="material-symbols-outlined text-sm text-outline group-hover:text-on-surface-variant cursor-grab shrink-0">drag_indicator</span>
               </div>
 
               {#if task.prompt}
@@ -547,12 +580,10 @@
                    dead: the board was full and nothing could ever be dispatched. -->
               {#if blockedById[task.task_id]}
                 {@const blk = blockedById[task.task_id]}
-                <div class="ml-6 rounded-lg px-2 py-1.5 border text-[10px] leading-snug
-                  {blk.dead
-                    ? 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400'
-                    : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'}">
-                  <div class="flex items-center gap-1 font-bold">
-                    <span class="material-symbols-outlined text-[13px]">
+                <div class="ml-6 rounded-lg px-2 py-1.5 border border-outline-variant text-[11px] leading-snug
+                  {blk.dead ? 'bg-error/10 text-error' : 'bg-warning/10 text-warning'}">
+                  <div class="flex items-center gap-1 font-medium">
+                    <span class="material-symbols-outlined text-sm">
                       {blk.dead ? 'block' : 'hourglass_top'}
                     </span>
                     {blk.dead ? 'Bị chặn bởi task lỗi' : 'Đang chờ task khác'}
@@ -568,7 +599,7 @@
                     <button
                       type="button"
                       on:click|stopPropagation={() => retryBlockers(blk)}
-                      class="mt-1 px-2 py-0.5 rounded border border-red-500/40 font-bold hover:bg-red-500/20 cursor-pointer"
+                      class="mt-1.5 px-2 py-1 rounded-lg border border-outline-variant text-xs font-medium hover:bg-error/10 cursor-pointer"
                     >
                       Retry task đang chặn
                     </button>
@@ -578,7 +609,7 @@
 
               <!-- Assignment Dropdown -->
               <div class="space-y-1 pt-1 border-t border-outline-variant/30 ml-6">
-                <span class="text-[9px] font-bold text-on-surface-variant uppercase">Assignee:</span>
+                <span class="text-[11px] font-medium text-on-surface-variant">Phụ trách</span>
                 <Dropdown
                   options={agentOptions}
                   value={task.assigned_to || ''}
@@ -587,8 +618,8 @@
               </div>
 
               <!-- Status Dropdown & Priority -->
-              <div class="flex items-center justify-between pt-1 border-t border-outline-variant/40 text-[10px] ml-6">
-                <span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-mono font-bold uppercase">{task.priority}</span>
+              <div class="flex items-center justify-between pt-1 border-t border-outline-variant/40 text-[11px] ml-6">
+                <span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-medium">{task.priority}</span>
 
                 <!-- Quick status switcher -->
                 <div class="w-28">
@@ -607,9 +638,9 @@
               </div>
             </div>
           {:else}
-            <div class="flex flex-col items-center justify-center h-48 text-center text-on-surface-variant opacity-50">
-              <span class="material-symbols-outlined text-3xl mb-1">{col.icon}</span>
-              <p class="text-xs">Kéo thả Task vào đây</p>
+            <div class="flex flex-col items-center justify-center h-48 text-center text-on-surface-variant">
+              <span class="material-symbols-outlined text-base mb-1 text-outline">{col.icon}</span>
+              <p class="text-xs">Kéo task vào đây</p>
             </div>
           {/each}
         </div>
@@ -620,51 +651,52 @@
 
 {#if showAddModal}
 <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-[450px] space-y-4">
+  <div class="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 w-[450px] space-y-4">
     <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
-      <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary">add_task</span> Tạo Task Mới (Kanban)
+      <h3 class="text-sm font-semibold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-base text-on-surface-variant">add_task</span> Tạo task mới
       </h3>
-      <button type="button" on:click={() => showAddModal = false} class="text-on-surface-variant hover:text-on-surface">
-        <span class="material-symbols-outlined text-xl">close</span>
+      <button type="button" on:click={() => showAddModal = false} aria-label="Đóng"
+        class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+        <span class="material-symbols-outlined text-base">close</span>
       </button>
     </div>
 
     <div class="space-y-3 text-xs">
       <div>
-        <label for="new-task-title" class="font-bold text-on-surface block mb-1">Tiêu đề Task:</label>
-        <input 
+        <label for="new-task-title" class="text-xs font-medium text-on-surface-variant block mb-1">Tiêu đề</label>
+        <input
           id="new-task-title"
           type="text"
           bind:value={newTaskTitle}
           placeholder="Ví dụ: [CODE] Lập trình giao diện Login..."
-          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 outline-none focus:border-primary text-on-surface font-semibold"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 focus:border-primary text-on-surface"
         />
       </div>
 
       <div>
-        <label for="new-task-desc" class="font-bold text-on-surface block mb-1">Mô tả / Prompt chi tiết:</label>
+        <label for="new-task-desc" class="text-xs font-medium text-on-surface-variant block mb-1">Mô tả / prompt chi tiết</label>
         <textarea
           id="new-task-desc"
           bind:value={newTaskDescription}
           placeholder="Mô tả chi tiết công việc hoặc prompt cho AI Agent..."
-          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 h-24 outline-none focus:border-primary text-on-surface resize-none"
+          class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2.5 h-24 focus:border-primary text-on-surface resize-none"
         ></textarea>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label for="new-task-priority" class="font-bold text-on-surface block mb-1">Độ ưu tiên:</label>
-          <select id="new-task-priority" bind:value={newTaskPriority} class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-on-surface outline-none">
-            <option value="high">HIGH (Cao)</option>
-            <option value="normal">NORMAL (Bình thường)</option>
-            <option value="low">LOW (Thấp)</option>
+          <label for="new-task-priority" class="text-xs font-medium text-on-surface-variant block mb-1">Độ ưu tiên</label>
+          <select id="new-task-priority" bind:value={newTaskPriority} class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-on-surface cursor-pointer">
+            <option value="high">Cao</option>
+            <option value="normal">Bình thường</option>
+            <option value="low">Thấp</option>
           </select>
         </div>
 
         <div>
-          <label for="new-task-assignee" class="font-bold text-on-surface block mb-1">Phân công Agent:</label>
-          <select id="new-task-assignee" bind:value={newTaskAssignedTo} class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-on-surface outline-none">
+          <label for="new-task-assignee" class="text-xs font-medium text-on-surface-variant block mb-1">Phân công agent</label>
+          <select id="new-task-assignee" bind:value={newTaskAssignedTo} class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-on-surface cursor-pointer">
             {#each agentOptions as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
@@ -674,17 +706,19 @@
     </div>
 
     <div class="flex justify-end gap-2 pt-3 border-t border-outline-variant">
-      <button 
-        type="button" 
-        on:click={() => showAddModal = false} 
-        class="px-4 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs rounded-xl hover:bg-surface-container-highest transition-all cursor-pointer">
-        Hủy bỏ
+      <button
+        type="button"
+        on:click={() => showAddModal = false}
+        class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+        Huỷ
       </button>
-      <button 
-        type="button" 
-        on:click={handleAddTask} 
-        class="px-4 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer flex items-center gap-1">
-        <span class="material-symbols-outlined text-sm">check</span> Tạo Task
+      <button
+        type="button"
+        on:click={handleAddTask}
+        disabled={creatingTask}
+        class="bg-primary text-on-primary text-xs font-medium px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-sm {creatingTask ? 'animate-spin' : ''}">{creatingTask ? 'progress_activity' : 'check'}</span>
+        {creatingTask ? 'Đang tạo...' : 'Tạo task'}
       </button>
     </div>
   </div>
@@ -692,50 +726,49 @@
 {/if}
 
 {#if detailTask}
-<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl p-6 w-full max-w-3xl max-h-[90vh] flex flex-col space-y-4">
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  <div class="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] flex flex-col space-y-4">
     <!-- Modal Header -->
     <div class="flex justify-between items-start pb-3 border-b border-outline-variant">
       <div>
         <div class="flex items-center gap-2">
-          <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold uppercase bg-primary/10 text-primary border border-primary/20">
-            Task Inspector & Sub-Agent Monitor
-          </span>
-          <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold uppercase {detailTask.status === 'running' ? 'bg-primary/20 text-primary animate-pulse' : detailTask.status === 'done' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-surface-container-high text-on-surface-variant'}">
+          <span class="text-xs font-medium text-on-surface-variant">Task Inspector</span>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-medium
+            {detailTask.status === 'running' ? 'bg-primary/10 text-primary' : detailTask.status === 'done' ? 'bg-success/10 text-success' : 'bg-surface-container-high text-on-surface-variant'}">
             {detailTask.status}
           </span>
         </div>
-        <h3 class="text-base font-bold text-on-surface mt-1 flex items-center gap-2">
+        <h3 class="text-sm font-semibold text-on-surface mt-1">
           {detailTask.title}
         </h3>
       </div>
-      <button type="button" on:click={() => detailTaskId = null} class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-all cursor-pointer">
-        <span class="material-symbols-outlined text-xl">close</span>
+      <button type="button" on:click={() => detailTaskId = null} aria-label="Đóng"
+        class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+        <span class="material-symbols-outlined text-base">close</span>
       </button>
     </div>
 
     <!-- Main Content Area -->
     <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
-      
+
       <!-- Subagent Card & Live Status -->
-      <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/60 space-y-3 shadow-xs">
+      <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant space-y-3">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <span class="material-symbols-outlined text-xl">smart_toy</span>
-            </div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-base text-on-surface-variant">smart_toy</span>
             <div>
-              <div class="text-[10px] uppercase font-bold text-outline">Sub-Agent Phân Công</div>
-              <h4 class="font-bold text-sm text-on-surface">{detailTask.assigned_to || 'Chưa phân công (Unassigned)'}</h4>
+              <div class="text-[11px] font-medium text-on-surface-variant">Sub-agent phụ trách</div>
+              <h4 class="text-sm font-semibold text-on-surface">{detailTask.assigned_to || 'Chưa phân công'}</h4>
             </div>
           </div>
 
           <div class="flex items-center gap-2">
-            <span class="text-[11px] font-bold text-on-surface-variant">Đổi Agent:</span>
+            <span class="text-[11px] font-medium text-on-surface-variant">Đổi agent</span>
             <select
               value={detailTask.assigned_to || ''}
+              aria-label="Đổi agent phụ trách"
               on:change={(e) => handleAssignAgent(detailTask.task_id, e.currentTarget.value)}
-              class="bg-surface-container-lowest border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface font-semibold outline-none focus:border-primary cursor-pointer"
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface focus:border-primary cursor-pointer"
             >
               {#each agentOptions as opt}
                 <option value={opt.value}>{opt.label}</option>
@@ -745,16 +778,18 @@
         </div>
 
         {#if detailTask.status === 'running'}
-          <div class="p-2.5 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-2 text-primary font-bold text-xs animate-pulse">
-            <span class="material-symbols-outlined text-base animate-spin">sync</span>
-            <span>Sub-Agent đang xử lý task này ngầm... Vui lòng xem log bên dưới!</span>
+          <div class="p-2.5 bg-surface-container border border-outline-variant rounded-lg flex items-center gap-2 text-on-surface-variant text-xs">
+            <span class="material-symbols-outlined text-sm animate-spin text-primary">sync</span>
+            <span>Sub-agent đang xử lý task này. Xem log bên dưới.</span>
           </div>
         {/if}
       </div>
 
       <!-- Task Prompt / Action breakdown -->
       <div class="space-y-1">
-        <span class="font-bold text-on-surface block">📌 Prompt / Yêu cầu chi tiết:</span>
+        <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">description</span> Prompt chi tiết
+        </span>
         <div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant font-mono text-on-surface-variant whitespace-pre-wrap text-[11px] leading-relaxed">
           {detailTask.prompt || detailTask.description || 'Không có prompt'}
         </div>
@@ -763,34 +798,34 @@
       <!-- Realtime Log Execution Output Stream -->
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <span class="font-bold text-on-surface flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm text-secondary">terminal</span> Realtime Sub-Agent Log ({currentTaskLogs.length}):
+          <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">terminal</span> Log sub-agent ({currentTaskLogs.length})
           </span>
           <div class="flex items-center gap-1.5">
             <button type="button" on:click={copyTaskLog}
-              class="text-[10px] bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-2 py-0.5 rounded font-bold border border-outline-variant cursor-pointer flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">content_copy</span> Copy
+              class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-sm">content_copy</span> Sao chép
             </button>
             <button type="button" on:click={() => detailTaskId && clearTaskLog(detailTaskId)}
-              class="text-[10px] bg-surface-container-high text-on-surface hover:bg-rose-500/10 hover:text-rose-600 px-2 py-0.5 rounded font-bold border border-outline-variant cursor-pointer flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">clear_all</span> Clear
+              class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-sm">clear_all</span> Xoá log
             </button>
           </div>
         </div>
-        <div bind:this={logContainer} class="bg-black/90 text-emerald-400 p-3 rounded-xl border border-slate-800 font-mono text-[11px] h-44 overflow-y-auto space-y-1 shadow-inner leading-relaxed scroll-smooth">
+        <div bind:this={logContainer} class="bg-surface-container-highest text-on-surface-variant p-3 rounded-xl border border-outline-variant font-mono text-[11px] h-44 overflow-y-auto space-y-1 leading-relaxed scroll-smooth">
           <!-- Keyed by the store-assigned seq: time+message repeats during
                streaming, and a duplicate key is a thrown error in Svelte 5 —
                the drawer died mid-render with its overlay covering the app.
                The index fallback cannot collide either. -->
           {#each visibleTaskLogs as l, i (l.seq ?? `fallback-${i}`)}
             <div class="flex items-start gap-2">
-              <span class="text-slate-500 font-mono">[{l.time || 'NOW'}]</span>
-              <span class={l.level === 'ERROR' ? 'text-rose-400' : l.level === 'SUCCESS' ? 'text-emerald-400' : l.level === 'WARN' ? 'text-amber-300' : l.level === 'TOOL' ? 'text-cyan-300 font-semibold' : 'text-slate-300'}>
+              <span class="text-outline font-mono">[{l.time || 'NOW'}]</span>
+              <span class={l.level === 'ERROR' ? 'text-error' : l.level === 'SUCCESS' ? 'text-success' : l.level === 'WARN' ? 'text-warning' : l.level === 'TOOL' ? 'text-primary' : 'text-on-surface-variant'}>
                 {l.message}
               </span>
             </div>
           {:else}
-            <div class="text-slate-600 italic">Chưa có log cho task này. Log sẽ hiện realtime khi Agent thực thi (bao gồm cả tool calls 🔧).</div>
+            <div class="text-outline italic">Chưa có log cho task này. Log sẽ hiện realtime khi agent thực thi, bao gồm cả tool calls.</div>
           {/each}
         </div>
       </div>
@@ -799,17 +834,17 @@
       {#if detailTask.result}
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <span class="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">check_circle</span> Kết quả Thực thi AI Deliverable:
+          <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">check_circle</span> Kết quả thực thi
           </span>
           <button
             type="button"
-            on:click={() => { if (detailTask?.result) { navigator.clipboard.writeText(detailTask.result); addLog('Đã sao chép kết quả AI!', 'SUCCESS'); } }}
-            class="text-[10px] bg-surface-container-high text-on-surface hover:bg-surface-container-highest px-2 py-0.5 rounded font-bold border border-outline-variant cursor-pointer flex items-center gap-1">
-            <span class="material-symbols-outlined text-xs">content_copy</span> Sao chép Kết quả
+            on:click={() => { if (detailTask?.result) { navigator.clipboard.writeText(detailTask.result); addLog('Đã sao chép kết quả AI!', 'SUCCESS'); addToast('Đã sao chép kết quả.', 'SUCCESS'); } }}
+            class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">content_copy</span> Sao chép
           </button>
         </div>
-        <div class="bg-surface-container-lowest p-3 rounded-xl border border-emerald-500/30 font-mono text-on-surface max-h-52 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed">
+        <div class="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant font-mono text-on-surface max-h-52 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed">
           {detailTask.result}
         </div>
       </div>
@@ -818,12 +853,12 @@
       <!-- E2E screenshot capture -->
       {#if detailTaskId && $taskScreenshotsStore[detailTaskId]}
       <div class="space-y-1">
-        <span class="font-bold text-on-surface flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm text-secondary">photo_camera</span> Ảnh chụp E2E (Chrome CDP):
+        <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">photo_camera</span> Ảnh chụp E2E (Chrome CDP)
         </span>
         <a href={$taskScreenshotsStore[detailTaskId]} target="_blank" rel="noreferrer" class="block">
           <img src={$taskScreenshotsStore[detailTaskId]} alt="E2E screenshot"
-            class="w-full rounded-xl border border-outline-variant max-h-72 object-contain object-top bg-black/40 hover:opacity-90 transition-opacity" />
+            class="w-full rounded-xl border border-outline-variant max-h-72 object-contain object-top bg-surface-container hover:opacity-90 transition-opacity" />
         </a>
       </div>
       {/if}
@@ -831,22 +866,22 @@
       <!-- Git Diff — what the agent changed in the workspace -->
       <div class="space-y-1">
         <button type="button" on:click={loadDiff}
-          class="w-full flex items-center justify-between bg-surface-container-low hover:bg-surface-container px-3 py-2 rounded-xl border border-outline-variant transition-all cursor-pointer">
-          <span class="font-bold text-on-surface flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm text-secondary">difference</span> Thay đổi mã (Git Diff)
+          class="w-full flex items-center justify-between bg-surface-container-low hover:bg-surface-container px-3 py-2 rounded-xl border border-outline-variant transition-colors cursor-pointer">
+          <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">difference</span> Thay đổi mã (Git diff)
           </span>
           <span class="material-symbols-outlined text-sm text-on-surface-variant">{showDiff ? 'expand_less' : 'expand_more'}</span>
         </button>
         {#if showDiff}
-          <div class="bg-black/90 p-3 rounded-xl border border-slate-800 font-mono text-[11px] max-h-60 overflow-auto leading-relaxed">
+          <div class="bg-surface-container-highest p-3 rounded-xl border border-outline-variant font-mono text-[11px] max-h-60 overflow-auto leading-relaxed">
             {#if loadingDiff}
-              <span class="text-slate-400 italic">Đang tải diff...</span>
+              <span class="text-on-surface-variant italic">Đang tải diff...</span>
             {:else if !diffText.trim()}
               <!-- Backend returns "" for a clean tree; the text lives here now. -->
-              <span class="text-slate-400 italic">Không có thay đổi nào trong workspace.</span>
+              <span class="text-on-surface-variant italic">Không có thay đổi nào trong workspace.</span>
             {:else}
               {#each diffText.split('\n') as line}
-                <div class={line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' : line.startsWith('-') && !line.startsWith('---') ? 'text-rose-400' : line.startsWith('@@') ? 'text-cyan-300' : 'text-slate-300'}>{line || ' '}</div>
+                <div class={line.startsWith('+') && !line.startsWith('+++') ? 'text-success' : line.startsWith('-') && !line.startsWith('---') ? 'text-error' : line.startsWith('@@') ? 'text-primary' : 'text-on-surface-variant'}>{line || ' '}</div>
               {/each}
             {/if}
           </div>
@@ -865,23 +900,23 @@
           <button
             type="button"
             on:click={() => detailTask && handleStopTask(detailTask.task_id)}
-            class="px-4 py-2 bg-rose-500/10 text-rose-600 border border-rose-500/30 font-bold text-xs rounded-xl hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">stop_circle</span> Dừng Task
+            class="border border-outline-variant text-error hover:bg-error/10 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">stop_circle</span> Dừng task
           </button>
         {/if}
         {#if detailTask.status === 'failed' || detailTask.status === 'done'}
           <button
             type="button"
             on:click={() => detailTask && handleRetryTask(detailTask.task_id)}
-            class="px-4 py-2 bg-amber-500/10 text-amber-600 border border-amber-500/30 font-bold text-xs rounded-xl hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1">
+            class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
             <span class="material-symbols-outlined text-sm">replay</span> Chạy lại
           </button>
         {/if}
         <button
           type="button"
           on:click={() => detailTaskId = null}
-          class="px-5 py-2 bg-primary text-on-primary font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer shadow-xs">
-          Đóng Panel
+          class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+          Đóng
         </button>
       </div>
     </div>

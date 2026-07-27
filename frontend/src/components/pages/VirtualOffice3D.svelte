@@ -197,7 +197,7 @@
     });
 
     globalBubble = `Đã gắn agent vào toàn bộ 35 chỗ`;
-    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: `Populated all 35 seats facing keyboards & dual monitors correctly` }];
+    $logs = [...$logs, { time: new Date().toLocaleTimeString(), level: 'SYSTEM', message: `Đã xếp đủ 35 chỗ, mỗi agent quay mặt vào bàn phím và hai màn hình` }];
   }
 
   // Walk the real plan, in dependency order.
@@ -289,12 +289,14 @@
     syncAgentsToTasks($tasksStore as any[]);
   }
 
+  // Labels in Vietnamese like the rest of this toolbar: the buttons beside them
+  // were already Vietnamese while these five stayed English.
   const CAMERA_VIEWS = [
-    { id: 'floorplan', label: 'Floorplan', icon: 'view_in_ar' },
-    { id: 'staff', label: 'Staff', icon: 'groups' },
-    { id: 'ceo', label: 'CEO', icon: 'badge' },
-    { id: 'conference', label: 'Conference', icon: 'meeting_room' },
-    { id: 'reception', label: 'Reception', icon: 'door_front' },
+    { id: 'floorplan', label: 'Mặt bằng', icon: 'view_in_ar' },
+    { id: 'staff', label: 'Khu nhân viên', icon: 'groups' },
+    { id: 'ceo', label: 'Phòng CEO', icon: 'badge' },
+    { id: 'conference', label: 'Phòng họp', icon: 'meeting_room' },
+    { id: 'reception', label: 'Lễ tân', icon: 'door_front' },
   ] as const;
 
   let cameraView: 'floorplan' | 'staff' | 'ceo' | 'conference' | 'reception' = 'floorplan';
@@ -967,19 +969,19 @@
   }
 </script>
 
-<div class="relative w-full h-[calc(100vh-100px)] overflow-hidden rounded-xl border border-outline-variant bg-surface shadow-sm">
+<div class="relative w-full h-[calc(100vh-100px)] overflow-hidden rounded-xl border border-outline-variant bg-surface">
   <!-- 3D Canvas Viewport -->
   <div bind:this={container} class="w-full h-full"></div>
 
   <!-- One bar along the top: views on the left, actions on the right. These
        were three separate floating panels that overlapped each other. -->
   <div class="absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-    <div class="pointer-events-auto bg-surface-container-lowest/95 backdrop-blur border border-outline-variant p-1 rounded-xl shadow-sm flex gap-0.5">
+    <div class="pointer-events-auto bg-surface-container-lowest border border-outline-variant p-1 rounded-xl flex gap-0.5">
       {#each CAMERA_VIEWS as view}
         <button
           type="button"
           on:click={() => setCameraView(view.id)}
-          class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 {cameraView === view.id ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'}">
+          class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap {cameraView === view.id ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container-high'}">
           <span class="material-symbols-outlined text-sm">{view.icon}</span>
           {view.label}
         </button>
@@ -990,8 +992,8 @@
       <button
         type="button"
         on:click={handlePopulateAllSeats}
-        class="bg-surface-container-lowest/95 backdrop-blur text-on-surface border border-outline-variant px-3 py-2 rounded-xl text-[11px] font-semibold hover:bg-surface-container-high flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm whitespace-nowrap">
-        <span class="material-symbols-outlined text-sm text-primary">person_add</span>
+        class="bg-surface-container-lowest text-on-surface-variant border border-outline-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap">
+        <span class="material-symbols-outlined text-sm">person_add</span>
         Gắn agent vào 35 chỗ
       </button>
 
@@ -999,7 +1001,7 @@
         type="button"
         on:click={handleRunFullOfficeScenario}
         disabled={isSimulating}
-        class="bg-primary text-on-primary px-3 py-2 rounded-xl text-[11px] font-semibold hover:brightness-110 flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-sm whitespace-nowrap">
+        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 flex items-center gap-1.5 transition-opacity disabled:opacity-50 cursor-pointer whitespace-nowrap">
         <span class="material-symbols-outlined text-sm {isSimulating ? 'animate-spin' : ''}">{isSimulating ? 'sync' : 'play_arrow'}</span>
         {isSimulating ? 'Đang chạy…' : 'Chạy kịch bản'}
       </button>
@@ -1009,36 +1011,36 @@
   <!-- Agent Speech Bubbles -->
   {#each uiAgents as uiAgent}
     {#if uiAgent.visible}
-      <div 
-        class="absolute -translate-x-1/2 -translate-y-full bg-surface-container-lowest border border-outline-variant px-3 py-1.5 rounded-xl text-[11px] font-semibold shadow-xl whitespace-nowrap pointer-events-none transition-all duration-75 text-on-surface"
+      <div
+        class="absolute -translate-x-1/2 -translate-y-full bg-surface-container-lowest border border-outline-variant px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap pointer-events-none transition-all duration-75 text-on-surface"
         style="left: {uiAgent.x}px; top: {uiAgent.y}px;"
       >
         <div class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-surface-container-lowest border-b border-r border-outline-variant rotate-45"></div>
-        <span class="text-primary font-bold">{uiAgent.name}:</span> {uiAgent.text}
+        <span class="text-primary font-medium">{uiAgent.name}:</span> {uiAgent.text}
       </div>
     {/if}
   {/each}
 
   <!-- Bottom Real-time Console Log Overlay -->
-  <div class="absolute bottom-6 left-6 w-96 bg-surface-container-lowest border border-outline-variant rounded-xl p-3 shadow-xl space-y-2">
-    <div class="flex items-center justify-between border-b border-outline-variant pb-1">
-      <span class="text-[10px] font-bold uppercase text-on-surface-variant flex items-center gap-1">
-        <span class="material-symbols-outlined text-xs">terminal</span> Nhật ký mô phỏng
+  <div class="absolute bottom-6 left-6 w-96 bg-surface-container-lowest border border-outline-variant rounded-xl p-3 space-y-2">
+    <div class="flex items-center justify-between border-b border-outline-variant pb-1.5">
+      <span class="text-[11px] font-medium text-on-surface-variant flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-sm">terminal</span> Nhật ký mô phỏng
       </span>
-      <span class="flex items-center gap-1.5 text-[10px] font-semibold text-on-surface-variant">
-        <span class="w-1.5 h-1.5 rounded-full {isSimulating ? 'bg-primary animate-pulse' : 'bg-emerald-500'}"></span>
+      <span class="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+        <span class="w-1.5 h-1.5 rounded-full {isSimulating ? 'bg-primary' : 'bg-outline'}"></span>
         {isSimulating ? 'Đang mô phỏng' : '35 chỗ hoạt động'}
       </span>
     </div>
-    <p class="text-[10px] text-on-surface-variant leading-snug line-clamp-2">{globalBubble}</p>
+    <p class="text-[11px] text-on-surface-variant leading-snug line-clamp-2">{globalBubble}</p>
     <div class="font-mono text-[11px] space-y-1 max-h-28 overflow-y-auto">
       {#each $logs.slice(-4) as log}
         <div class="flex gap-2">
-          <span class="text-secondary font-bold">[{log.level}]</span>
+          <span class="text-on-surface-variant">[{log.level}]</span>
           <span class="text-on-surface line-clamp-1">{log.message}</span>
         </div>
       {:else}
-        <div class="text-on-surface-variant italic text-[10px]">Chưa có hoạt động. Bấm "Chạy kịch bản" để bắt đầu.</div>
+        <div class="text-on-surface-variant text-[11px]">Chưa có hoạt động. Bấm "Chạy kịch bản" để bắt đầu.</div>
       {/each}
     </div>
   </div>

@@ -21,6 +21,9 @@
   let hostWarning = '';
   let port = 9111;
   let busy = false;
+  // Chốt phiên là hành động không quay lại được, nên hỏi lại bằng modal trong
+  // app thay vì confirm() của webview (confirm() khoá luôn luồng WebView2).
+  let confirmFinish = false;
 
   let sessionIds: string[] = [];
   let selected = '';
@@ -297,20 +300,20 @@
   ];
 
   function verdictStyle(v: string) {
-    if (v === 'confirmed') return 'text-rose-600 dark:text-rose-400';
-    if (v === 'refuted') return 'text-emerald-600 dark:text-emerald-400';
-    if (v === 'escalated' || v === 'inconclusive') return 'text-amber-600 dark:text-amber-400';
+    if (v === 'confirmed') return 'text-error';
+    if (v === 'refuted') return 'text-success';
+    if (v === 'escalated' || v === 'inconclusive') return 'text-warning';
     return 'text-on-surface-variant';
   }
 
   function verdictLabel(c: Claim) {
-    if (c.kind === 'opinion') return 'Ý KIẾN — không chặn merge';
+    if (c.kind === 'opinion') return 'Ý kiến — không chặn merge';
     switch (c.verdict) {
-      case 'confirmed': return 'XÁC NHẬN — chặn merge';
-      case 'refuted': return 'BÁC BỎ';
-      case 'inconclusive': return 'KHÔNG KẾT LUẬN — cần người xem';
-      case 'escalated': return 'CHUYỂN NGƯỜI QUYẾT';
-      default: return 'CHỜ KIỂM CHỨNG';
+      case 'confirmed': return 'Xác nhận — chặn merge';
+      case 'refuted': return 'Bác bỏ';
+      case 'inconclusive': return 'Không kết luận — cần người xem';
+      case 'escalated': return 'Chuyển người quyết';
+      default: return 'Chờ kiểm chứng';
     }
   }
 
@@ -341,8 +344,8 @@
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div class="space-y-0.5">
       <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-xl text-primary">gavel</span>
-        <h1 class="text-lg font-bold text-on-surface">Phân xử tranh chấp giữa các Agent</h1>
+        <span class="material-symbols-outlined text-lg text-primary">gavel</span>
+        <h1 class="text-lg font-semibold text-on-surface">Phân xử tranh chấp giữa các Agent</h1>
       </div>
       <p class="text-xs text-on-surface-variant max-w-3xl">
         Khi agent của hai người kết luận trái ngược nhau, thắng thua do <b>kết quả chạy check</b>
@@ -353,18 +356,18 @@
 
     <div class="flex items-center gap-2">
       {#if running}
-        <span class="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{addr}
+        <span class="flex items-center gap-1.5 text-[11px] font-medium text-success">
+          <span class="w-1.5 h-1.5 rounded-full bg-success"></span>{addr}
         </span>
         <button type="button" on:click={stopHost} disabled={busy}
-          class="border border-outline-variant text-on-surface px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:bg-surface-container-high disabled:opacity-50 cursor-pointer">
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer">
           Dừng host
         </button>
       {:else}
         <input type="number" bind:value={port} min="1024" max="65535"
-          class="w-20 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] font-mono text-on-surface outline-none focus:border-primary" />
+          class="w-20 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1.5 text-xs font-mono text-on-surface outline-none focus:border-primary" />
         <button type="button" on:click={startHost} disabled={busy}
-          class="bg-primary text-on-primary px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer">
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer">
           Mở host
         </button>
       {/if}
@@ -372,8 +375,8 @@
   </div>
 
   {#if hostWarning}
-    <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
-      <span class="material-symbols-outlined text-sm">warning</span>
+    <div class="bg-warning/10 border border-warning/30 rounded-xl px-4 py-2.5 text-xs text-on-surface flex items-start gap-2">
+      <span class="material-symbols-outlined text-sm text-warning">warning</span>
       <div class="flex-1">
         <p>{hostWarning}</p>
         <!-- The warning used to state the problem and stop there. A workspace
@@ -382,7 +385,7 @@
         <button
           type="button"
           on:click={createChecksFile}
-          class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 font-bold cursor-pointer hover:bg-amber-500/30"
+          class="mt-1.5 px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant text-xs font-medium hover:bg-surface-container-high transition-colors cursor-pointer"
         >
           Tạo tệp checks.json cho dự án này
         </button>
@@ -391,13 +394,13 @@
   {/if}
 
   <!-- Open a session -->
-  <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-3">
+  <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
     <div class="flex flex-col md:flex-row gap-2">
       <input type="text" bind:value={subject} disabled={!running}
         placeholder="Tranh chấp về cái gì? ví dụ backend/cli/process_windows.go:17"
-        class="flex-1 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2.5 text-xs text-on-surface font-mono outline-none focus:border-primary disabled:opacity-50" />
+        class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2.5 text-xs text-on-surface font-mono outline-none focus:border-primary disabled:opacity-50" />
       <button type="button" on:click={openSession} disabled={!running || busy || !subject.trim()}
-        class="bg-primary text-on-primary px-4 py-2.5 rounded-xl text-xs font-semibold hover:opacity-90 disabled:opacity-40 cursor-pointer whitespace-nowrap">
+        class="bg-primary text-on-primary px-4 py-2.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer whitespace-nowrap">
         Mở phiên
       </button>
     </div>
@@ -407,11 +410,11 @@
         <!-- The fastest door: one prompt that makes the agent do everything,
              including talking back in the discussion box below. -->
         <div class="bg-primary/5 border border-primary/25 rounded-xl p-3 space-y-2">
-          <span class="text-[11px] font-bold text-on-surface flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-base text-primary">smart_toy</span>
+          <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base text-on-surface-variant">smart_toy</span>
             Nhanh nhất: dán một prompt cho AI agent
           </span>
-          <p class="text-[11px] text-on-surface-variant">
+          <p class="text-xs text-on-surface-variant">
             Sao chép prompt rồi dán nguyên văn cho agent (Claude Code, Gemini CLI…). Trong prompt
             có sẵn địa chỉ, token và toàn bộ các bước: kết nối → điều tra → nộp claim → <b>tham gia
             thảo luận</b>. Agent sẽ tự làm từ đầu đến cuối, kể cả trả lời tin nhắn bạn gõ ở ô
@@ -422,15 +425,16 @@
               <button
                 type="button"
                 on:click={() => copyText(target.prompt, 'prompt cho AI agent')}
-                class="px-2.5 py-1.5 rounded-lg bg-primary text-on-primary text-[11px] font-bold hover:opacity-90 cursor-pointer whitespace-nowrap"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-medium hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap"
               >
-                📋 {target.scope === 'local' ? 'Agent trên máy này' : `Agent máy khác — ${shortHost(target.host)}`}
+                <span class="material-symbols-outlined text-sm">content_copy</span>
+                {target.scope === 'local' ? 'Agent trên máy này' : `Agent máy khác — ${shortHost(target.host)}`}
               </button>
             {/each}
           </div>
-          <details class="text-[10px] text-on-surface-variant">
-            <summary class="cursor-pointer font-semibold">Xem nội dung prompt</summary>
-            <pre class="mt-1.5 bg-surface-container-high border border-outline-variant rounded-lg p-3 font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{joinTargets[0].prompt}</pre>
+          <details class="text-xs text-on-surface-variant">
+            <summary class="cursor-pointer font-medium">Xem nội dung prompt</summary>
+            <pre class="mt-1.5 bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[11px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{joinTargets[0].prompt}</pre>
           </details>
         </div>
 
@@ -438,12 +442,12 @@
              copy-only buttons: the MCP command existed but nobody ever saw it. -->
         <div class="space-y-2">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="text-[11px] font-semibold text-on-surface-variant">Hoặc tự chạy lệnh — máy của agent thuộc trường hợp nào?</span>
+            <span class="text-xs font-medium text-on-surface-variant">Hoặc tự chạy lệnh — máy của agent thuộc trường hợp nào?</span>
             {#each JOIN_MODES as mode}
               <button
                 type="button"
                 on:click={() => (joinMode = mode.id)}
-                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer border {joinMode === mode.id
+                class="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer border transition-colors {joinMode === mode.id
                   ? 'bg-primary text-on-primary border-primary'
                   : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'}"
               >
@@ -454,13 +458,13 @@
 
           {#each JOIN_MODES as mode}
             {#if joinMode === mode.id}
-              <p class="text-[11px] text-on-surface-variant">{mode.hint}</p>
+              <p class="text-xs text-on-surface-variant">{mode.hint}</p>
             {/if}
           {/each}
 
           {#if joinMode === 'cli' && !toolInstalled}
-            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
-              <span class="material-symbols-outlined text-sm">warning</span>
+            <div class="bg-warning/10 border border-warning/30 rounded-lg px-3 py-2 text-xs text-on-surface flex items-start gap-2">
+              <span class="material-symbols-outlined text-sm text-warning">warning</span>
               <span>
                 Máy này chưa có <b>claude-suite-claim</b> trên PATH, nên lệnh dưới sẽ báo "not found".
                 Chuyển sang <b>Chưa cài — tự tải</b> hoặc <b>MCP — không tải gì</b>.
@@ -474,24 +478,24 @@
             {@const cmd = joinMode === 'cli' ? target.command : joinMode === 'bootstrap' ? target.bootstrap : target.mcp}
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2">
-                <span class="text-[11px] font-semibold text-on-surface-variant">
+                <span class="text-xs font-medium text-on-surface-variant">
                   {target.label}
                   <span class="font-mono opacity-70">({target.host})</span>
                 </span>
                 <button
                   type="button"
                   on:click={() => copyCommand(cmd)}
-                  class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                  class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap"
                 >
                   Sao chép
                 </button>
               </div>
-              <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{cmd}</pre>
+              <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[11px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{cmd}</pre>
             </div>
           {/each}
 
           {#if joinMode === 'mcp'}
-            <p class="text-[10px] text-on-surface-variant">
+            <p class="text-xs text-on-surface-variant">
               Sau khi đăng ký, agent làm theo thứ tự: <span class="font-mono">join_session</span> (giữ lại
               participant_key) → <span class="font-mono">submit_claim</span> → <span class="font-mono">finish_reporting</span> →
               nghe và trả lời chat bằng <span class="font-mono">wait_for_chat</span> / <span class="font-mono">say</span>.
@@ -500,7 +504,7 @@
           {/if}
 
           {#if joinTargets.some((t) => t.scope === 'lan')}
-            <p class="text-[10px] text-on-surface-variant">
+            <p class="text-xs text-on-surface-variant">
               Máy khác trong LAN: lần đầu kết nối, Windows Firewall trên máy này sẽ hỏi — phải chọn
               <b>Allow</b> thì đồng đội mới vào được.
             </p>
@@ -510,31 +514,31 @@
                owner runs it here, pastes the public URL, and the backend
                mints the same four hand-outs for it. -->
           <details class="border border-outline-variant rounded-xl px-3 py-2">
-            <summary class="cursor-pointer text-[11px] font-semibold text-on-surface">
-              🌍 Thành viên ở XA — không chung LAN, không chung VPN?
+            <summary class="cursor-pointer text-xs font-medium text-on-surface">
+              Thành viên ở xa — không chung LAN, không chung VPN?
             </summary>
             <div class="mt-2 space-y-2">
               {#if joinTargets.some((t) => t.scope === 'vpn')}
-                <p class="text-[11px] text-on-surface-variant">
+                <p class="text-xs text-on-surface-variant">
                   Máy này có Tailscale — cách gọn nhất là mời đồng đội vào tailnet của bạn, rồi họ dùng
                   địa chỉ <b>"Qua VPN (Tailscale)"</b> ở trên từ bất kỳ đâu.
                 </p>
               {/if}
-              <p class="text-[11px] text-on-surface-variant">
+              <p class="text-xs text-on-surface-variant">
                 Không dùng VPN: mở một tunnel trên <b>chính máy này</b> rồi đưa URL công khai cho đồng đội.
                 Chạy một trong hai lệnh (cần cài <span class="font-mono">cloudflared</span> hoặc <span class="font-mono">ngrok</span>):
               </p>
               <div class="flex items-center gap-2">
-                <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[10px] font-mono text-on-surface overflow-x-auto">cloudflared tunnel --url http://localhost:{port}</pre>
+                <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[11px] font-mono text-on-surface overflow-x-auto">cloudflared tunnel --url http://localhost:{port}</pre>
                 <button type="button" on:click={() => copyCommand(`cloudflared tunnel --url http://localhost:${port}`)}
-                  class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
+                  class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
               </div>
               <div class="flex items-center gap-2">
-                <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[10px] font-mono text-on-surface overflow-x-auto">ngrok http {port}</pre>
+                <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[11px] font-mono text-on-surface overflow-x-auto">ngrok http {port}</pre>
                 <button type="button" on:click={() => copyCommand(`ngrok http ${port}`)}
-                  class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
+                  class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
               </div>
-              <p class="text-[11px] text-on-surface-variant">
+              <p class="text-xs text-on-surface-variant">
                 Lệnh in ra một URL dạng <span class="font-mono">https://…</span> — dán vào đây để tạo bộ lệnh cho URL đó
                 (URL + token trong lệnh là chìa khoá vào phiên: chỉ gửi cho người mình mời):
               </p>
@@ -549,7 +553,7 @@
                   type="button"
                   on:click={buildRemoteCommands}
                   disabled={remoteBusy || !publicHost.trim()}
-                  class="bg-primary text-on-primary px-3 py-2 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                  class="border border-outline-variant text-on-surface-variant px-3 py-2 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer whitespace-nowrap"
                 >
                   {remoteBusy ? 'Đang tạo...' : 'Tạo lệnh'}
                 </button>
@@ -559,18 +563,18 @@
                 {@const rcmd = joinMode === 'cli' ? rt.command : joinMode === 'bootstrap' ? rt.bootstrap : rt.mcp}
                 <div class="space-y-1">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-[11px] font-semibold text-on-surface-variant">
+                    <span class="text-xs font-medium text-on-surface-variant">
                       Qua tunnel <span class="font-mono opacity-70">({rt.host})</span>
                     </span>
                     <span class="flex items-center gap-3">
                       <button type="button" on:click={() => copyText(rt.prompt, 'prompt cho AI agent')}
-                        class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">🤖 Prompt cho AI</button>
+                        class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap">Prompt cho AI</button>
                       <button type="button" on:click={() => copyCommand(rcmd)}
-                        class="text-[11px] text-primary font-semibold hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
+                        class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
                     </span>
                   </div>
-                  <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[10px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{rcmd}</pre>
-                  <p class="text-[10px] text-on-surface-variant">
+                  <pre class="bg-surface-container-high border border-outline-variant rounded-lg p-3 text-[11px] font-mono text-on-surface overflow-x-auto whitespace-pre-wrap break-all">{rcmd}</pre>
+                  <p class="text-xs text-on-surface-variant">
                     Tunnel phải chạy suốt phiên; tắt tunnel là đồng đội mất kết nối. URL trycloudflare đổi mỗi lần chạy — phiên mới thì tạo lệnh lại.
                   </p>
                 </div>
@@ -582,11 +586,11 @@
     {/if}
 
     {#if checks.length}
-      <details class="text-[11px] text-on-surface-variant">
-        <summary class="cursor-pointer font-semibold">Check có thể trỏ tới ({checks.length})</summary>
+      <details class="text-xs text-on-surface-variant">
+        <summary class="cursor-pointer font-medium">Check có thể trỏ tới ({checks.length})</summary>
         <div class="mt-1.5 flex flex-wrap gap-1.5">
           {#each checks as c}
-            <span class="bg-surface-container-high border border-outline-variant rounded px-2 py-0.5 font-mono">{c}</span>
+            <span class="bg-surface-container-high border border-outline-variant rounded-lg px-2 py-0.5 font-mono">{c}</span>
           {/each}
         </div>
         <p class="mt-1.5">Falsifier <b>PASS khi claim SAI</b>, nên check fail là xác nhận lỗi có thật.</p>
@@ -596,14 +600,14 @@
 
   {#if selected}
     <!-- Phase -->
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-3">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-1">
           {#each PHASES as p, i}
             <div class="flex items-center gap-1">
-              <span class="px-2 py-1 rounded-lg text-[10px] font-semibold {phase === p.id ? 'bg-primary text-on-primary' : 'text-on-surface-variant'}">{p.label}</span>
+              <span class="px-2 py-1 rounded-lg text-[11px] font-medium {phase === p.id ? 'bg-primary text-on-primary' : 'text-on-surface-variant'}">{p.label}</span>
               {#if i < PHASES.length - 1}
-                <span class="material-symbols-outlined text-xs text-outline">chevron_right</span>
+                <span class="material-symbols-outlined text-sm text-outline">chevron_right</span>
               {/if}
             </div>
           {/each}
@@ -612,19 +616,21 @@
         <div class="flex items-center gap-2">
           {#if phase === 'collect'}
             <button type="button" on:click={forceAdjudicate} disabled={busy}
-              class="border border-outline-variant text-on-surface px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:bg-surface-container-high disabled:opacity-50 cursor-pointer">
+              class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer">
               Chạy kiểm chứng ngay
             </button>
           {/if}
           {#if (phase === 'reveal' || phase === 'debate') && opinions.length > 0 && round < maxRound}
             <button type="button" on:click={openDebate} disabled={busy}
-              class="border border-outline-variant text-on-surface px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:bg-surface-container-high disabled:opacity-50 cursor-pointer">
+              class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer">
               Mở vòng thảo luận {round + 1}/{maxRound}
             </button>
           {/if}
-          {#if phase && phase !== 'record'}
-            <button type="button" on:click={finishSession} disabled={busy}
-              class="bg-primary text-on-primary px-3 py-1.5 rounded-xl text-[11px] font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer">
+          <!-- Backend từ chối chốt khi phiên còn đang thu thập mù, nên nút không
+               hiện ở phase 'collect' thay vì bấm xong mới báo lỗi. -->
+          {#if phase && phase !== 'record' && phase !== 'collect'}
+            <button type="button" on:click={() => (confirmFinish = true)} disabled={busy}
+              class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer">
               Chốt phiên
             </button>
           {/if}
@@ -632,30 +638,31 @@
       </div>
 
       {#if phase === 'collect'}
-        <p class="text-[11px] text-on-surface-variant">
+        <p class="text-xs text-on-surface-variant">
           Đang thu thập <b>mù</b>: agent chưa thấy claim của nhau. Chỉ sau khi chạy xong check
           chúng mới được đối chiếu — đảo thứ tự này là biến review thành cuộc thi ai tự tin hơn.
           Nếu mới có <b>một</b> agent nộp xong, phiên vẫn được giữ mở thêm ~90 giây cho agent
-          còn lại kịp join — bấm "Chạy kiểm chứng ngay" nếu không muốn chờ.
+          còn lại kịp join — bấm "Chạy kiểm chứng ngay" nếu không muốn chờ. Chưa chạy kiểm chứng
+          thì chưa chốt phiên được.
         </p>
       {:else if phase === 'reveal' && opinions.length > 0}
-        <p class="text-[11px] text-on-surface-variant">
+        <p class="text-xs text-on-surface-variant">
           Check đã chạy xong. Còn <b>{opinions.length} ý kiến</b> không có gì kiểm chứng được —
           chỉ những cái đó mới đưa ra thảo luận, và tối đa {maxRound} vòng.
         </p>
       {:else if phase === 'debate'}
-        <p class="text-[11px] text-on-surface-variant">
+        <p class="text-xs text-on-surface-variant">
           Vòng <b>{round}/{maxRound}</b>. Chỉ ý kiến mới thảo luận được; những gì check đã
           kết luận thì không mở lại bằng lời. Ý kiến thiểu số vẫn được ghi lại nguyên vẹn.
         </p>
       {:else if phase === 'reveal'}
-        <p class="text-[11px] text-on-surface-variant">
+        <p class="text-xs text-on-surface-variant">
           Check đã chạy xong và mọi claim đều có kết luận — không còn gì để thảo luận.
         </p>
       {/if}
 
       {#each warnings as w}
-        <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+        <div class="bg-warning/10 border border-warning/30 rounded-lg px-3 py-2 text-xs text-on-surface">
           {w}
         </div>
       {/each}
@@ -668,19 +675,19 @@
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="text-xs font-semibold text-on-surface">{c.assertion}</div>
-              <div class="text-[10px] font-mono text-on-surface-variant truncate">{c.subject}</div>
+              <div class="text-[11px] font-mono text-on-surface-variant truncate">{c.subject}</div>
             </div>
-            <span class="text-[10px] font-bold whitespace-nowrap {verdictStyle(c.verdict)}">
+            <span class="text-[11px] font-semibold whitespace-nowrap {verdictStyle(c.verdict)}">
               {verdictLabel(c)}
             </span>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-[10px] text-on-surface-variant">
+          <div class="flex flex-wrap items-center gap-2 text-[11px] text-on-surface-variant">
             <span>bởi <b class="text-on-surface">{c.author}</b></span>
             {#if c.falsifier}
-              <span class="font-mono bg-surface-container-high border border-outline-variant rounded px-1.5">{c.falsifier}</span>
+              <span class="font-mono bg-surface-container-high border border-outline-variant rounded-lg px-1.5">{c.falsifier}</span>
             {:else}
-              <span class="italic">không có check — không chặn được merge</span>
+              <span>không có check — không chặn được merge</span>
             {/if}
             {#if c.exit_code}
               <span class="font-mono">exit {c.exit_code}</span>
@@ -688,13 +695,13 @@
           </div>
 
           {#if c.evidence}
-            <pre class="bg-slate-950 text-emerald-400 rounded-lg p-2 text-[10px] font-mono max-h-32 overflow-y-auto whitespace-pre-wrap break-all">{c.evidence}</pre>
+            <pre class="bg-surface-container-highest border border-outline-variant text-on-surface rounded-lg p-2 text-[11px] font-mono max-h-32 overflow-y-auto whitespace-pre-wrap break-all">{c.evidence}</pre>
           {/if}
 
           {#if remarksFor(c.id).length}
             <div class="border-l-2 border-outline-variant pl-2.5 space-y-1">
               {#each remarksFor(c.id) as r}
-                <div class="text-[10px] text-on-surface-variant">
+                <div class="text-[11px] text-on-surface-variant">
                   <span class="font-semibold text-on-surface">{r.author}</span>
                   <span class="opacity-60">vòng {r.round}</span>
                   <div class="whitespace-pre-wrap">{r.text}</div>
@@ -704,7 +711,7 @@
           {/if}
         </div>
       {:else}
-        <div class="text-center text-[11px] text-on-surface-variant py-6">
+        <div class="text-center text-xs text-on-surface-variant py-6">
           Chưa có claim nào. Đồng đội chạy lệnh ở trên để nộp.
         </div>
       {/each}
@@ -716,30 +723,34 @@
        the problem is upstream, checking now", i.e. most of a real review. Chat is
        never evidence: only a falsifier settles anything. -->
   {#if selected}
-    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4 space-y-3">
-      <div class="flex items-center justify-between">
-        <h4 class="text-xs font-bold text-on-surface flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-base text-primary">forum</span>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <h4 class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base text-on-surface-variant">forum</span>
           Thảo luận trong phiên
         </h4>
-        <input
-          bind:value={arbiterName}
-          title="Tên hiển thị của bạn trong phiên"
-          class="w-36 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-[11px] outline-none focus:border-primary"
-        />
+        <!-- Nhãn hiện rõ: trước đây chỉ có tooltip nên ô này trông như một hộp
+             chữ không rõ để làm gì. -->
+        <label class="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant whitespace-nowrap">
+          Tên của bạn
+          <input
+            bind:value={arbiterName}
+            class="w-32 bg-surface-container-low border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface outline-none focus:border-primary"
+          />
+        </label>
       </div>
 
       <div class="max-h-56 overflow-y-auto space-y-2 pr-1">
         {#each chat as m}
-          <div class="flex gap-2 text-[11px]">
-            <span class="font-bold text-primary whitespace-nowrap">{m.author}</span>
+          <div class="flex gap-2 text-xs">
+            <span class="font-semibold text-primary whitespace-nowrap">{m.author}</span>
             <span class="flex-1 text-on-surface whitespace-pre-wrap break-words">{m.text}</span>
             <span class="text-outline font-mono whitespace-nowrap">
               {m.at ? new Date(m.at).toLocaleTimeString('vi-VN') : ''}
             </span>
           </div>
         {:else}
-          <p class="text-[11px] text-on-surface-variant italic py-3 text-center">
+          <p class="text-xs text-on-surface-variant py-3 text-center">
             Chưa có tin nhắn nào. Bạn nhắn ở ô dưới; agent nghe bằng tool
             <span class="font-mono">wait_for_chat</span> (MCP) hoặc
             <span class="font-mono">claude-suite-claim --listen</span>, và trả lời bằng
@@ -753,18 +764,18 @@
           bind:value={chatDraft}
           on:keydown={(e) => { if (e.key === 'Enter') sendChat(); }}
           placeholder="Nhắn cho các agent trong phiên…"
-          class="flex-1 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2 text-xs outline-none focus:border-primary"
+          class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface outline-none focus:border-primary"
         />
         <button
           type="button"
           on:click={sendChat}
           disabled={!chatDraft.trim()}
-          class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-40 cursor-pointer"
+          class="bg-primary text-on-primary px-4 py-2 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
         >
           Gửi
         </button>
       </div>
-      <p class="text-[10px] text-on-surface-variant">
+      <p class="text-xs text-on-surface-variant">
         Thảo luận không phải bằng chứng — chỉ falsifier mới kết luận được một claim.
         Agent được dặn chỉ trả lời khi bị gọi tên, bị hỏi, hoặc bị phản bác — muốn agent
         nào đáp thì nhắc thẳng tên nó trong tin nhắn.
@@ -773,10 +784,41 @@
   {/if}
 
   {#if events.length}
-    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-emerald-400 max-h-40 overflow-y-auto space-y-0.5">
+    <div class="bg-surface-container-highest border border-outline-variant rounded-xl p-3 text-[11px] font-mono text-on-surface-variant max-h-40 overflow-y-auto space-y-0.5">
       {#each events as e}
         <div class="whitespace-pre-wrap break-all">{e}</div>
       {/each}
     </div>
   {/if}
 </div>
+
+<!-- Hỏi lại trước khi chốt: chốt xong là không mở lại phiên được. Dùng modal
+     trong app thay cho confirm() của webview. -->
+{#if confirmFinish}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div class="w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">
+      <h4 class="text-sm font-semibold text-on-surface">Chốt phiên này?</h4>
+      <p class="text-xs text-on-surface-variant">
+        Phiên sẽ chuyển sang trạng thái đã chốt: kết luận của các claim được ghi lại và
+        không nộp thêm được nữa. Thao tác này không hoàn tác được.
+      </p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          on:click={() => (confirmFinish = false)}
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors cursor-pointer"
+        >
+          Huỷ
+        </button>
+        <button
+          type="button"
+          on:click={() => { confirmFinish = false; finishSession(); }}
+          disabled={busy}
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
+        >
+          Chốt phiên
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { activeTab, orchestratorRunning, addToast, onboardingOpen } from '../../lib/stores/appState';
+  import { activeTab, orchestratorRunning, addToast, onboardingOpen, commandPaletteOpen } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
 
   let open = false;
@@ -42,7 +42,11 @@
     selected = 0;
     setTimeout(() => inputEl?.focus(), 0);
   }
-  function close() { open = false; }
+  function close() { open = false; commandPaletteOpen.set(false); }
+
+  // The menu bar asks for the palette through this store rather than reaching
+  // into the component.
+  $: if ($commandPaletteOpen && !open) openPalette();
 
   function onKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -65,16 +69,16 @@
 
 {#if open}
 <div class="fixed inset-0 z-[300] flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm" on:click|self={close} role="presentation">
-  <div class="bg-surface border border-outline-variant rounded-2xl shadow-2xl w-[560px] max-w-[92vw] overflow-hidden" role="dialog" aria-modal="true" tabindex="-1">
+  <div class="bg-surface border border-outline-variant rounded-xl shadow-lg w-[560px] max-w-[92vw] overflow-hidden" role="dialog" aria-modal="true" tabindex="-1">
     <div class="flex items-center gap-2 px-4 py-3 border-b border-outline-variant">
-      <span class="material-symbols-outlined text-on-surface-variant">search</span>
+      <span class="material-symbols-outlined text-base text-on-surface-variant">search</span>
       <input
         bind:this={inputEl}
         bind:value={query}
         placeholder="Gõ lệnh... (Ctrl+K để mở/đóng, ↑↓ chọn, Enter chạy)"
-        class="flex-1 bg-transparent outline-none text-sm text-on-surface placeholder:text-on-surface-variant"
+        class="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant"
       />
-      <kbd class="text-[10px] font-mono bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded border border-outline-variant">ESC</kbd>
+      <kbd class="text-[10px] font-mono bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-lg border border-outline-variant">ESC</kbd>
     </div>
     <div class="max-h-[50vh] overflow-y-auto py-1">
       {#each filtered as c, i}
@@ -89,7 +93,7 @@
           <span class="flex-1">{c.label}</span>
         </button>
       {:else}
-        <div class="px-4 py-6 text-center text-xs text-on-surface-variant italic">Không có lệnh nào khớp.</div>
+        <div class="px-4 py-6 text-center text-xs text-on-surface-variant">Không có lệnh nào khớp.</div>
       {/each}
     </div>
   </div>

@@ -4,7 +4,18 @@
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import type { models } from '../../../wailsjs/go/models';
 
-  let tab: 'map' | 'lessons' | 'regressions' = 'map';
+  // Named, not `typeof tab` — a type query resolves to the narrowed type
+  // ('map' right after the initializer), which rejects the other two entries.
+  type MemTab = 'map' | 'lessons' | 'regressions';
+  let tab: MemTab = 'map';
+
+  // Same segmented pill the Settings sub-tabs use — this page used to invent a
+  // third tab style (secondary-container fill on a bottom border).
+  const MEM_TABS: { id: MemTab; label: string }[] = [
+    { id: 'map', label: 'Project Map' },
+    { id: 'lessons', label: 'Lesson' },
+    { id: 'regressions', label: 'Bug đã sửa' },
+  ];
 
   // ── Map tab state ──
   let stats: models.ProjectMapStats | null = null;
@@ -202,59 +213,67 @@
 <div class="max-w-6xl mx-auto">
   <div class="flex items-center justify-between mb-4">
     <div>
-      <h1 class="text-2xl font-bold text-on-surface flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary text-3xl">psychology</span>
-        Memory & Project Map
+      <h1 class="text-lg font-semibold text-on-surface flex items-center gap-2">
+        <span class="material-symbols-outlined text-lg text-on-surface-variant">psychology</span>
+        Memory và Project Map
       </h1>
-      <p class="text-sm text-on-surface-variant mt-1">
+      <p class="text-xs text-on-surface-variant mt-1">
         Những gì sub-agent được "nhớ": bản đồ code, lesson đã học, và các bug đã sửa — tất cả được tiêm vào prompt qua Context Pack.
       </p>
     </div>
     <button
       type="button"
-      class="px-3 py-2 rounded-xl text-xs font-bold bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer flex items-center gap-1"
+      class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1"
       on:click={loadAll}
       title="Tải lại toàn bộ dữ liệu memory"
     >
-      <span class="material-symbols-outlined text-base">refresh</span> Tải lại
+      <span class="material-symbols-outlined text-sm">refresh</span> Tải lại
     </button>
   </div>
 
   <!-- Tabs -->
-  <div class="flex gap-1 mb-5 border-b border-outline-variant">
-    <button type="button" class="px-4 py-2 text-sm font-bold rounded-t-lg transition-all cursor-pointer {tab === 'map' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface'}" on:click={() => (tab = 'map')}>Project Map</button>
-    <button type="button" class="px-4 py-2 text-sm font-bold rounded-t-lg transition-all cursor-pointer {tab === 'lessons' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface'}" on:click={() => (tab = 'lessons')}>
-      Lessons {#if pendingLessons.length > 0}<span class="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-on-primary text-[10px]">{pendingLessons.length}</span>{/if}
-    </button>
-    <button type="button" class="px-4 py-2 text-sm font-bold rounded-t-lg transition-all cursor-pointer {tab === 'regressions' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:text-on-surface'}" on:click={() => (tab = 'regressions')}>Fixed Bugs</button>
+  <div class="flex mb-5 overflow-x-auto">
+    <div class="bg-surface-container-high p-1 rounded-xl flex flex-wrap gap-1 border border-outline-variant">
+      {#each MEM_TABS as t}
+        <button
+          type="button"
+          on:click={() => (tab = t.id)}
+          class="px-4 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap
+          {tab === t.id ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}"
+        >
+          {t.label}
+          {#if t.id === 'lessons' && pendingLessons.length > 0}<span class="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-on-primary text-[11px]">{pendingLessons.length}</span>{/if}
+        </button>
+      {/each}
+    </div>
   </div>
 
   {#if tab === 'map'}
     {#if mapError}
-      <div class="bg-surface border border-border rounded-xl p-6 text-sm text-on-surface-variant">{mapError}</div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-sm text-on-surface-variant">{mapError}</div>
     {:else if stats}
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <div class="bg-surface border border-border rounded-xl p-4">
-          <p class="text-[10px] uppercase font-bold text-on-surface-variant">Files</p>
-          <p class="text-2xl font-bold text-on-surface">{stats.files}</p>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
+          <p class="text-xs font-medium text-on-surface-variant">Files</p>
+          <p class="text-lg font-semibold text-on-surface">{stats.files}</p>
         </div>
-        <div class="bg-surface border border-border rounded-xl p-4">
-          <p class="text-[10px] uppercase font-bold text-on-surface-variant">Nodes</p>
-          <p class="text-2xl font-bold text-on-surface">{stats.nodes}</p>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
+          <p class="text-xs font-medium text-on-surface-variant">Nodes</p>
+          <p class="text-lg font-semibold text-on-surface">{stats.nodes}</p>
         </div>
-        <div class="bg-surface border border-border rounded-xl p-4">
-          <p class="text-[10px] uppercase font-bold text-on-surface-variant">Edges</p>
-          <p class="text-2xl font-bold text-on-surface">{stats.edges}</p>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
+          <p class="text-xs font-medium text-on-surface-variant">Edges</p>
+          <p class="text-lg font-semibold text-on-surface">{stats.edges}</p>
         </div>
-        <div class="bg-surface border border-border rounded-xl p-4">
-          <p class="text-[10px] uppercase font-bold text-on-surface-variant">Trạng thái</p>
-          <p class="text-lg font-bold {stats.staleness.status === 'fresh' ? 'text-emerald-500' : stats.staleness.status === 'unknown' ? 'text-on-surface-variant' : 'text-amber-500'}">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
+          <p class="text-xs font-medium text-on-surface-variant">Trạng thái</p>
+          <p class="text-lg font-semibold {stats.staleness.status === 'fresh' ? 'text-success' : stats.staleness.status === 'unknown' ? 'text-on-surface-variant' : 'text-warning'}">
             {stats.staleness.status}{#if stats.staleness.status === 'stale'} ({stats.staleness.commits_behind} commit){/if}
           </p>
         </div>
       </div>
       {#if stats.files === 0}
-        <div class="bg-surface border border-border rounded-xl p-6 mb-5 text-sm text-on-surface-variant">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 mb-5 text-sm text-on-surface-variant">
           Chưa có project map cho workspace này. Bấm <strong>Build lại map</strong> để quét lần đầu (chỉ phân tích tĩnh, không tốn token).
         </div>
       {:else}
@@ -267,40 +286,40 @@
         <button
           type="button"
           disabled={rebuilding}
-          class="px-4 py-2 rounded-xl font-bold text-xs bg-primary text-on-primary hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+          class="px-3 py-1.5 rounded-lg font-medium text-xs bg-primary text-on-primary hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
           on:click={rebuildMap}
         >
-          {#if rebuilding}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{:else}<span class="material-symbols-outlined text-base">account_tree</span>{/if}
+          <span class="material-symbols-outlined text-sm {rebuilding ? 'animate-spin' : ''}">{rebuilding ? 'progress_activity' : 'account_tree'}</span>
           Build lại map
         </button>
         <button
           type="button"
           disabled={refreshingSummaries}
-          class="px-4 py-2 rounded-xl font-bold text-xs bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+          class="px-3 py-1.5 rounded-lg font-medium text-xs border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
           on:click={refreshSummaries}
           title="Dùng model rẻ (Haiku) viết summary cho các file đang chờ — tốn một lượng token nhỏ"
         >
-          {#if refreshingSummaries}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{:else}<span class="material-symbols-outlined text-base">auto_awesome</span>{/if}
-          Làm mới summaries (LLM)
+          <span class="material-symbols-outlined text-sm {refreshingSummaries ? 'animate-spin' : ''}">{refreshingSummaries ? 'progress_activity' : 'auto_awesome'}</span>
+          Làm mới summary (LLM)
         </button>
         <button
           type="button"
           disabled={graphLoading}
-          class="px-4 py-2 rounded-xl font-bold text-xs bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+          class="px-3 py-1.5 rounded-lg font-medium text-xs border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
           on:click={toggleGraph}
         >
-          {#if graphLoading}<span class="material-symbols-outlined text-base animate-spin">progress_activity</span>{:else}<span class="material-symbols-outlined text-base">hub</span>{/if}
+          <span class="material-symbols-outlined text-sm {graphLoading ? 'animate-spin' : ''}">{graphLoading ? 'progress_activity' : 'hub'}</span>
           {showGraph ? 'Ẩn module graph' : 'Xem module graph'}
         </button>
       </div>
 
       {#if showGraph && graphData}
         {#if layoutNodes.length === 0}
-          <div class="bg-surface border border-border rounded-xl p-6 mt-5 text-sm text-on-surface-variant">
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 mt-5 text-sm text-on-surface-variant">
             Chưa có module nào trong map — build map trước.
           </div>
         {:else}
-          <div class="bg-surface border border-border rounded-xl p-4 mt-5 overflow-x-auto">
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 mt-5 overflow-x-auto">
             <p class="text-xs text-on-surface-variant mb-2">
               Top {layoutNodes.length} thư mục theo số file; đường nối = import giữa các thư mục (đậm hơn = nhiều import hơn).
             </p>
@@ -324,24 +343,27 @@
         {/if}
       {/if}
     {:else}
-      <div class="bg-surface border border-border rounded-xl p-6 text-sm text-on-surface-variant">Đang tải…</div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-sm text-on-surface-variant flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+        Đang tải…
+      </div>
     {/if}
   {:else if tab === 'lessons'}
     {#if lessonsError}
-      <div class="bg-surface border border-border rounded-xl p-6 text-sm text-on-surface-variant">{lessonsError}</div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-sm text-on-surface-variant">{lessonsError}</div>
     {:else}
-      <h2 class="text-sm font-bold text-on-surface mb-2 flex items-center gap-1">
-        <span class="material-symbols-outlined text-amber-500 text-lg">pending_actions</span>
+      <h2 class="text-sm font-semibold text-on-surface mb-2 flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-base text-on-surface-variant">pending_actions</span>
         Chờ duyệt ({pendingLessons.length})
       </h2>
       {#if pendingLessons.length === 0}
-        <div class="bg-surface border border-border rounded-xl p-4 mb-5 text-sm text-on-surface-variant">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 mb-5 text-sm text-on-surface-variant">
           Chưa có lesson nào chờ duyệt. Lesson do LLM chưng cất sẽ xuất hiện ở đây sau khi các agent chạy đủ nhiều — và chỉ được tiêm vào prompt khi bạn duyệt.
         </div>
       {:else}
         <div class="space-y-2 mb-5">
           {#each pendingLessons as l (l.lesson_id)}
-            <div class="bg-surface border border-border rounded-xl p-4">
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-sm text-on-surface">{l.action}</p>
@@ -353,10 +375,10 @@
                 </div>
                 <div class="flex gap-1 flex-shrink-0">
                   <button type="button" disabled={reviewingId === l.lesson_id}
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600/10 text-emerald-600 border border-emerald-600/30 hover:bg-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-on-primary hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
                     on:click={() => review(l.lesson_id, 'approve')}>Duyệt</button>
                   <button type="button" disabled={reviewingId === l.lesson_id}
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer disabled:opacity-50"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
                     on:click={() => review(l.lesson_id, 'reject')}>Loại</button>
                 </div>
               </div>
@@ -365,18 +387,18 @@
         </div>
       {/if}
 
-      <h2 class="text-sm font-bold text-on-surface mb-2 flex items-center gap-1">
-        <span class="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
+      <h2 class="text-sm font-semibold text-on-surface mb-2 flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-base text-on-surface-variant">check_circle</span>
         Đang hoạt động ({activeLessons.length})
       </h2>
       {#if activeLessons.length === 0}
-        <div class="bg-surface border border-border rounded-xl p-4 text-sm text-on-surface-variant">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 text-sm text-on-surface-variant">
           Chưa có lesson nào hoạt động. Lesson "mechanical" (suy ra từ chu trình fail→fixed) tự kích hoạt; lesson LLM cần bạn duyệt ở trên.
         </div>
       {:else}
         <div class="space-y-2">
           {#each activeLessons as l (l.lesson_id)}
-            <div class="bg-surface border border-border rounded-xl p-4">
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="text-sm text-on-surface">{l.action}</p>
@@ -387,7 +409,7 @@
                   </p>
                 </div>
                 <button type="button" disabled={reviewingId === l.lesson_id}
-                  class="px-3 py-1.5 rounded-lg text-xs font-bold bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer disabled:opacity-50 flex-shrink-0"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50 flex-shrink-0"
                   on:click={() => review(l.lesson_id, 'reject')}
                   title="Ngừng tiêm lesson này vào prompt">Lưu trữ</button>
               </div>
@@ -398,18 +420,18 @@
     {/if}
   {:else}
     {#if regressionsError}
-      <div class="bg-surface border border-border rounded-xl p-6 text-sm text-on-surface-variant">{regressionsError}</div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-sm text-on-surface-variant">{regressionsError}</div>
     {:else if regressions.length === 0}
-      <div class="bg-surface border border-border rounded-xl p-6 text-sm text-on-surface-variant">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-sm text-on-surface-variant">
         Chưa có bug đã sửa nào được ghi nhận. Khi một task fail rồi được sửa xong, chu trình đó sẽ tự xuất hiện ở đây — và các task sau đụng cùng vùng code sẽ được cảnh báo.
       </div>
     {:else}
       <div class="space-y-2">
         {#each regressions as r (r.regression_id)}
-          <div class="bg-surface border border-border rounded-xl p-4">
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <p class="text-sm font-bold text-on-surface">{r.title}</p>
+                <p class="text-sm font-semibold text-on-surface">{r.title}</p>
                 <p class="text-xs text-on-surface-variant mt-1 font-mono truncate" title={r.symptom}>{r.symptom}</p>
                 {#if r.files && r.files.length > 0}
                   <p class="text-[11px] text-on-surface-variant mt-1">files: <span class="font-mono">{r.files.slice(0, 4).join(', ')}</span></p>
@@ -417,12 +439,12 @@
               </div>
               <div class="flex-shrink-0">
                 {#if r.guard_status === 'approved'}
-                  <span class="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-600/10 text-emerald-600 border border-emerald-600/30">
+                  <span class="px-2 py-1 rounded-full text-[11px] font-medium bg-surface-container-high text-on-surface-variant">
                     guard: {r.guard_check_id}
                   </span>
                 {:else}
                   <button type="button"
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
                     on:click={() => openGuardForm(r)}
                     title="Viết một lệnh kiểm chứng vào .claude-suite/checks.json để chặn bug này quay lại">Thêm guard…</button>
                 {/if}
@@ -436,22 +458,22 @@
                   <span class="font-mono">.claude-suite/checks.json</span>. Lệnh <em>fail</em> nghĩa là bug đã quay lại.
                 </p>
                 <input type="text" bind:value={guardName} placeholder="tên check (kebab-case)"
-                  class="w-full mb-2 px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono text-on-surface" />
+                  class="w-full mb-2 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-sm font-mono text-on-surface focus:border-primary" />
                 <textarea bind:value={guardArgsText} rows="3"
                   placeholder={'go\ntest\n./backend/services/'}
-                  class="w-full mb-2 px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono text-on-surface"></textarea>
+                  class="w-full mb-2 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-sm font-mono text-on-surface focus:border-primary"></textarea>
                 {#if guardArgs.length > 0}
                   <p class="text-[11px] text-on-surface-variant mb-2">argv sẽ ghi: <span class="font-mono">[{guardArgs.map((a) => JSON.stringify(a)).join(', ')}]</span></p>
                 {/if}
                 <div class="flex gap-2">
                   <button type="button" disabled={approvingGuard || !guardName.trim() || guardArgs.length === 0}
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-on-primary hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-on-primary hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                     on:click={approveGuard}>
                     {#if approvingGuard}<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>{/if}
-                    Duyệt & ghi guard
+                    Duyệt và ghi guard
                   </button>
                   <button type="button"
-                    class="px-3 py-1.5 rounded-lg text-xs font-bold bg-surface-container-highest text-on-surface-variant transition-all cursor-pointer"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
                     on:click={() => (guardForId = '')}>Huỷ</button>
                 </div>
               </div>

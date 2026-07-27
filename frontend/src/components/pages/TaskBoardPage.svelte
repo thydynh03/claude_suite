@@ -38,7 +38,6 @@
 
   $: estimatedTokens = Math.round((requirementText.length * 3.5) + ((tasks || []).reduce((acc, t) => acc + (t.prompt?.length || 100), 0) * 2.5) + 500);
   $: tokenText = estimatedTokens > 999 ? `~${(estimatedTokens / 1000).toFixed(1)}k` : `~${estimatedTokens}`;
-  $: confidence = (tasks || []).length > 3 ? 98 : (tasks || []).length > 0 ? 88 : 0;
   // Real orchestrator load derived from live task statuses (not a hardcoded number)
   $: runningCount = (tasks || []).filter((t) => t.status === 'running').length;
   $: doneCount = (tasks || []).filter((t) => t.status === 'done').length;
@@ -99,7 +98,7 @@
     isDecomposing = true;
     const [provider, model] = planModelChoice.split(':');
     const providerName = provider === 'anti' ? 'Antigravity (Gemini)' : 'Claude Agent';
-    addLog(`AI Decomposing project requirements with ${providerName} (${model})...`, 'THINKING');
+    addLog(`AI đang phân rã yêu cầu bằng ${providerName} (${model})...`, 'THINKING');
     try {
       let res: any;
       if (provider === 'anti') {
@@ -110,13 +109,13 @@
       const loaded = Array.isArray(res) ? res : [];
       tasksStore.set(loaded);
       subTab = 'kanban';
-      addLog(`Created ${loaded.length} tasks!`, 'SUCCESS');
-      addToast(`Created ${loaded.length} tasks!`, 'SUCCESS');
+      addLog(`Đã tạo ${loaded.length} task.`, 'SUCCESS');
+      addToast(`Đã tạo ${loaded.length} task.`, 'SUCCESS');
     } catch (e: any) {
       const errStr = String(e || '');
-      addLog(`Decompose error: ${errStr}`, 'ERROR');
-      addToast(`Decompose error: ${errStr}`, 'ERROR');
-      
+      addLog(`Phân rã kế hoạch thất bại: ${errStr}`, 'ERROR');
+      addToast(`Phân rã kế hoạch thất bại: ${errStr}`, 'ERROR');
+
       if (errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.toLowerCase().includes('limit') || errStr.toLowerCase().includes('balance') || errStr.toLowerCase().includes('exhausted')) {
         failedAgentName = providerName;
         quotaErrorMessage = errStr;
@@ -167,10 +166,10 @@
     try {
       await AppBindings.ClearAllTasks();
       await loadTasks();
-      addLog('Cleared all tasks', 'INFO');
+      addLog('Đã xoá toàn bộ task.', 'INFO');
       addToast('Đã xoá toàn bộ task.', 'SUCCESS');
     } catch (e) {
-      addLog(`ClearAllTasks failed: ${e}`, 'ERROR');
+      addLog(`Không xoá được task: ${e}`, 'ERROR');
       addToast(`Không xoá được task: ${e}`, 'ERROR');
     }
   }
@@ -219,9 +218,8 @@
       }
       addLog(`Execute Plan: ready=${ready}, blocked=${blocked}, dead=${dead}`, 'INFO');
     } catch (e) {
+      addLog(`Không khởi động được orchestrator: ${e}`, 'ERROR');
       addToast(`Không khởi động được orchestrator: ${e}`, 'ERROR');
-      addLog(`Execute Plan failed: ${e}`, 'ERROR');
-      addToast(`Execute Plan failed: ${e}`, 'ERROR');
     } finally {
       isStarting = false;
     }
@@ -236,13 +234,11 @@
     isExporting = true;
     try {
       const file = await AppBindings.ExportKanbanReport();
-      addLog(`Exported report to ${file}`, 'SUCCESS');
-      addToast(`Exported report to ${file}`, 'SUCCESS');
+      addLog(`Đã xuất báo cáo: ${file}`, 'SUCCESS');
       lastReportPath = file;
       addToast(`Đã xuất báo cáo: ${file}`, 'SUCCESS', 8000);
     } catch (e) {
-      addLog(`Export failed: ${e}`, 'ERROR');
-      addToast(`Export failed: ${e}`, 'ERROR');
+      addLog(`Xuất báo cáo thất bại: ${e}`, 'ERROR');
       addToast(`Xuất báo cáo thất bại: ${e}`, 'ERROR');
     } finally {
       isExporting = false;
@@ -251,21 +247,14 @@
 </script>
 
 <div class="space-y-6 max-w-7xl mx-auto pb-12">
-  <!-- Hero Banner -->
-  <div class="bg-gradient-to-r from-blue-600 to-blue-800 w-full rounded-xl p-6 flex items-center justify-between shadow-sm text-white">
-    <div class="flex items-center gap-4">
-      <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-md">
-        <span class="material-symbols-outlined text-white text-2xl">assignment</span>
-      </div>
-      <div>
-        <h1 class="text-xl font-bold">Task Board & Planning — Quản lý tác vụ</h1>
-        <p class="text-white/80 text-xs mt-0.5">Enterprise AI Orchestration Workspace</p>
-      </div>
+  <!-- Page header -->
+  <div class="flex items-end justify-between gap-4 border-b border-outline-variant pb-4">
+    <div>
+      <h1 class="text-lg font-semibold text-on-surface">Task Board</h1>
+      <p class="text-xs text-on-surface-variant mt-0.5">Lập kế hoạch và điều phối sub-agent trên workspace hiện tại.</p>
     </div>
-    <div class="flex items-center gap-3">
-      <div class="bg-white/10 px-4 py-1 rounded-full border border-white/20 text-xs font-semibold">
-        Total Tasks: {(tasks || []).length}
-      </div>
+    <div class="text-xs text-on-surface-variant whitespace-nowrap">
+      {(tasks || []).length} task
     </div>
   </div>
 
@@ -275,26 +264,26 @@
       <button
         type="button"
         on:click={() => (subTab = 'kanban')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer
-        {subTab === 'kanban' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+        class="px-4 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer
+        {subTab === 'kanban' ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}"
       >
-        Interactive Kanban
+        Kanban
       </button>
       <button
         type="button"
         on:click={() => (subTab = 'builder')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer
-        {subTab === 'builder' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+        class="px-4 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer
+        {subTab === 'builder' ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}"
       >
-        AI Plan Builder
+        Kế hoạch AI
       </button>
       <button
         type="button"
         on:click={() => (subTab = 'reports')}
-        class="px-5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer
-        {subTab === 'reports' ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}"
+        class="px-4 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer
+        {subTab === 'reports' ? 'bg-surface-container-lowest text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}"
       >
-        Project Reports
+        Báo cáo
       </button>
     </div>
   </div>
@@ -309,10 +298,10 @@
       <!-- Left Panel: Project Description -->
       <div class="col-span-12 lg:col-span-5 flex flex-col gap-4">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-secondary text-sm">description</span>
-          <span class="text-xs uppercase font-bold tracking-wider text-on-surface">Mô tả dự án / Mục tiêu</span>
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">description</span>
+          <span class="text-sm font-semibold text-on-surface">Mô tả dự án / mục tiêu</span>
         </div>
-        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden shadow-sm h-[420px]">
+        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col overflow-hidden h-[420px] focus-within:border-primary transition-colors">
           <textarea
             bind:value={requirementText}
             on:keydown={(e) => {
@@ -321,17 +310,17 @@
                 handleDecompose();
               }
             }}
-            class="flex-1 bg-transparent text-on-surface text-sm p-4 outline-none resize-none placeholder:text-outline-variant border-none"
+            class="flex-1 bg-transparent text-on-surface text-sm p-4 resize-none placeholder:text-outline border-none"
             placeholder="Xây dựng hệ thống Quản lý Task với REST API, Dashboard UI và Unit Tests... (Nhấn Enter để gửi, Shift+Enter xuống dòng)"
           ></textarea>
           <div class="p-3 bg-surface-container flex flex-col gap-2 border-t border-outline-variant">
             <div class="flex items-center gap-2">
-              <label for="plan-model-select" class="text-[11px] font-bold text-on-surface-variant whitespace-nowrap">Plan Agent & Model:</label>
+              <label for="plan-model-select" class="text-xs font-medium text-on-surface-variant whitespace-nowrap">Agent &amp; model</label>
               <div class="flex-1">
                 <ModelSelect
                   value={planModel}
                   on:change={onPlanModelChange}
-                  selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface font-semibold outline-none focus:border-primary"
+                  selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface focus:border-primary"
                 />
               </div>
             </div>
@@ -339,89 +328,93 @@
               type="button"
               on:click|preventDefault={handleDecompose}
               disabled={isDecomposing}
-              class="w-full bg-secondary text-on-secondary flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+              class="w-full bg-primary text-on-primary flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
             >
               <span class="material-symbols-outlined text-sm {isDecomposing ? 'animate-spin' : ''}">
                 {isDecomposing ? 'sync' : 'auto_mode'}
               </span>
-              {isDecomposing ? '🤖 AI đang tạo kế hoạch...' : 'Tạo kế hoạch AI (Decompose Plan)'}
+              {isDecomposing ? 'AI đang tạo kế hoạch...' : 'Tạo kế hoạch AI'}
             </button>
           </div>
         </div>
-        <div class="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">check_circle</span>
-          Đã tạo {tasks.length} tasks. Nhấn 'Execute Plan' để chạy.
-        </div>
+        {#if tasks.length > 0}
+          <div class="text-xs text-success flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">check_circle</span>
+            Đã tạo {tasks.length} task. Bấm "Chạy kế hoạch" để orchestrator giao việc.
+          </div>
+        {/if}
       </div>
 
       <!-- Right Panel: Task List -->
       <div class="col-span-12 lg:col-span-7 flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-secondary text-sm">list_alt</span>
-            <span class="text-xs uppercase font-bold tracking-wider text-on-surface">TASKS ĐƯỢC TẠO</span>
+            <span class="material-symbols-outlined text-sm text-on-surface-variant">list_alt</span>
+            <span class="text-sm font-semibold text-on-surface">Task đã tạo</span>
           </div>
           <div class="flex gap-2">
-            <button on:click={handleClearAll} class="flex items-center gap-1 px-3 py-1 bg-surface-container-highest rounded border border-outline-variant text-xs font-semibold hover:bg-rose-100 hover:text-rose-700 transition-all">
-              <span class="material-symbols-outlined text-sm">delete</span> Clear
+            <button type="button" on:click={handleClearAll}
+              class="border border-outline-variant text-error hover:bg-error/10 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-sm">delete</span> Xoá tất cả
             </button>
-            <button on:click={handleExecutePlan} disabled={isStarting} class="flex items-center gap-1 px-4 py-1 bg-emerald-600 text-white rounded border border-emerald-700 text-xs font-bold hover:bg-emerald-700 disabled:opacity-60 transition-all cursor-pointer">
-              <span class="material-symbols-outlined text-sm {isStarting ? 'animate-spin' : ''}">{isStarting ? 'progress_activity' : 'play_arrow'}</span> Execute Plan
+            <button type="button" on:click={handleExecutePlan} disabled={isStarting}
+              class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-sm {isStarting ? 'animate-spin' : ''}">{isStarting ? 'progress_activity' : 'play_arrow'}</span> Chạy kế hoạch
             </button>
           </div>
         </div>
 
-        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-y-auto max-h-[420px] p-4 space-y-4">
+        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-y-auto max-h-[420px] p-4 space-y-3">
           {#each tasks as task, idx}
-            <div class="relative border-l-4 border-primary bg-surface-container-low/60 rounded-r-xl p-4 space-y-3 shadow-xs hover:shadow-sm transition-all border border-outline-variant/50">
+            <div class="border border-outline-variant rounded-xl p-4 space-y-2">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="font-mono text-xs font-black bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20">#{idx + 1}</span>
-                  <h3 class="font-bold text-sm text-on-surface flex items-center gap-2">
-                    {task.title}
-                  </h3>
+                  <span class="font-mono text-[11px] text-outline">#{idx + 1}</span>
+                  <h3 class="text-sm font-semibold text-on-surface">{task.title}</h3>
                 </div>
-                <div class="flex items-center gap-2 font-mono text-[11px]">
-                  <span class="px-2 py-0.5 rounded-full font-bold uppercase {task.priority === 'high' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : 'bg-blue-500/10 text-blue-600 border border-blue-500/20'}">
-                    Priority: {task.priority || 'normal'}
+                <div class="flex items-center gap-2 text-[11px]">
+                  <span class="px-2 py-0.5 rounded-full font-medium
+                    {task.priority === 'high' ? 'bg-error/10 text-error' : 'bg-surface-container-high text-on-surface-variant'}">
+                    {task.priority || 'normal'}
                   </span>
-                  <span class="px-2 py-0.5 rounded-full font-bold uppercase bg-surface-container-high text-on-surface-variant border border-outline-variant">
+                  <span class="px-2 py-0.5 rounded-full font-medium bg-surface-container-high text-on-surface-variant">
                     {task.status || 'backlog'}
                   </span>
                 </div>
               </div>
 
               {#if task.description && task.description !== task.title}
-                <p class="text-xs text-on-surface-variant leading-relaxed bg-surface-container-lowest/60 p-2.5 rounded-lg border border-outline-variant/40">
+                <p class="text-xs text-on-surface-variant leading-relaxed">
                   {task.description}
                 </p>
               {/if}
 
               <!-- Structured Prompt Tag Display -->
-              <div class="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant font-mono text-[11px] space-y-1.5 leading-relaxed text-on-surface select-text overflow-x-auto whitespace-pre-wrap">
+              <div class="bg-surface-container-low rounded-lg p-2.5 font-mono text-[11px] leading-relaxed text-on-surface-variant select-text overflow-x-auto whitespace-pre-wrap">
                 {task.prompt || task.description}
               </div>
             </div>
           {:else}
-            <div class="text-center text-on-surface-variant text-xs p-10 italic flex flex-col items-center justify-center gap-2">
-              <span class="material-symbols-outlined text-3xl text-outline-variant">psychology</span>
-              <span>Chưa có kế hoạch. Nhập mục tiêu dự án bên trái và bấm 'Tạo kế hoạch AI' để AI tự động Brainstorming chi tiết!</span>
+            <div class="text-center text-on-surface-variant text-xs p-10 flex flex-col items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-base text-outline">psychology</span>
+              <span>Chưa có kế hoạch. Nhập mục tiêu dự án bên trái và bấm "Tạo kế hoạch AI".</span>
             </div>
           {/each}
         </div>
       </div>
     </div>
-  {:else}
+  {:else if subTab === 'reports'}
     <!-- Reports Sub-tab -->
     <div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant">
-      <h3 class="font-bold text-base mb-2">Báo cáo dự án & Tasks</h3>
+      <h3 class="text-sm font-semibold text-on-surface mb-2">Báo cáo dự án &amp; task</h3>
       <p class="text-xs text-on-surface-variant mb-4">Xuất báo cáo Kanban sang định dạng Markdown và HTML.</p>
       <button
+        type="button"
         on:click={handleExportReport}
         disabled={isExporting}
-        class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-60 cursor-pointer"
+        class="bg-primary text-on-primary text-xs font-medium px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
       >
-        {isExporting ? 'Đang xuất…' : 'Export Report Now'}
+        {isExporting ? 'Đang xuất...' : 'Xuất báo cáo'}
       </button>
       {#if lastReportPath}
         <p class="text-[11px] text-on-surface-variant mt-3 font-mono break-all">
@@ -432,37 +425,72 @@
   {/if}
 
   <!-- Dynamic Dashboard Insights -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
-      <span class="text-[10px] font-bold uppercase text-outline">TOKEN ESTIMATE</span>
-      <span class="text-2xl font-bold text-secondary">{tokenText}</span>
-      <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden mt-2">
-        <div class="h-full bg-secondary transition-all duration-500" style="width: {Math.min(100, Math.max(10, Math.round(estimatedTokens / 150)))}%"></div>
-      </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between gap-1">
+      <span class="text-xs font-medium text-on-surface-variant">Token ước tính</span>
+      <span class="text-lg font-semibold text-on-surface">{tokenText}</span>
+      <span class="text-[11px] text-outline">Ước lượng thô theo độ dài prompt, không phải số đo thật.</span>
     </div>
-    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
-      <span class="text-[10px] font-bold uppercase text-outline">PLAN CONFIDENCE</span>
-      <span class="text-2xl font-bold text-tertiary">{confidence}%</span>
-      <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden mt-2">
-        <div class="h-full bg-tertiary transition-all duration-500" style="width: {confidence}%"></div>
+    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between gap-1">
+      <span class="text-xs font-medium text-on-surface-variant">Tiến độ orchestrator</span>
+      <span class="text-lg font-semibold text-on-surface">{orchestratorLoad}%</span>
+      <div class="w-full h-1 bg-surface-container rounded-full overflow-hidden">
+        <div class="h-full bg-primary" style="width: {orchestratorLoad}%"></div>
       </div>
+      <span class="text-[11px] text-outline">{runningCount} đang chạy · {doneCount}/{totalCount} xong</span>
     </div>
-    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
-      <span class="text-[10px] font-bold uppercase text-outline">ORCHESTRATOR LOAD</span>
-      <span class="text-2xl font-bold {runningCount > 0 ? 'text-primary' : 'text-on-surface'}">{orchestratorLoad}%</span>
-      <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden mt-2">
-        <div class="h-full bg-primary transition-all duration-500" style="width: {orchestratorLoad}%"></div>
-      </div>
-      <span class="text-[9px] text-outline mt-1">{runningCount} running · {doneCount}/{totalCount} done</span>
-    </div>
-    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between">
-      <span class="text-[10px] font-bold uppercase text-outline">SYSTEM STATUS</span>
-      <div class="flex items-center gap-2 mt-auto">
-        <div class="w-3 h-3 rounded-full {runningCount > 0 ? 'bg-primary animate-ping' : $orchestratorRunning ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}"></div>
-        <span class="text-base font-bold {runningCount > 0 ? 'text-primary' : $orchestratorRunning ? 'text-amber-600' : 'text-emerald-600'}">
-          {runningCount > 0 ? 'DISPATCHING' : $orchestratorRunning ? 'SCANNING' : 'READY'}
+    <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between gap-1">
+      <span class="text-xs font-medium text-on-surface-variant">Trạng thái hệ thống</span>
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full {runningCount > 0 ? 'bg-primary animate-pulse' : $orchestratorRunning ? 'bg-primary' : 'bg-outline'}"></div>
+        <span class="text-sm font-semibold text-on-surface">
+          {runningCount > 0 ? 'Đang giao việc' : $orchestratorRunning ? 'Đang quét backlog' : 'Sẵn sàng'}
         </span>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Quota fallback — the 429 path used to set showQuotaModal with nothing
+     listening, so the promised "switch agent" dialog never appeared. -->
+{#if showQuotaModal}
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-surface border border-outline-variant rounded-xl shadow-lg p-6 w-[460px] space-y-4">
+    <div class="flex items-center gap-2 pb-2 border-b border-outline-variant">
+      <span class="material-symbols-outlined text-base text-on-surface-variant">swap_horiz</span>
+      <h3 class="text-sm font-semibold text-on-surface">Agent đã hết quota</h3>
+    </div>
+
+    <div class="space-y-3 text-xs text-on-surface-variant">
+      <p>
+        <span class="text-on-surface font-medium">{failedAgentName}</span> không phân rã được kế hoạch
+        (hết quota hoặc bị giới hạn tốc độ).
+      </p>
+      {#if quotaErrorMessage}
+        <div class="bg-surface-container-highest border border-outline-variant rounded-lg p-2.5 font-mono text-[11px] leading-relaxed max-h-28 overflow-y-auto whitespace-pre-wrap break-all">
+          {quotaErrorMessage}
+        </div>
+      {/if}
+      <p>
+        Chạy lại bằng <span class="text-on-surface font-medium">{fallbackAgentName}</span>?
+        Picker model sẽ được cập nhật theo agent này.
+      </p>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-3 border-t border-outline-variant">
+      <button
+        type="button"
+        on:click={() => (showQuotaModal = false)}
+        class="border border-outline-variant text-on-surface-variant hover:bg-surface-container-high text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+        Huỷ
+      </button>
+      <button
+        type="button"
+        on:click={handleConfirmFallbackDecompose}
+        class="bg-primary text-on-primary text-xs font-medium px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-sm">auto_mode</span> Dùng agent dự phòng
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
