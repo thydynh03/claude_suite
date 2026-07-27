@@ -1,9 +1,9 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // ObservationRepository is the raw capture store: one row per event from an

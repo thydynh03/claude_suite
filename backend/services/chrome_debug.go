@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/sysproc"
 )
 
 // ── Why a dedicated profile instead of the user's real one ────────────────
@@ -42,9 +42,9 @@ import (
 // concatenating this path is what would break it.
 func AgentUserDataDir() string {
 	if base := os.Getenv("LOCALAPPDATA"); base != "" {
-		return filepath.Join(base, "ClaudeSuite", "ChromeAgent")
+		return filepath.Join(base, "AgentCenter", "ChromeAgent")
 	}
-	return filepath.Join(os.TempDir(), "ClaudeSuiteChromeAgent")
+	return filepath.Join(os.TempDir(), "AgentCenterChromeAgent")
 }
 
 // ChromeExecutablePath resolves chrome.exe from the App Paths registry key,

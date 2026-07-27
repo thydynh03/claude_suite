@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { fade, fly, scale } from 'svelte/transition';
   import { cubicOut, quintOut } from 'svelte/easing';
@@ -19,7 +19,7 @@
     {
       badge: 'Chào mừng',
       icon: 'auto_awesome',
-      title: 'Claude Suite — Trung tâm điều phối AI Agent',
+      title: 'Agent Center — Trung tâm điều phối AI Agent',
       subtitle:
         'Mô tả mục tiêu dự án, AI sẽ tự phân rã thành tasks, giao cho các sub-agent chạy song song, tự kiểm thử và tự sửa lỗi.',
       points: [

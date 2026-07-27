@@ -1,6 +1,6 @@
-package core
+﻿package core
 
-import "claude_suite/backend/orchestrator"
+import "agent_center/backend/orchestrator"
 
 // EventSink is how a frontend receives what the orchestrator is doing.
 //

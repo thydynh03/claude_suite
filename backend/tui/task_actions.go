@@ -9,18 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/claims"
-	"claude_suite/backend/cli"
-	"claude_suite/backend/core"
-	"claude_suite/backend/database"
-	"claude_suite/backend/defaults"
-	"claude_suite/backend/modelcatalog"
-	"claude_suite/backend/models"
-	"claude_suite/backend/orchestrator"
-	"claude_suite/backend/pipeline"
-	"claude_suite/backend/provider"
-	"claude_suite/backend/services"
-	"claude_suite/backend/services/projectmap"
+	"agent_center/backend/claims"
+	"agent_center/backend/cli"
+	"agent_center/backend/core"
+	"agent_center/backend/database"
+	"agent_center/backend/defaults"
+	"agent_center/backend/modelcatalog"
+	"agent_center/backend/models"
+	"agent_center/backend/orchestrator"
+	"agent_center/backend/pipeline"
+	"agent_center/backend/provider"
+	"agent_center/backend/services"
+	"agent_center/backend/services/projectmap"
 )
 
 // The terminal UI must offer the same shared capabilities as the desktop app.
@@ -597,7 +597,7 @@ func saveScreenshot(dataURI string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(os.TempDir(), "claude-suite-screenshots")
+	dir := filepath.Join(os.TempDir(), "agent-center-screenshots")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}

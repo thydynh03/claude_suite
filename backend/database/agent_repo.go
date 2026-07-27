@@ -1,11 +1,11 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
 	"fmt"
 	"time"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 
 	"github.com/google/uuid"
 )

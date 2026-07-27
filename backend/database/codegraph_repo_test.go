@@ -1,11 +1,11 @@
-package database
+﻿package database
 
 import (
 	"path/filepath"
 	"testing"
 	"time"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func newGraphTestRepo(t *testing.T) *CodeGraphRepository {

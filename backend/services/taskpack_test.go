@@ -1,12 +1,12 @@
-package services
+﻿package services
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
 )
 
 func newPackHarness(t *testing.T) (*ContextManager, *database.TaskRepository, *database.AttemptRepository) {

@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ func TestAgentUserDataDirUsesLocalAppData(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("LOCALAPPDATA", base)
 
-	want := filepath.Join(base, "ClaudeSuite", "ChromeAgent")
+	want := filepath.Join(base, "AgentCenter", "ChromeAgent")
 	if got := AgentUserDataDir(); got != want {
 		t.Errorf("AgentUserDataDir() = %q, want %q", got, want)
 	}
@@ -21,7 +21,7 @@ func TestAgentUserDataDirUsesLocalAppData(t *testing.T) {
 func TestAgentUserDataDirFallsBackToTempDir(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", "")
 
-	want := filepath.Join(os.TempDir(), "ClaudeSuiteChromeAgent")
+	want := filepath.Join(os.TempDir(), "AgentCenterChromeAgent")
 	if got := AgentUserDataDir(); got != want {
 		t.Errorf("AgentUserDataDir() = %q, want %q", got, want)
 	}

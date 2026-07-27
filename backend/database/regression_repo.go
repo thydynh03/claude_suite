@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 
 	"github.com/google/uuid"
 )

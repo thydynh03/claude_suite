@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"os"
@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
 )
 
 func newIncrementalHarness(t *testing.T) (*Mapper, *database.CodeGraphRepository, string) {

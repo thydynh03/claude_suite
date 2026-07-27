@@ -1,4 +1,4 @@
-package cli
+﻿package cli
 
 import (
 	"bytes"
@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 
-	"claude_suite/backend/provider"
+	"agent_center/backend/provider"
 )
 
 var ShowCLIConsole bool = false

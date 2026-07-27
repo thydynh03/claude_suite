@@ -1,11 +1,11 @@
-# Kế hoạch: Project Map + Persistent Memory
+﻿# Kế hoạch: Project Map + Persistent Memory
 
 **Vấn đề giải quyết:** sub-agent hiểu dự án kém, quên context sau một thời gian làm việc,
 và tái phạm những bug đã được sửa trước đó.
 
 - Ngày lập: 2026-07-26. Trạng thái: **đề xuất, chưa code**.
 - Nguồn nghiên cứu: đọc code 2 repo tham khảo + khảo sát toàn bộ pipeline context hiện tại
-  của Claude Suite, sau đó thiết kế được một vòng phản biện đối chiếu từng file/hàm với
+  của Agent Center, sau đó thiết kế được một vòng phản biện đối chiếu từng file/hàm với
   codebase thật. Mọi `file:line` trong tài liệu này đã được xác minh ngày 2026-07-26.
   - [Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) (commit `2cda14e`, MIT) — code graph.
   - [ECC](https://github.com/affaan-m/ECC) (commit `6a9f075`, MIT) — memory / continuous learning.
@@ -23,7 +23,7 @@ Xây 2 hệ trong chính backend Go (không ship runtime Node/Python của repo 
 2. **Persistent Memory** (port ý tưởng ECC): bắt observation ngay tại dispatcher (không cần
    hook — ta đã parse `stream-json`), chưng cất thành `memory_lessons` (mechanical tự động +
    LLM distill phải người duyệt), cộng **regression memory** riêng (bug → fix → guard nối vào
-   `.claude-suite/checks.json`).
+   `.agent-center/checks.json`).
 
 Hai hệ hợp lại thành một **Context Pack** có ngân sách ký tự cứng, tiêm vào `fullPrompt` tại
 `orchestrator.go:593-599` — đường duy nhất đến được **cả 2 provider** (Claude & Antigravity).
@@ -52,7 +52,7 @@ tất cả đã xác minh trong code:
 
 Tri thức "bug đã sửa" hôm nay chỉ sống trong tài liệu cho người đọc
 (`docs/ARCHITECTURE_DECISIONS.md`, memory notes) và catalogue falsifier
-`.claude-suite/checks.json` — **không có code nào đưa chúng vào prompt của sub-agent**.
+`.agent-center/checks.json` — **không có code nào đưa chúng vào prompt của sub-agent**.
 
 ---
 
@@ -159,7 +159,7 @@ render 1 dòng, stale-replay guard, kill-switch ngân sách = 0.
    Một code path, một mặt test, hai provider giống hệt nhau.
 3. **SQLite thay vì file JSON** — cần concurrent readers (worker pool) và partial write
    (re-index từng file). Đồng thời render một bản markdown ra
-   `<workspace>/.claude-suite/project-map.md` để Claude CLI tự nạp, Plan Builder tiêm,
+   `<workspace>/.agent-center/project-map.md` để Claude CLI tự nạp, Plan Builder tiêm,
    và người đọc được.
 4. **Capture tại dispatcher, không hook** — mọi tool event đã chảy qua closure `onLog` trong
    `runTask`. Không cần self-loop guard 5 tầng của ECC: các run nội bộ (summarizer/learner)
@@ -171,7 +171,7 @@ render 1 dòng, stale-replay guard, kill-switch ngân sách = 0.
    0 / deterministic / LLM.
 6. **Regression memory là bảng riêng + cầu nối claims**, không phải memory chung chung:
    chu trình fail→fixed sinh row `regressions` và (khi khả thi) một đề xuất falsifier cho
-   `.claude-suite/checks.json` chờ người duyệt.
+   `.agent-center/checks.json` chờ người duyệt.
 7. **Mọi lesson vào được prompt hoặc là mechanical (suy ra máy móc, tự active) hoặc đã qua
    người duyệt** (pending → active trên MemoryPage).
 8. **Ngân sách ký tự cứng một chỗ**: mặc định 12.000 ký tự (~3k token), cap con theo section,
@@ -203,7 +203,7 @@ render 1 dòng, stale-replay guard, kill-switch ngân sách = 0.
 
 ```
 mapper.go        // ProjectMapper: FullBuild / IncrementalUpdate / Staleness / RenderPack
-scan.go          // inventory file, detect ngôn ngữ/category, đọc .claude-suite/mapignore
+scan.go          // inventory file, detect ngôn ngữ/category, đọc .agent-center/mapignore
 goextract.go     // extractor go/parser + go/ast (func, method receiver, struct, import, exported)
 tsextract.go     // regex extractor cho ts/js/svelte: import/export/function-signature
 fingerprint.go   // content_hash + structure_sig + phân loại NONE/COSMETIC/STRUCTURAL
@@ -254,7 +254,7 @@ render.go        // render markdown pack có ngân sách
 3. Render markdown: overview ≤600 ký tự → layers ≤5 dòng → components 1 dòng/node →
    relationships dạng `A --[calls]--> B`.
 4. Sau mỗi build/update, ghi bản đầy đủ (vẫn có cap) ra
-   `<workspace>/.claude-suite/project-map.md`.
+   `<workspace>/.agent-center/project-map.md`.
 
 ### 4.3 Capture observations
 
@@ -311,14 +311,14 @@ Goroutine thay cho daemon bash của ECC, thuộc sở hữu Orchestrator:
   `## Known fixed bugs — do not re-introduce:`.
 - **Cầu nối claims**: Learner có thể draft một lệnh falsifier; MemoryPage nút "Approve guard"
   → `claims.AppendCheck` (hàm mới cạnh `LoadCatalogue`, `backend/claims/falsifier.go:45-68`)
-  ghi vào `.claude-suite/checks.json` (kiểu **`claims.Check`** — không phải `CheckEntry`),
+  ghi vào `.agent-center/checks.json` (kiểu **`claims.Check`** — không phải `CheckEntry`),
   argv-only đúng thiết kế hiện tại (`falsifier.go:16-27`).
   **Thừa nhận rõ**: comment `falsifier.go:29-34` nói catalogue "changes through review like
   any other code; an agent may only name an entry". Cho app ghi lệnh do agent draft — dù có
   người bấm duyệt — là **nới một invariant bảo mật đã văn bản hoá**. Điều kiện bắt buộc:
   UI duyệt phải hiển thị **argv nguyên văn** (không phải tóm tắt), và ghi thêm một entry vào
   `docs/ARCHITECTURE_DECISIONS.md` giải thích quyết định nới này.
-- Follow-on M5: scanner đọc verdict claims (`.claude-suite/session-<id>/verdict.json`, code
+- Follow-on M5: scanner đọc verdict claims (`.agent-center/session-<id>/verdict.json`, code
   ghi tại `backend/claims/client.go:134-152`) → đề xuất draft regression trên MemoryPage
   (người bấm chấp nhận) — đây là nguồn defect chất lượng cao nhất trong hệ thống.
 
@@ -371,7 +371,7 @@ repo mới ⇒ **signature `NewOrchestrator` đổi** ⇒ cập nhật đủ cá
 ### 4.7 Plan Builder hết mù
 
 `DecomposeWithProvider` (`backend/pipeline/plan_builder.go:43`, prompt tại `:81`) nối thêm:
-digest của `.claude-suite/project-map.md` (≤4.000 ký tự) + `## Known regressions in this
+digest của `.agent-center/project-map.md` (≤4.000 ký tự) + `## Known regressions in this
 workspace` (top 10 title+symptom) + snapshot board hiện tại (title+status qua
 `TaskRepository`). Nhánh fallback `SimpleSplit` (`:103-146`) không LLM — không tiêm gì.
 
@@ -648,7 +648,7 @@ Mọi mốc: `go build ./... && go vet ./... && go test ./backend/...`, frontend
 ### M2 — Project Map v1, deterministic-only (4–6 ngày)
 Scan + extractor Go (`go/parser`) + extractor regex TS/JS/Svelte + fingerprint; 4 bảng graph
 + `CodeGraphRepository`; `FullBuild` (summary mặc định = dòng signature, chưa LLM);
-`RenderPack` seed+1-hop; ghi `.claude-suite/project-map.md`; `Staleness` + banner; API
+`RenderPack` seed+1-hop; ghi `.agent-center/project-map.md`; `Staleness` + banner; API
 `GetProjectMap/RebuildProjectMap/GetProjectMapStaleness` cả 2 adapter; tiêm Plan Builder.
 
 **Accept:** trên chính repo này FullBuild <10s; task nhắc "dispatcher" ⇒ pack chứa

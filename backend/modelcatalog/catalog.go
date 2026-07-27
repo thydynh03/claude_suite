@@ -1,4 +1,4 @@
-// Package modelcatalog is the single source of truth for which models the app
+﻿// Package modelcatalog is the single source of truth for which models the app
 // offers. Every dropdown used to carry its own hand-copied list — nine copies,
 // each missing different entries, all dead the day a provider ships something
 // new. The catalog merges four sources instead:
@@ -29,8 +29,8 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/provider"
+	"agent_center/backend/models"
+	"agent_center/backend/provider"
 )
 
 // Model is one catalog entry.

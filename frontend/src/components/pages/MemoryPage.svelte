@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from 'svelte';
   import { addToast } from '../../lib/stores/appState';
   import * as AppBindings from '../../../wailsjs/go/main/App';
@@ -188,7 +188,7 @@
     approvingGuard = true;
     try {
       await AppBindings.ApproveRegressionGuard(guardForId, guardName.trim(), guardArgs);
-      addToast(`Đã ghi guard "${guardName.trim()}" vào .claude-suite/checks.json.`, 'SUCCESS');
+      addToast(`Đã ghi guard "${guardName.trim()}" vào .agent-center/checks.json.`, 'SUCCESS');
       guardForId = '';
       await loadRegressions();
     } catch (e: any) {
@@ -279,7 +279,7 @@
       {:else}
         <p class="text-xs text-on-surface-variant mb-5">
           Phân tích lần cuối: {fmtDate(stats.analyzed_at)} · commit <span class="font-mono">{(stats.git_commit_hash || '').slice(0, 7) || 'n/a'}</span>
-          · map tự cập nhật sau mỗi task; bản digest nằm ở <span class="font-mono">.claude-suite/project-map.md</span>
+          · map tự cập nhật sau mỗi task; bản digest nằm ở <span class="font-mono">.agent-center/project-map.md</span>
         </p>
       {/if}
       <div class="flex gap-2">
@@ -446,7 +446,7 @@
                   <button type="button"
                     class="px-3 py-1.5 rounded-lg text-xs font-medium border border-outline-variant text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
                     on:click={() => openGuardForm(r)}
-                    title="Viết một lệnh kiểm chứng vào .claude-suite/checks.json để chặn bug này quay lại">Thêm guard…</button>
+                    title="Viết một lệnh kiểm chứng vào .agent-center/checks.json để chặn bug này quay lại">Thêm guard…</button>
                 {/if}
               </div>
             </div>
@@ -455,7 +455,7 @@
               <div class="mt-3 border-t border-outline-variant pt-3">
                 <p class="text-xs text-on-surface-variant mb-2">
                   Guard là một lệnh <strong>argv</strong> (mỗi tham số một dòng — không phải chuỗi shell) được ghi vào
-                  <span class="font-mono">.claude-suite/checks.json</span>. Lệnh <em>fail</em> nghĩa là bug đã quay lại.
+                  <span class="font-mono">.agent-center/checks.json</span>. Lệnh <em>fail</em> nghĩa là bug đã quay lại.
                 </p>
                 <input type="text" bind:value={guardName} placeholder="tên check (kebab-case)"
                   class="w-full mb-2 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-sm font-mono text-on-surface focus:border-primary" />

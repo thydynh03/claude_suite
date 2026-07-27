@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 
 ####
 ## Please note: Template replacements don't work in this file. They are provided with default defines like
@@ -77,7 +77,7 @@ ManifestDPIAware true
 # shows no pages at all, so nothing is launched on CI.
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION LaunchAppAsUser
-!define MUI_FINISHPAGE_RUN_TEXT "Mở Claude Suite"
+!define MUI_FINISHPAGE_RUN_TEXT "Mở Agent Center"
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
@@ -123,18 +123,18 @@ Function .onInit
    SetRegView 64
 
    # Builds up to v2.14.1 installed under the author's GitHub handle
-   # ("...\thydynh03\Claude Suite"). companyName is the product name now, so
+   # ("...\thydynh03\Agent Center"). companyName is the product name now, so
    # without this a machine ends up with two installations and two entries in
    # Apps & features, and the old Start-menu shortcut keeps launching the old
    # build. Declining is allowed: it is the user's machine.
    # The key name keeps the space: UNINST_KEY_NAME is the bare concatenation
-   # of companyName and productName, which were "thydynh03" + "Claude Suite".
-   ReadRegStr $R0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\thydynh03Claude Suite" "UninstallString"
+   # of companyName and productName, which were "thydynh03" + "Agent Center".
+   ReadRegStr $R0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\thydynh03Agent Center" "UninstallString"
    ${If} $R0 != ""
        # /SD IDNO: a silent install (/S — CI uses it) must not pop a dialog;
        # declining is the safe default there.
        MessageBox MB_YESNO|MB_ICONQUESTION \
-           "Đã có bản Claude Suite cũ cài ở thư mục khác. Gỡ bản cũ trước khi cài bản mới?" \
+           "Đã có bản Agent Center cũ cài ở thư mục khác. Gỡ bản cũ trước khi cài bản mới?" \
            /SD IDNO IDNO skip_old_uninstall
        # _?= makes the uninstaller run in place instead of copying itself to
        # %TEMP% and returning immediately — without it ExecWait comes back in
@@ -180,7 +180,7 @@ Section
 
     !insertmacro wails.files
 
-    # The companion command-line tools ship beside the app. claude-suite-claim is
+    # The companion command-line tools ship beside the app. agent-center-claim is
     # the one a teammate's agent runs to file a claim, and the join command the
     # app hands out names this exact path — without it that line only works for
     # someone who built the project from source.
@@ -195,8 +195,8 @@ Section
     # ${__FILEDIR__} anchors the paths to this script rather than to makensis's
     # working directory. No /nonfatal, so a missing tool fails the build instead
     # of silently producing an installer without it.
-    File "${__FILEDIR__}\..\..\bin\claude-suite-claim.exe"
-    File "${__FILEDIR__}\..\..\bin\claude-suite-tui.exe"
+    File "${__FILEDIR__}\..\..\bin\agent-center-claim.exe"
+    File "${__FILEDIR__}\..\..\bin\agent-center-tui.exe"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

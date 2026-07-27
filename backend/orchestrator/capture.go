@@ -1,14 +1,14 @@
-package orchestrator
+﻿package orchestrator
 
 import (
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
-	"claude_suite/backend/services/projectmap"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
+	"agent_center/backend/services/projectmap"
+	"agent_center/backend/textutil"
 )
 
 // obsPayloadCap bounds one observation payload (chars), after scrubbing.

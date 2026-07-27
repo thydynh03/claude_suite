@@ -1,9 +1,9 @@
-package tui
+﻿package tui
 
 import (
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func TestRepositoryTaskActionsMutateOnlySelectedDatabase(t *testing.T) {

@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
 )
 
 type WebhookService struct {

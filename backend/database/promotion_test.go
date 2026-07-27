@@ -1,10 +1,10 @@
-package database
+﻿package database
 
 import (
 	"path/filepath"
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // The ported ECC promotion rule: the same trigger active in ≥2 workspaces

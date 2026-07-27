@@ -1,4 +1,4 @@
-# Contributing to Claude Suite
+﻿# Contributing to Agent Center
 
 **English** · [Tiếng Việt](CONTRIBUTING.vi.md)
 
@@ -17,9 +17,9 @@ By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 | You want to… | Start here |
 |---|---|
-| Report a bug | [Open a bug report](https://github.com/thydynh03/claude_suite/issues/new?template=bug_report.yml) — include the version from the title bar and the log file from the data directory |
-| Suggest a feature | [Open a feature request](https://github.com/thydynh03/claude_suite/issues/new?template=feature_request.yml) — describe the problem before the solution |
-| Fix something small | Anything labelled [`good first issue`](https://github.com/thydynh03/claude_suite/labels/good%20first%20issue) |
+| Report a bug | [Open a bug report](https://github.com/thydynh03/agent_center/issues/new?template=bug_report.yml) — include the version from the title bar and the log file from the data directory |
+| Suggest a feature | [Open a feature request](https://github.com/thydynh03/agent_center/issues/new?template=feature_request.yml) — describe the problem before the solution |
+| Fix something small | Anything labelled [`good first issue`](https://github.com/thydynh03/agent_center/labels/good%20first%20issue) |
 | Translate | `frontend/src/lib/stores/i18n.ts` holds every string. Keep labels short — the sidebar rail is 240px and there is a test that fails when a nav label no longer fits |
 | Improve the docs | Every fix is welcome, including typos. Both language versions should stay in step |
 
@@ -51,16 +51,16 @@ There are two frontends over one backend. Both read the same database.
 wails dev
 
 # Terminal UI — read-only by default: no migrations, no writes
-go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db
+go run ./cmd/agent-center-tui --db /path/to/agent_manager.db
 
 # Terminal UI with task mutations and orchestration enabled
-go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db --write
+go run ./cmd/agent-center-tui --db /path/to/agent_manager.db --write
 ```
 
 Production build:
 
 ```bash
-wails build -platform windows/amd64 -clean   # -> build/bin/ClaudeSuite.exe
+wails build -platform windows/amd64 -clean   # -> build/bin/AgentCenter.exe
 ```
 
 Point the app at a **throwaway workspace** while you develop. Sub-agents run with
@@ -141,8 +141,8 @@ agent. Use word boundaries — see `orchestrator.keywordMatch` and
 
 ### 4. Secrets never go in the source
 
-GCP OAuth credentials are read from `CLAUDE_SUITE_GCP_CLIENT_ID` /
-`CLAUDE_SUITE_GCP_CLIENT_SECRET`, or from `gcp_oauth.json` in the data directory.
+GCP OAuth credentials are read from `AGENT_CENTER_GCP_CLIENT_ID` /
+`AGENT_CENTER_GCP_CLIENT_SECRET`, or from `gcp_oauth.json` in the data directory.
 Both are gitignored. Never paste a token into an issue — see [SECURITY.md](SECURITY.md).
 
 ### 5. Sub-agents write to the workspace directly
@@ -179,8 +179,8 @@ running app rather than by eye — the failure is invisible in screenshots.
 | `backend/tui/` | terminal UI (`model` / `update` / `commands` / `view` files) |
 | `backend/contract/` | cross-frontend consistency checks |
 | `frontend/src/` | Svelte 5 desktop UI (`*.test.ts` next to what they cover) |
-| `cmd/claude-suite-tui/` | TUI entry point |
-| `cmd/claude-suite-claim/` | the claim-filing CLI |
+| `cmd/agent-center-tui/` | TUI entry point |
+| `cmd/agent-center-claim/` | the claim-filing CLI |
 
 ---
 
@@ -212,15 +212,15 @@ If you are an agent — or a person using one — this repository has a way to s
 finding so it can be proven wrong, instead of writing it straight into a PR comment:
 
 ```bash
-claude-suite-claim --checks                    # what you may point at
-claude-suite-claim --host ws://HOST:9111 --session ID --token T \
+agent-center-claim --checks                    # what you may point at
+agent-center-claim --host ws://HOST:9111 --session ID --token T \
   --author you/your-agent --provider claude \
   --subject "backend/cli/process_windows.go:17" \
   --assert  "cmd.Wait() never returns when the console is visible" \
   --falsify "console-window-hidden"
 ```
 
-`--falsify` names an entry in `.claude-suite/checks.json`, and **a falsifier passes
+`--falsify` names an entry in `.agent-center/checks.json`, and **a falsifier passes
 when your claim is wrong** — so a failing check confirms the defect. Omit it and the
 claim is kept as an opinion that cannot block a merge. Full details, including the
 MCP transport, are in [CLAUDE.md](CLAUDE.md).

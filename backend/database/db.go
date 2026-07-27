@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"claude_suite/backend/logger"
-	"claude_suite/backend/paths"
+	"agent_center/backend/logger"
+	"agent_center/backend/paths"
 
 	_ "modernc.org/sqlite"
 )
@@ -86,7 +86,7 @@ func InitDB() (*sql.DB, error) {
 			fmt.Printf("Data migration warning: %v\n", err)
 		} else if report != nil {
 			logger.Info(fmt.Sprintf("adopted existing data from %s", report.From))
-			fmt.Printf("Adopted existing Claude Suite data from %s (kept as a backup there)\n", report.From)
+			fmt.Printf("Adopted existing Agent Center data from %s (kept as a backup there)\n", report.From)
 		}
 
 		db, err := OpenAt(dbPath)

@@ -1,10 +1,10 @@
-package database
+﻿package database
 
 import (
 	"path/filepath"
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func agentRepoWithOne(t *testing.T) (*AgentRepository, *models.Agent) {

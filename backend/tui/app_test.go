@@ -1,11 +1,11 @@
-package tui
+﻿package tui
 
 import (
 	"strings"
 	"testing"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/services"
+	"agent_center/backend/models"
+	"agent_center/backend/services"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"

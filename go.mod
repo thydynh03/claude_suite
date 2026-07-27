@@ -1,4 +1,4 @@
-module claude_suite
+module agent_center
 
 go 1.26
 

@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"fmt"
@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/services/projectmap"
+	"agent_center/backend/database"
+	"agent_center/backend/services/projectmap"
 )
 
 var TextExtensions = map[string]bool{

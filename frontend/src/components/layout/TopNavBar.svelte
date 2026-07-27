@@ -50,7 +50,7 @@
   }
 
   function openRepo() {
-    const url = 'https://github.com/thydynh03/claude_suite';
+    const url = 'https://github.com/thydynh03/agent_center';
     try {
       (AppBindings as any).OpenURLInBrowser(url);
     } catch {
@@ -226,7 +226,7 @@
 <header class="flex justify-between items-center px-6 w-full fixed top-0 z-50 bg-surface border-b border-outline-variant h-[60px]">
   <div class="flex items-center gap-6">
     <div class="flex items-center gap-2">
-      <span class="text-sm font-semibold text-on-surface">Claude Suite</span>
+      <span class="text-sm font-semibold text-on-surface">Agent Center</span>
     </div>
 
     <nav class="hidden md:flex items-center gap-1 relative select-none" on:mouseleave={closeMenus}>

@@ -1,4 +1,4 @@
-// Package core holds what every frontend of Claude Suite must agree on.
+﻿// Package core holds what every frontend of Agent Center must agree on.
 //
 // There are two frontends over one backend: the Wails desktop app in app.go and
 // the terminal UI in backend/tui. They are separate adapters by design — one
@@ -17,8 +17,8 @@
 package core
 
 import (
-	"claude_suite/backend/models"
-	"claude_suite/backend/services"
+	"agent_center/backend/models"
+	"agent_center/backend/services"
 )
 
 // Facade is the capability set both frontends must offer.

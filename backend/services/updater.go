@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/version"
+	"agent_center/backend/version"
 
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/sysproc"
 )
 
 type UpdateInfo struct {
@@ -59,7 +59,7 @@ var (
 // the exe. Reported once, on the next check, so a silently-lost update stops
 // looking like an update that never happened.
 func updateGaveUpMarker() string {
-	return filepath.Join(os.TempDir(), "claude_suite_update_gaveup.txt")
+	return filepath.Join(os.TempDir(), "agent_center_update_gaveup.txt")
 }
 
 // TakeFailedSwapNotice reports (and clears) a previous update whose file swap
@@ -77,7 +77,7 @@ func (u *UpdaterService) TakeFailedSwapNotice() bool {
 // A release carries four .exe assets: the NSIS installer, the portable app,
 // and the two companion CLI tools. "First asset ending in .exe" is therefore
 // never a safe pick — depending on upload order it can hand the updater
-// claude-suite-claim.exe as the new app binary.
+// agent-center-claim.exe as the new app binary.
 //
 // An installed copy (under Program Files) must update through the installer,
 // which requests elevation itself; a portable copy gets the bare exe swapped
@@ -192,7 +192,7 @@ func isInstallerAsset(downloadUrl string) bool {
 // a concurrent update's files are in active use.
 func cleanStaleUpdateFiles() {
 	tmp := os.TempDir()
-	for _, pattern := range []string{"ClaudeSuite-update-*.exe", "claude_suite_updater-*.bat"} {
+	for _, pattern := range []string{"AgentCenter-update-*.exe", "agent_center_updater-*.bat"} {
 		matches, _ := filepath.Glob(filepath.Join(tmp, pattern))
 		for _, m := range matches {
 			if info, err := os.Stat(m); err == nil && time.Since(info.ModTime()) > 24*time.Hour {
@@ -203,7 +203,7 @@ func cleanStaleUpdateFiles() {
 }
 
 func dirWritable(dir string) bool {
-	probe, err := os.CreateTemp(dir, ".claude-suite-write-probe-*")
+	probe, err := os.CreateTemp(dir, ".agent-center-write-probe-*")
 	if err != nil {
 		return false
 	}
@@ -220,12 +220,12 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	// machine would repeat forever.
 	var lastErr error
 
-	apiUrl := "https://api.github.com/repos/thydynh03/claude_suite/releases/latest"
+	apiUrl := "https://api.github.com/repos/thydynh03/agent_center/releases/latest"
 	req, err := http.NewRequest("GET", apiUrl, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "ClaudeSuite-App")
+	req.Header.Set("User-Agent", "AgentCenter-App")
 
 	resp, err := updateCheckClient.Do(req)
 	if err != nil {
@@ -253,7 +253,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 					// No .exe in the release: the install button can only ever
 					// fail on this, so say so up front instead of letting the
 					// user discover it by pressing it.
-					downloadUrl = "https://github.com/thydynh03/claude_suite/archive/refs/tags/" + rel.TagName + ".zip"
+					downloadUrl = "https://github.com/thydynh03/agent_center/archive/refs/tags/" + rel.TagName + ".zip"
 					body = manualOnlyNotice(rel.TagName) + body
 				}
 				return &UpdateInfo{
@@ -269,10 +269,10 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 	}
 
 	// Fallback: Check tags API if releases API is empty
-	tagsUrl := "https://api.github.com/repos/thydynh03/claude_suite/tags"
+	tagsUrl := "https://api.github.com/repos/thydynh03/agent_center/tags"
 	tReq, err := http.NewRequest("GET", tagsUrl, nil)
 	if err == nil {
-		tReq.Header.Set("User-Agent", "ClaudeSuite-App")
+		tReq.Header.Set("User-Agent", "AgentCenter-App")
 		tResp, err := updateCheckClient.Do(tReq)
 		if err != nil {
 			lastErr = err
@@ -302,7 +302,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 					return &UpdateInfo{
 						HasUpdate:   true,
 						Version:     latestTag,
-						DownloadURL: "https://github.com/thydynh03/claude_suite/archive/refs/tags/" + latestTag + ".zip",
+						DownloadURL: "https://github.com/thydynh03/agent_center/archive/refs/tags/" + latestTag + ".zip",
 						Body:        manualOnlyNotice(latestTag) + "Bản phát hành mới " + latestTag + " trên GitHub Repository.",
 					}, nil
 				}
@@ -322,7 +322,7 @@ func (u *UpdaterService) CheckForUpdates() (*UpdateInfo, error) {
 // cannot be installed from inside the app.
 func manualOnlyNotice(tag string) string {
 	return "⚠️ Bản " + tag + " chưa có file .exe để tự cập nhật — hãy tải và cài thủ công tại " +
-		"https://github.com/thydynh03/claude_suite/releases/latest\n\n"
+		"https://github.com/thydynh03/agent_center/releases/latest\n\n"
 }
 
 // buildUpdaterBat swaps the downloaded exe over the running one after it
@@ -408,7 +408,7 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 	// Download into the temp dir, never into the app's own directory: an
 	// installed copy lives under Program Files, where an unelevated write
 	// is denied before the update even starts.
-	out, err := os.CreateTemp("", "ClaudeSuite-update-*.exe")
+	out, err := os.CreateTemp("", "AgentCenter-update-*.exe")
 	if err != nil {
 		return err
 	}
@@ -420,7 +420,7 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 		os.Remove(newExePath)
 		return err
 	}
-	dlReq.Header.Set("User-Agent", "ClaudeSuite-App")
+	dlReq.Header.Set("User-Agent", "AgentCenter-App")
 	resp, err := updateDownloadClient.Do(dlReq)
 	if err != nil {
 		out.Close()
@@ -495,7 +495,7 @@ func (u *UpdaterService) DownloadAndInstall(downloadUrl string, progressCb func(
 	// and does not hold it exclusively, so rewriting a fixed path while a
 	// previous update's script is still in its retry window hands that
 	// interpreter garbled commands.
-	batFile, err := os.CreateTemp("", "claude_suite_updater-*.bat")
+	batFile, err := os.CreateTemp("", "agent_center_updater-*.bat")
 	if err != nil {
 		os.Remove(newExePath)
 		return err

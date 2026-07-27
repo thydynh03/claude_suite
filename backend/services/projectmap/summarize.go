@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"encoding/json"
@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/cli"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 )
 
 const (

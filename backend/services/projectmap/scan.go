@@ -1,4 +1,4 @@
-// Package projectmap builds and serves the deterministic project map: a
+﻿// Package projectmap builds and serves the deterministic project map: a
 // per-workspace code graph stored in SQLite, fingerprinted for cheap
 // incremental updates, rendered as bounded context for sub-agent prompts.
 //
@@ -30,7 +30,7 @@ var skippedDirs = map[string]bool{
 	"node_modules": true, ".git": true, "__pycache__": true, ".venv": true,
 	"venv": true, "dist": true, "build": true, ".wails": true, ".idea": true,
 	".vscode": true, ".next": true, "coverage": true, "wailsjs": true,
-	".claude-suite": true, ".ua": true, "bin": true, "obj": true,
+	".agent-center": true, ".ua": true, "bin": true, "obj": true,
 	// .claude holds agent-tool state INCLUDING nested git worktrees
 	// (.claude/worktrees/<name> is a full copy of the repo while a background
 	// task runs). Scanning it doubles every node under a path nothing else

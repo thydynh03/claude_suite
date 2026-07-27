@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -15,26 +15,26 @@ import (
 
 	"os/exec"
 
-	"claude_suite/backend/claims"
-	"claude_suite/backend/cli"
-	"claude_suite/backend/core"
-	"claude_suite/backend/database"
-	"claude_suite/backend/defaults"
-	"claude_suite/backend/logger"
-	"claude_suite/backend/modelcatalog"
-	"claude_suite/backend/models"
-	"claude_suite/backend/orchestrator"
-	"claude_suite/backend/paths"
-	"claude_suite/backend/pipeline"
-	"claude_suite/backend/secrets"
-	"claude_suite/backend/services"
-	"claude_suite/backend/services/projectmap"
-	"claude_suite/backend/textutil"
-	"claude_suite/backend/version"
+	"agent_center/backend/claims"
+	"agent_center/backend/cli"
+	"agent_center/backend/core"
+	"agent_center/backend/database"
+	"agent_center/backend/defaults"
+	"agent_center/backend/logger"
+	"agent_center/backend/modelcatalog"
+	"agent_center/backend/models"
+	"agent_center/backend/orchestrator"
+	"agent_center/backend/paths"
+	"agent_center/backend/pipeline"
+	"agent_center/backend/secrets"
+	"agent_center/backend/services"
+	"agent_center/backend/services/projectmap"
+	"agent_center/backend/textutil"
+	"agent_center/backend/version"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"claude_suite/backend/provider"
+	"agent_center/backend/provider"
 )
 
 // App struct
@@ -214,7 +214,7 @@ func (a *App) startup(ctx context.Context) {
 		logger.Error("startup aborted: " + msg)
 		_, _ = wailsRuntime.MessageDialog(ctx, wailsRuntime.MessageDialogOptions{
 			Type:    wailsRuntime.ErrorDialog,
-			Title:   "Claude Suite không khởi động được",
+			Title:   "Agent Center không khởi động được",
 			Message: msg,
 		})
 		wailsRuntime.Quit(ctx)
@@ -1357,11 +1357,11 @@ func accountLabel(id string) string {
 
 // oauthCreds resolves GCP OAuth credentials from (1) environment variables,
 // (2) a local gcp_oauth.json config next to the DB, else empty. Secrets must NOT
-// be committed to source — set CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET or
+// be committed to source — set agent_center_GCP_CLIENT_ID / _CLIENT_SECRET or
 // drop a gcp_oauth.json ({"client_id":"...","client_secret":"..."}) in the data dir.
 func oauthCreds() (string, string) {
-	id := os.Getenv("CLAUDE_SUITE_GCP_CLIENT_ID")
-	secret := os.Getenv("CLAUDE_SUITE_GCP_CLIENT_SECRET")
+	id := os.Getenv("agent_center_GCP_CLIENT_ID")
+	secret := os.Getenv("agent_center_GCP_CLIENT_SECRET")
 	if id != "" && secret != "" {
 		return id, secret
 	}
@@ -1422,7 +1422,7 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 	if clientID == "" || clientSecret == "" {
 		if a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, "log_entry", map[string]string{
-				"message": "⚠️ Thiếu GCP OAuth credentials. Đặt biến môi trường CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET hoặc tạo file gcp_oauth.json trong thư mục dữ liệu.",
+				"message": "⚠️ Thiếu GCP OAuth credentials. Đặt biến môi trường agent_center_GCP_CLIENT_ID / _CLIENT_SECRET hoặc tạo file gcp_oauth.json trong thư mục dữ liệu.",
 				"level":   "ERROR",
 				"time":    time.Now().Format("15:04:05"),
 			})
@@ -1573,7 +1573,7 @@ func (a *App) GetRegressions() ([]models.Regression, error) {
 }
 
 // ApproveRegressionGuard writes a human-approved falsifier into the
-// workspace's .claude-suite/checks.json and links it to the regression. The
+// workspace's .agent-center/checks.json and links it to the regression. The
 // UI shows the exact argv before this is called — never a summary.
 func (a *App) ApproveRegressionGuard(regressionID, checkName string, command []string) error {
 	ws := a.workspaceConfig.LastWorkspaceFolder
@@ -2077,7 +2077,7 @@ func (a *App) RefreshAccountTokens() (refreshed int, failed int) {
 	// was ever contacted — persisted, and nothing re-enables disabled
 	// accounts. WarmupAntiAccountKeys already guards this identically.
 	if clientID == "" || clientSecret == "" {
-		a.emitLog("⚠️ Chưa cấu hình GCP OAuth (CLAUDE_SUITE_GCP_CLIENT_ID / _CLIENT_SECRET hoặc gcp_oauth.json) — bỏ qua làm mới token, không tài khoản nào bị vô hiệu hoá.", "WARN")
+		a.emitLog("⚠️ Chưa cấu hình GCP OAuth (agent_center_GCP_CLIENT_ID / _CLIENT_SECRET hoặc gcp_oauth.json) — bỏ qua làm mới token, không tài khoản nào bị vô hiệu hoá.", "WARN")
 		return 0, len(pending)
 	}
 
@@ -2307,7 +2307,7 @@ func (a *App) domReady(ctx context.Context) {
 // Two members' agents reaching opposite conclusions is settled by running the
 // check each of them named, not by letting them argue. These methods drive that
 // from the desktop app; agents on other machines take part through
-// cmd/claude-suite-claim.
+// cmd/agent-center-claim.
 
 // ClaimsHostStatus reports whether agents can currently connect.
 func (a *App) ClaimsHostStatus() map[string]interface{} {
@@ -2438,7 +2438,7 @@ func (a *App) BuildJoinCommands(rawHost, sessionID, token, subject string) map[s
 	}
 }
 
-// CreateChecksFile writes a starter .claude-suite/checks.json for the current
+// CreateChecksFile writes a starter .agent-center/checks.json for the current
 // workspace, seeded with whatever the project's own tooling implies.
 //
 // Without a catalogue every claim is an opinion and nothing can block a merge —
@@ -2450,7 +2450,7 @@ func (a *App) CreateChecksFile() (string, error) {
 		return "", fmt.Errorf("chưa chọn workspace")
 	}
 
-	dir := filepath.Join(workspace, ".claude-suite")
+	dir := filepath.Join(workspace, ".agent-center")
 	path := filepath.Join(dir, "checks.json")
 	// Never overwrite: the existing file is the user's, and it may be the only
 	// copy of checks they wrote by hand.
@@ -2555,13 +2555,13 @@ func (a *App) FinishClaimSession(sessionID string) (*claims.Outcome, error) {
 
 // claimToolCommand is how the join command should invoke the claim CLI.
 //
-// The installer puts claude-suite-claim.exe beside the app, which is not on
+// The installer puts agent-center-claim.exe beside the app, which is not on
 // PATH, so a bare name only works for someone who ran `go install` from source.
 // The whole point of the copied line is that a teammate's agent can run it
 // without being told to install anything first, so it names the full path when
 // the tool is there and falls back to the bare name when it is not — which is
 // the development case, where PATH does have it.
-// claimToolInstalled reports whether claude-suite-claim can be found — beside
+// claimToolInstalled reports whether agent-center-claim can be found — beside
 // the app, as the installer places it, or on PATH.
 //
 // The command handed to a teammate names the tool without a path, so this is what
@@ -2569,7 +2569,7 @@ func (a *App) FinishClaimSession(sessionID string) (*claims.Outcome, error) {
 // absolute path of *this* machine and embedded it in a line meant to be run on
 // another one; it worked only while both sides used the same install directory.
 func claimToolInstalled() bool {
-	names := []string{"claude-suite-claim", "claude-suite-claim.exe"}
+	names := []string{"agent-center-claim", "agent-center-claim.exe"}
 
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)

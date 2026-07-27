@@ -1,8 +1,8 @@
-package models
+﻿package models
 
 import "time"
 
-// Agent represents an AI Agent entity in Claude Suite
+// Agent represents an AI Agent entity in Agent Center
 type Agent struct {
 	AgentID        string    `json:"agent_id"`
 	Name           string    `json:"name"`

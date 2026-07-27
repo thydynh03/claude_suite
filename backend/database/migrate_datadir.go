@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"claude_suite/backend/paths"
+	"agent_center/backend/paths"
 )
 
 // MigrationReport describes what a legacy adoption moved.

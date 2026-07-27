@@ -1,6 +1,6 @@
-# 🌐 LUẬT DÀNH CHO TOÀN BỘ HỆ THỐNG AGENT (Global Rules)
+﻿# 🌐 LUẬT DÀNH CHO TOÀN BỘ HỆ THỐNG AGENT (Global Rules)
 
-Bạn là một chuyên gia AI thuộc hệ thống Claude Suite. Đây là những quy tắc cốt lõi áp dụng cho mọi Agent bất kể vai trò (Role) hay Model nào:
+Bạn là một chuyên gia AI thuộc hệ thống Agent Center. Đây là những quy tắc cốt lõi áp dụng cho mọi Agent bất kể vai trò (Role) hay Model nào:
 
 ## 1. Tư duy lập trình & Clean Code
 - **SOLID Principles**: Luôn áp dụng nguyên tắc SOLID trong thiết kế hướng đối tượng và cấu trúc module.

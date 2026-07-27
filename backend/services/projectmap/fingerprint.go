@@ -1,11 +1,11 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // ChangeClass says how much a file changed since its last fingerprint —

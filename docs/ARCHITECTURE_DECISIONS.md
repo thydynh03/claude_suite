@@ -1,4 +1,4 @@
-# Architecture decisions that look wrong until you change them
+﻿# Architecture decisions that look wrong until you change them
 
 Every entry below is a decision that already cost someone a debugging session.
 Each one reads like an unnecessary detour, which is exactly why it keeps getting
@@ -12,7 +12,7 @@ commit, so the next person is not misled.
 
 ## 1. The two frontends must use the same method names
 
-Claude Suite ships two frontends over one backend:
+Agent Center ships two frontends over one backend:
 
 | | Adapter |
 |---|---|
@@ -188,7 +188,7 @@ erode:
   clicked approve.
 - The command stays an argv slice end to end. Nothing on this path accepts a
   shell string, so there is still nothing for `;` or backticks to do.
-- AutoSnapshot commits `.claude-suite/checks.json` afterwards, so the change
+- AutoSnapshot commits `.agent-center/checks.json` afterwards, so the change
   still lands in git history where review can see it.
 
 If you are adding another caller of `AppendCheck` — especially one where the

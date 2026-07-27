@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/sysproc"
 )
 
 // Check is one entry in the repository's catalogue of things a claim may point at.
@@ -37,7 +37,7 @@ type Catalogue struct {
 }
 
 // CatalogueFile is where the catalogue is read from, relative to the workspace.
-const CatalogueFile = ".claude-suite/checks.json"
+const CatalogueFile = ".agent-center/checks.json"
 
 // LoadCatalogue reads the catalogue from a workspace. A missing file yields an
 // empty catalogue, which means every claim is an opinion — safe, and obvious to

@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"crypto/sha256"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // WorkspaceRepository keys every piece of project memory to a stable workspace

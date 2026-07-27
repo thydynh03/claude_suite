@@ -1,4 +1,4 @@
-package logger
+﻿package logger
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/paths"
+	"agent_center/backend/paths"
 )
 
 type LogLevel string
@@ -44,7 +44,7 @@ func GetLogger() *Logger {
 		logDir := paths.LogDir()
 		_ = os.MkdirAll(logDir, 0755)
 
-		filePath := filepath.Join(logDir, "claude_suite.log")
+		filePath := filepath.Join(logDir, "agent_center.log")
 		f, _ := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 
 		globalLogger = &Logger{

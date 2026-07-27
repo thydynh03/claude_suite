@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"strings"
@@ -129,7 +129,7 @@ func TestJoinCommandCarriesNoMachineSpecificPath(t *testing.T) {
 	if strings.Contains(cmd, "YOU/your-agent") {
 		t.Errorf("command = %q, still carries the placeholder author", cmd)
 	}
-	if !strings.HasPrefix(cmd, "claude-suite-claim ") {
+	if !strings.HasPrefix(cmd, "agent-center-claim ") {
 		t.Errorf("command = %q, want the tool named plainly so PATH resolves it", cmd)
 	}
 	for _, want := range []string{"--host ws://192.168.1.5:9111", "--session abc123", "--token tok"} {
@@ -146,7 +146,7 @@ func TestBootstrapJoinCommandFetchesTheToolItself(t *testing.T) {
 	cmd := BootstrapJoinCommand("ws://192.168.1.5:9111", "abc123", "tok")
 
 	for _, want := range []string{
-		"releases/latest/download/claude-suite-claim.exe",
+		"releases/latest/download/agent-center-claim.exe",
 		"Test-Path",
 		"--host ws://192.168.1.5:9111", "--session abc123", "--token tok",
 	} {
@@ -173,9 +173,9 @@ func TestAgentJoinPromptIsSelfContained(t *testing.T) {
 	for _, want := range []string{
 		"backend/cli/process_windows.go:17",
 		"--host ws://192.168.1.5:9111", "--session abc123", "--token tok",
-		"releases/latest/download/claude-suite-claim.exe",
-		"go run ./cmd/claude-suite-claim",
-		"https://github.com/thydynh03/claude_suite",
+		"releases/latest/download/agent-center-claim.exe",
+		"go run ./cmd/agent-center-claim",
+		"https://github.com/thydynh03/agent_center",
 		"--ping",
 		"--checks",
 		"--falsify",

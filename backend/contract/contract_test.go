@@ -1,6 +1,6 @@
-// Package contract holds cross-frontend consistency checks.
+﻿// Package contract holds cross-frontend consistency checks.
 //
-// Claude Suite ships two frontends over one backend: the Wails desktop app
+// Agent Center ships two frontends over one backend: the Wails desktop app
 // (methods on *App in app.go) and the terminal UI (methods on
 // *tui.RepositoryTaskActions). Both are hand-written adapters over the same
 // services, so the same capability can — and did — end up with two names:

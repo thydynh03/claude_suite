@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 )
 
 type ExporterService struct{}
@@ -24,11 +24,11 @@ func (e *ExporterService) ExportKanbanReport(tasks []models.Task, outDir string)
 		outDir = "."
 	}
 
-	mdFile := filepath.Join(outDir, fmt.Sprintf("ClaudeSuite_Kanban_Report_%s.md", ts))
-	htmlFile := filepath.Join(outDir, fmt.Sprintf("ClaudeSuite_Kanban_Report_%s.html", ts))
+	mdFile := filepath.Join(outDir, fmt.Sprintf("AgentCenter_Kanban_Report_%s.md", ts))
+	htmlFile := filepath.Join(outDir, fmt.Sprintf("AgentCenter_Kanban_Report_%s.html", ts))
 
 	var md strings.Builder
-	md.WriteString("# 📋 Claude Suite — Kanban Report\n\n")
+	md.WriteString("# 📋 Agent Center — Kanban Report\n\n")
 	md.WriteString(fmt.Sprintf("**Thời gian xuất:** %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
 
 	statuses := []string{"backlog", "queued", "running", "done", "failed"}
@@ -63,7 +63,7 @@ func (e *ExporterService) ExportKanbanReport(tasks []models.Task, outDir string)
 <html>
 <head>
 <meta charset="utf-8">
-<title>Claude Suite Kanban Report</title>
+<title>Agent Center Kanban Report</title>
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 40px; background: #f8fafc; color: #0f172a; }
 h1 { color: #2563eb; }
@@ -110,7 +110,7 @@ func (e *ExporterService) ExportProjectSnapshotJSON(tasks []models.Task, outDir 
 		return "", err
 	}
 
-	filePath := filepath.Join(outDir, fmt.Sprintf("ClaudeSuite_Backup_%s.json", ts))
+	filePath := filepath.Join(outDir, fmt.Sprintf("AgentCenter_Backup_%s.json", ts))
 	if err := os.WriteFile(filePath, jsonBytes, 0644); err != nil {
 		return "", err
 	}

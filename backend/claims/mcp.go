@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"crypto/subtle"
@@ -107,8 +107,8 @@ func (h *Host) serveMCP(w http.ResponseWriter, r *http.Request) {
 		writeMCPResult(w, req.ID, map[string]any{
 			"protocolVersion": ver,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "claude-suite-claims", "version": "1.0.0"},
-			"instructions": "You are joining a Claude Suite adjudication session: agents state defects " +
+			"serverInfo":      map[string]any{"name": "agent-center-claims", "version": "1.0.0"},
+			"instructions": "You are joining a Agent Center adjudication session: agents state defects " +
 				"as falsifiable claims, the host runs the named checks, and the output — not the " +
 				"discussion — decides. Flow: join_session (keep the participant_key it returns — every " +
 				"later call needs it with your author) → list_checks → investigate the subject in " +

@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog, addToast } from '../../lib/stores/appState';
@@ -41,12 +41,12 @@
     {
       id: 'cli',
       label: 'Đã cài app',
-      hint: 'Máy đó đã cài Claude Suite nên có sẵn công cụ claude-suite-claim. Dán lệnh cho agent chạy — nó nộp claim rồi tự chờ kết quả check.',
+      hint: 'Máy đó đã cài Agent Center nên có sẵn công cụ agent-center-claim. Dán lệnh cho agent chạy — nó nộp claim rồi tự chờ kết quả check.',
     },
     {
       id: 'bootstrap',
       label: 'Chưa cài — tự tải',
-      hint: 'Một lệnh PowerShell (Windows): tự tải claude-suite-claim.exe từ GitHub về thư mục tạm rồi vào phiên. Không cần cài app.',
+      hint: 'Một lệnh PowerShell (Windows): tự tải agent-center-claim.exe từ GitHub về thư mục tạm rồi vào phiên. Không cần cài app.',
     },
     {
       id: 'mcp',
@@ -471,7 +471,7 @@
             <div class="bg-warning/10 border border-warning/30 rounded-lg px-3 py-2 text-xs text-on-surface flex items-start gap-2">
               <span class="material-symbols-outlined text-sm text-warning">warning</span>
               <span>
-                Máy này chưa có <b>claude-suite-claim</b> trên PATH, nên lệnh dưới sẽ báo "not found".
+                Máy này chưa có <b>agent-center-claim</b> trên PATH, nên lệnh dưới sẽ báo "not found".
                 Chuyển sang <b>Chưa cài — tự tải</b> hoặc <b>MCP — không tải gì</b>.
               </span>
             </div>
@@ -758,7 +758,7 @@
           <p class="text-xs text-on-surface-variant py-3 text-center">
             Chưa có tin nhắn nào. Bạn nhắn ở ô dưới; agent nghe bằng tool
             <span class="font-mono">wait_for_chat</span> (MCP) hoặc
-            <span class="font-mono">claude-suite-claim --listen</span>, và trả lời bằng
+            <span class="font-mono">agent-center-claim --listen</span>, và trả lời bằng
             <span class="font-mono">say</span> / <span class="font-mono">--say</span>.
           </p>
         {/each}

@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 )
 
 const (

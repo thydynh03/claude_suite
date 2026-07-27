@@ -1,7 +1,7 @@
-package services
+﻿package services
 
 import (
-	"claude_suite/backend/textutil"
+	"agent_center/backend/textutil"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/cli"
+	"agent_center/backend/cli"
 
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"

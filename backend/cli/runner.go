@@ -1,11 +1,11 @@
-package cli
+﻿package cli
 
 import (
 	"context"
 	"sync/atomic"
 	"time"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // taskTimeoutNanos is the per-execution CLI timeout (default 10m), configurable

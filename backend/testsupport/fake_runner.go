@@ -1,4 +1,4 @@
-// Package testsupport provides fakes shared by tests in several backend
+﻿// Package testsupport provides fakes shared by tests in several backend
 // packages. It is only referenced from _test.go files, so nothing here reaches
 // the shipped binary.
 package testsupport
@@ -7,8 +7,8 @@ import (
 	"context"
 	"sync"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/models"
+	"agent_center/backend/cli"
+	"agent_center/backend/models"
 )
 
 // FakeRunner stands in for cli.CLIRunner so tests never spawn a real CLI.

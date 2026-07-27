@@ -1,7 +1,7 @@
-package services
+﻿package services
 
 import (
-	"claude_suite/backend/textutil"
+	"agent_center/backend/textutil"
 	"context"
 	"encoding/json"
 	"os"
@@ -11,7 +11,7 @@ import (
 
 	"os/exec"
 
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/sysproc"
 )
 
 // VerifyService runs build checks in a workspace so an agent's changes are

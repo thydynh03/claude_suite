@@ -1,11 +1,11 @@
-package database
+﻿package database
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func newAttemptTestRepos(t *testing.T) (*AttemptRepository, *TaskRepository) {

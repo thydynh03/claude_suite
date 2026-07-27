@@ -1,4 +1,4 @@
-package tui
+﻿package tui
 
 import (
 	"database/sql"
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 
 	_ "modernc.org/sqlite"
 )
@@ -32,7 +32,7 @@ var readableColumns = map[string][]string{
 	},
 }
 
-// LoadReadOnly reads one existing Claude Suite database without creating or
+// LoadReadOnly reads one existing Agent Center database without creating or
 // migrating files. It supports the legacy Python schema used by the current DB.
 func LoadReadOnly(path string) (Snapshot, error) {
 	db, absolute, err := openReadOnly(path)
@@ -177,7 +177,7 @@ func validateReadableSchema(db *sql.DB) error {
 	}
 	if len(problems) != 0 {
 		sort.Strings(problems)
-		return fmt.Errorf("incompatible Claude Suite schema: %s", strings.Join(problems, "; "))
+		return fmt.Errorf("incompatible Agent Center schema: %s", strings.Join(problems, "; "))
 	}
 	return nil
 }

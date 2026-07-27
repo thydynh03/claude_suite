@@ -1,9 +1,9 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 
 	"github.com/google/uuid"
 )

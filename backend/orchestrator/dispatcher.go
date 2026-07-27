@@ -1,10 +1,10 @@
-package orchestrator
+﻿package orchestrator
 
 import (
 	"strings"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 )
 
 // keywordMatch reports whether kw occurs in text as a whole word (single tokens)

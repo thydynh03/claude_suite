@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 )
 
 // DigestInput is everything a digest is built from. Taking plain slices rather
@@ -51,7 +51,7 @@ func BuildDigest(in DigestInput) string {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "🗒️ Tổng kết Claude Suite — %s\n\n", time.Now().Format("02/01/2006"))
+	fmt.Fprintf(&b, "🗒️ Tổng kết Agent Center — %s\n\n", time.Now().Format("02/01/2006"))
 	fmt.Fprintf(&b, "✅ Hoàn thành: %d   ❌ Thất bại: %d   ⏳ Đang chạy: %d   📋 Chờ: %d\n",
 		len(done), len(failed), len(running), len(waiting))
 

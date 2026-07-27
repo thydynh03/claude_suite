@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func TestBuildDigestCountsEachStatus(t *testing.T) {

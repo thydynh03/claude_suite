@@ -1,14 +1,14 @@
-package services
+﻿package services
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
-	"claude_suite/backend/testsupport"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
+	"agent_center/backend/testsupport"
 )
 
 type learnerHarness struct {
@@ -168,7 +168,7 @@ func TestRepeatedBuildFailuresBecomeAMechanicalLesson(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		_ = h.obs.Add(&models.Observation{
 			WorkspaceID: h.wsID, Event: "build_verify_failed",
-			Payload: "go build failed: cannot find package claude_suite/backend/foo",
+			Payload: "go build failed: cannot find package agent_center/backend/foo",
 		})
 	}
 

@@ -1,8 +1,8 @@
-<div align="center">
+﻿<div align="center">
 
-<img src="docs/assets/logo.svg" alt="Claude Suite" width="420" />
+<img src="docs/assets/logo.svg" alt="Agent Center" width="420" />
 
-# Claude Suite
+# Agent Center
 
 **Mô tả thứ bạn muốn xây. Xem một đội agent AI xây nó, tự kiểm tra việc mình làm,
 và sửa lại những gì chúng làm hỏng.**
@@ -12,10 +12,10 @@ bảng Kanban các task, giao task cho các sub-agent Claude và Gemini CLI ch�
 song trong thư mục dự án của bạn, và không chịu đánh dấu "xong" chừng nào workspace
 còn chưa build được.
 
-[![CI](https://github.com/thydynh03/claude_suite/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/claude_suite/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/thydynh03/claude_suite/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/claude_suite/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/thydynh03/claude_suite?color=2f81f7)](https://github.com/thydynh03/claude_suite/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/thydynh03/claude_suite/total?color=2f81f7)](https://github.com/thydynh03/claude_suite/releases)
+[![CI](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/thydynh03/agent_center?color=2f81f7)](https://github.com/thydynh03/agent_center/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/thydynh03/agent_center/total?color=2f81f7)](https://github.com/thydynh03/agent_center/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](frontend/package.json)
@@ -41,7 +41,7 @@ file. Nó sụp đổ ngay khi công việc là "làm cho tôi cả cái này", 
 hoạch, không ai nhận ra bước 4 vừa làm hỏng bước 2, và không gì nói cho bạn biết kết
 quả có chạy được thật hay không.
 
-Claude Suite giữ kế hoạch, các phụ thuộc, phần kiểm chứng và bằng chứng ở cùng một
+Agent Center giữ kế hoạch, các phụ thuộc, phần kiểm chứng và bằng chứng ở cùng một
 chỗ:
 
 - **Lập kế hoạch.** Một AI phân rã yêu cầu của bạn thành các task gắn vai trò — BA,
@@ -66,23 +66,23 @@ gian thực, các tool mà từng agent gọi, diff git nó tạo ra, số token
 
 ### Windows — dùng bộ cài (khuyến nghị)
 
-1. Tải `ClaudeSuite-amd64-installer.exe` từ
-   [bản phát hành mới nhất](https://github.com/thydynh03/claude_suite/releases/latest).
+1. Tải `AgentCenter-amd64-installer.exe` từ
+   [bản phát hành mới nhất](https://github.com/thydynh03/agent_center/releases/latest).
 2. Chạy nó. App xuất hiện trong Start menu và gỡ được qua **Apps & features** như mọi
    ứng dụng bình thường.
-3. Bộ cài đặt kèm luôn hai công cụ dòng lệnh nằm cạnh app: `claude-suite-claim`
-   (agent của đồng đội dùng để nộp claim) và `claude-suite-tui` (giao diện terminal).
+3. Bộ cài đặt kèm luôn hai công cụ dòng lệnh nằm cạnh app: `agent-center-claim`
+   (agent của đồng đội dùng để nộp claim) và `agent-center-tui` (giao diện terminal).
    Không cần cài Go.
 
 Bộ cài mang theo trình khởi tạo Microsoft WebView2, nên app chạy được trên một máy
 Windows vừa cài mới.
 
-> **Bản chạy thẳng.** `ClaudeSuite.exe` trong cùng bản phát hành chạy không cần cài —
+> **Bản chạy thẳng.** `AgentCenter.exe` trong cùng bản phát hành chạy không cần cài —
 > hợp để mang theo USB. Nó không tạo shortcut và không tự cập nhật.
 
 ### Bạn cũng cần ít nhất một agent CLI
 
-Claude Suite điều phối các agent CLI chứ không thay thế chúng. Hãy cài **ít nhất
+Agent Center điều phối các agent CLI chứ không thay thế chúng. Hãy cài **ít nhất
 một** và đảm bảo nó nằm trong `PATH`:
 
 | Nhà cung cấp | CLI | Ghi chú |
@@ -173,15 +173,15 @@ cùng.
 ## Phân xử: chứng minh một lỗi thay vì khẳng định nó
 
 Khi nhiều agent cùng review một đoạn code, chúng sinh ra những đoạn văn rất tự tin.
-Một phần trong đó sai. Claude Suite có hệ thống **claims** để biến sự khác biệt đó
+Một phần trong đó sai. Agent Center có hệ thống **claims** để biến sự khác biệt đó
 thành thứ kiểm chứng được.
 
 Một agent nộp claim kèm **falsifier** — tên của một check trong
-`.claude-suite/checks.json` mà **pass khi claim là sai**. Nghĩa là check *thất bại*
+`.agent-center/checks.json` mà **pass khi claim là sai**. Nghĩa là check *thất bại*
 mới là thứ xác nhận lỗi:
 
 ```bash
-claude-suite-claim --host ws://HOST:9111 --session ID --token T \
+agent-center-claim --host ws://HOST:9111 --session ID --token T \
   --author you/your-agent --provider claude \
   --subject "backend/cli/process_windows.go:17" \
   --assert  "cmd.Wait() never returns when the console is visible" \
@@ -194,14 +194,14 @@ chỉ là gợi ý, và việc bị hỏi "lệnh nào chứng minh anh sai" ch�
 thật khỏi một phỏng đoán tự tin.
 
 Giai đoạn thu thập là mù (các agent không thấy claim của nhau), giai đoạn phân xử
-chạy các falsifier, và kết quả nằm ở `.claude-suite/session-<id>/verdict.json`. Mỗi
+chạy các falsifier, và kết quả nằm ở `.agent-center/session-<id>/verdict.json`. Mỗi
 phiên cũng có kênh chat tự do giữa các agent và một trọng tài là người — nhưng lời
 nói không phải bằng chứng, chỉ falsifier mới kết luận được một claim.
 
 Agent có thể tham gia bằng CLI ở trên, hoặc qua **MCP** mà không cần tải gì:
 
 ```bash
-claude mcp add --transport http claude-suite-debate "http://HOST:9111/mcp/SESSION?token=T"
+claude mcp add --transport http agent-center-debate "http://HOST:9111/mcp/SESSION?token=T"
 ```
 
 ---
@@ -242,13 +242,13 @@ Một giao diện thuần bàn phím trên cùng database và cùng bộ service
 
 ```bash
 # Xem một database có sẵn một cách an toàn
-claude-suite-tui --db /path/to/agent_manager.db
+agent-center-tui --db /path/to/agent_manager.db
 
 # Bật quyền sửa task và điều phối
-claude-suite-tui --db /path/to/agent_manager.db --write
+agent-center-tui --db /path/to/agent_manager.db --write
 
 # Kiểm tra database mà không mở giao diện
-claude-suite-tui --db /path/to/agent_manager.db --check
+agent-center-tui --db /path/to/agent_manager.db --check
 ```
 
 | Phím | Hành động |
@@ -270,9 +270,9 @@ quan sát nhẹ.
 
 | Thứ gì | Ở đâu |
 |---|---|
-| Thư mục dữ liệu (database, config, log, profile Chrome) | `%LOCALAPPDATA%\ClaudeSuite` trên Windows, `~/.claude_suite` ở nơi khác |
-| Đổi thư mục dữ liệu | `CLAUDE_SUITE_DATA_DIR=/duong/dan` |
-| Google OAuth client | `CLAUDE_SUITE_GCP_CLIENT_ID` / `CLAUDE_SUITE_GCP_CLIENT_SECRET`, hoặc `gcp_oauth.json` trong thư mục dữ liệu |
+| Thư mục dữ liệu (database, config, log, profile Chrome) | `%LOCALAPPDATA%\AgentCenter` trên Windows, `~/.agent_center` ở nơi khác |
+| Đổi thư mục dữ liệu | `AGENT_CENTER_DATA_DIR=/duong/dan` |
+| Google OAuth client | `AGENT_CENTER_GCP_CLIENT_ID` / `AGENT_CENTER_GCP_CLIENT_SECRET`, hoặc `gcp_oauth.json` trong thư mục dữ liệu |
 | Thông báo gửi ra | Cài đặt → Tích hợp: một URL webhook nhận sự kiện task xong và task lỗi |
 | Prompt vai trò agent | file markdown sửa được cho từng vai trò, nằm trong thư mục dữ liệu |
 
@@ -285,11 +285,11 @@ máy khác cũng không lấy được tài khoản của bạn.
 ## Build từ mã nguồn
 
 ```bash
-git clone https://github.com/thydynh03/claude_suite.git
-cd claude_suite
+git clone https://github.com/thydynh03/agent_center.git
+cd agent_center
 
 wails dev                                     # app desktop, hot reload
-wails build -platform windows/amd64 -clean    # -> build/bin/ClaudeSuite.exe
+wails build -platform windows/amd64 -clean    # -> build/bin/AgentCenter.exe
 ```
 
 Yêu cầu: Go (phiên bản ghim trong `go.mod`), Node.js 20.x, và Wails CLI v2.13.0
@@ -353,7 +353,7 @@ bạn không thể mất.
 
 Phiên bản hiển thị trong app được giải theo thứ tự: `version.json` đã lưu trong thư
 mục dữ liệu, rồi `git describe --tags`, rồi giá trị nhúng lúc build bằng
-`-ldflags "-X claude_suite/backend/version.BuildVersion=..."`, cuối cùng là giá trị
+`-ldflags "-X agent_center/backend/version.BuildVersion=..."`, cuối cùng là giá trị
 mặc định biên dịch sẵn. Bản phát hành được build từ tag `v*`, và tag là nguồn sự thật
 duy nhất cho con số mà binary báo ra.
 

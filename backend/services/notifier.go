@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"bytes"
@@ -71,7 +71,7 @@ func (n *NotifierService) NotifyTaskEvent(event, taskTitle, status, detail strin
 	if url == "" {
 		return
 	}
-	summary := fmt.Sprintf("[Claude Suite] %s: %s", event, taskTitle)
+	summary := fmt.Sprintf("[Agent Center] %s: %s", event, taskTitle)
 	if status != "" {
 		summary += " (" + status + ")"
 	}
@@ -85,7 +85,7 @@ func (n *NotifierService) NotifyTaskEvent(event, taskTitle, status, detail strin
 		"title":   taskTitle,
 		"status":  status,
 		"detail":  detail,
-		"source":  "Claude Suite",
+		"source":  "Agent Center",
 		"time":    time.Now().Format(time.RFC3339),
 	}
 	body, err := json.Marshal(payload)

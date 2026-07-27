@@ -1,4 +1,4 @@
-# Kế hoạch sửa lỗi & nâng cấp — tháng 7/2026
+﻿# Kế hoạch sửa lỗi & nâng cấp — tháng 7/2026
 
 > **Trạng thái 26/07/2026: đã làm xong toàn bộ 19 hạng mục.** Xem
 > `git log --oneline` từ commit "fix(ui): make actions report what they did" trở
@@ -119,7 +119,7 @@ Cách làm đúng, theo thứ tự ưu tiên:
    `gcp_oauth.json` trong thư mục dữ liệu. Kèm nút mở sẵn đúng trang Console và nút copy
    redirect URI. Mỗi người dùng có credential riêng, không ai chia sẻ hạn mức của ai.
 2. **Nhập file** `client_secret_*.json` tải thẳng từ Console — parse luôn, đỡ phải copy tay.
-3. Với bản dành cho nội bộ nhóm: đặt biến môi trường `CLAUDE_SUITE_GCP_CLIENT_ID` /
+3. Với bản dành cho nội bộ nhóm: đặt biến môi trường `AGENT_CENTER_GCP_CLIENT_ID` /
    `_CLIENT_SECRET` khi cài, không đưa vào git.
 
 ### 1.6 🐛 Checkbox trong bảng tài khoản không có tác dụng
@@ -157,7 +157,7 @@ addLog(`Exported report to ${file}`, 'SUCCESS');
 
 `app.go:549` trả về **nội dung markdown**, không phải đường dẫn. Nên dòng log thành
 "Exported report to # Báo cáo…" — cả một file markdown nhét vào một dòng log. File thật *có*
-được ghi ra workspace (thấy `ClaudeSuite_Kanban_Report_*.md` trong ảnh chụp Code Studio),
+được ghi ra workspace (thấy `AgentCenter_Kanban_Report_*.md` trong ảnh chụp Code Studio),
 nhưng người dùng không hề biết nó nằm ở đâu.
 
 Việc phải làm: đổi `ExportKanbanReport` trả `(mdPath, htmlPath string, err error)`; UI toast
@@ -326,14 +326,14 @@ Việc phải làm:
 `--author YOU/your-agent --provider claude `+
 ```
 
-`cmd/claude-suite-claim/main.go:40` cũng để mặc định rỗng. Không có chỗ nào đọc tên máy hay
+`cmd/agent-center-claim/main.go:40` cũng để mặc định rỗng. Không có chỗ nào đọc tên máy hay
 tên người dùng. Đây là chỗ giữ chỗ, người nhận phải tự sửa tay — và họ thường quên, nên các
 claim gửi lên đều mang tên `YOU/your-agent`.
 
 Việc phải làm: mặc định lấy `os.UserHomeDir` / `os.Hostname` → `an@may-cua-an/claude-code`,
 vẫn cho phép ghi đè bằng cờ `--author`. Lệnh copy ra sẽ chạy được ngay mà không cần sửa.
 
-### 9.1b Trả lời: đường dẫn `C:\Program Files\thydynh03\Claude Suite\claude-suite-claim.exe`
+### 9.1b Trả lời: đường dẫn `C:\Program Files\thydynh03\Agent Center\agent-center-claim.exe`
 **là tự lấy theo máy, không hardcode** — nhưng chữ `thydynh03` thì có vấn đề riêng
 
 Hai phần của chuỗi lệnh có nguồn gốc khác hẳn nhau, nên trả lời tách ra:
@@ -348,15 +348,15 @@ if err == nil {
         return `"` + beside + `"`    // có bọc nháy vì "Program Files" có dấu cách
     }
 }
-return "claude-suite-claim"          // dự phòng: dựa vào PATH
+return "agent-center-claim"          // dự phòng: dựa vào PATH
 ```
 
-Nó hỏi hệ điều hành app đang nằm ở đâu, rồi tìm `claude-suite-claim.exe` **ngay cạnh**. Nên:
+Nó hỏi hệ điều hành app đang nằm ở đâu, rồi tìm `agent-center-claim.exe` **ngay cạnh**. Nên:
 
-- Người dùng cài vào `D:\Apps\ClaudeSuite` → lệnh sinh ra trỏ đúng `D:\Apps\ClaudeSuite\...`
+- Người dùng cài vào `D:\Apps\AgentCenter` → lệnh sinh ra trỏ đúng `D:\Apps\AgentCenter\...`
 - Cài theo kiểu user (`%LOCALAPPDATA%\Programs\...`) → cũng đúng
-- Chạy bản portable `ClaudeSuite.exe` từ USB mà không có công cụ đi kèm → `os.Stat` thất
-  bại, rơi về `claude-suite-claim` trần, tức là phụ thuộc PATH. Trường hợp này lệnh sẽ báo
+- Chạy bản portable `AgentCenter.exe` từ USB mà không có công cụ đi kèm → `os.Stat` thất
+  bại, rơi về `agent-center-claim` trần, tức là phụ thuộc PATH. Trường hợp này lệnh sẽ báo
   "not found" — chính là lỗi mà agent bên máy khác từng gặp, và là lý do v2.14.1 đóng gói
   công cụ vào bộ cài.
 
@@ -375,8 +375,8 @@ NSIS lấy giá trị đó làm thư mục cài mặc định (`project.nsi:79`:
 tài khoản GitHub của tác giả nằm trong Program Files của mọi người tải app về**, và nó cũng
 là khoá đăng ký gỡ cài đặt (`UNINST_KEY_NAME`).
 
-Việc phải làm: đổi `companyName` thành tên sản phẩm/tổ chức đàng hoàng (ví dụ `Claude Suite`),
-để đường dẫn thành `C:\Program Files\Claude Suite\`. Lưu ý đây là **thay đổi phá vỡ tương
+Việc phải làm: đổi `companyName` thành tên sản phẩm/tổ chức đàng hoàng (ví dụ `Agent Center`),
+để đường dẫn thành `C:\Program Files\Agent Center\`. Lưu ý đây là **thay đổi phá vỡ tương
 thích**: người đã cài bản cũ sẽ có hai thư mục và hai mục trong Apps & features. Cần xử lý
 gỡ bản cũ trong `.onInit` của installer, hoặc chấp nhận và ghi rõ trong release note. Nên làm
 sớm, càng nhiều người cài thì càng khó đổi.
@@ -411,10 +411,10 @@ Việc phải làm:
 - **Địa chỉ**: liệt kê IP LAN thật của máy (`net.Interfaces`) và cho chọn; mặc định hiện cả
   hai dòng — *"cùng máy này"* dùng `localhost`, *"máy khác trong mạng"* dùng `ws://192.168.x.x:9111`.
   Kèm cảnh báo tường lửa Windows sẽ hỏi cho phép ở lần đầu.
-- **Đường dẫn**: bỏ đường dẫn tuyệt đối ra khỏi lệnh chia sẻ, chỉ dùng `claude-suite-claim`
+- **Đường dẫn**: bỏ đường dẫn tuyệt đối ra khỏi lệnh chia sẻ, chỉ dùng `agent-center-claim`
   (bộ cài nên thêm thư mục app vào PATH — sửa `project.nsi`). Muốn giữ đường dẫn tuyệt đối
   thì phải sinh **hai phiên bản lệnh**: một để chạy tại chỗ, một để gửi cho người khác.
-- **Kiểm tra được**: thêm `claude-suite-claim --ping --host ... --session ...` để đồng đội thử
+- **Kiểm tra được**: thêm `agent-center-claim --ping --host ... --session ...` để đồng đội thử
   kết nối trước, thay vì phát hiện sai lúc đang nộp claim.
 - Ngoài mạng LAN (khác nơi làm việc) thì cần tunnel — ghi rõ trong tài liệu là chưa hỗ trợ,
   đừng để người dùng tưởng dán lệnh là xong.
@@ -426,12 +426,12 @@ Hiện `ClaimsPage.svelte` chỉ có nộp claim và xem verdict. Cần dựng t
 - **Giao diện chat theo phiên**: mỗi phiên là một phòng, tin nhắn có tác giả, provider, dấu
   thời gian; claim hiển thị như thẻ nhúng trong dòng chat kèm kết quả falsifier.
 - **Agent máy khác gửi tin nhắn**: mở rộng giao thức WebSocket sẵn có (`ws://host:9111`)
-  thêm loại `message` bên cạnh `claim`. `claude-suite-claim` thêm lệnh con `chat` để agent ở
+  thêm loại `message` bên cạnh `claim`. `agent-center-claim` thêm lệnh con `chat` để agent ở
   IDE máy khác nói chuyện trong phòng.
 - **Trọng tài**: một agent giữ vai trò arbiter, đọc toàn bộ tranh luận + kết quả falsifier
   rồi ra phán quyết có lý do. Vẫn giữ nguyên tắc: claim không có falsifier là ý kiến, không
   chặn được merge.
-- **Máy bên kia chạy ngầm**: `claude-suite-claim --watch` giữ kết nối, nhận task được giao,
+- **Máy bên kia chạy ngầm**: `agent-center-claim --watch` giữ kết nối, nhận task được giao,
   chạy, trả kết quả về phòng.
 
 ### 9.3 Workspace không có go.mod / package.json
@@ -439,7 +439,7 @@ Hiện `ClaimsPage.svelte` chỉ có nộp claim và xem verdict. Cần dựng t
 `app.go:1322` đã có cảnh báo đúng nội dung: không tìm thấy check nào thì mọi claim thành ý
 kiến. Nhưng nó chỉ báo, không chỉ đường.
 
-Việc phải làm: kèm nút **"Tạo file checks"** sinh `.claude-suite/checks.json` mẫu theo ngôn
+Việc phải làm: kèm nút **"Tạo file checks"** sinh `.agent-center/checks.json` mẫu theo ngôn
 ngữ phát hiện được trong workspace (Python → pytest/ruff, Node → npm test, Rust → cargo
 test, Java → mvn test…), và cho phép tự khai báo lệnh bất kỳ. Có vậy người dùng mới dùng
 được cho dự án của họ.

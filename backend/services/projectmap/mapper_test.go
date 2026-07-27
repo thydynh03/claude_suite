@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"os"
@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
 )
 
 func newTestMapper(t *testing.T) *Mapper {
@@ -88,7 +88,7 @@ func TestFullBuildProducesGraphAndResolvedImports(t *testing.T) {
 	}
 
 	// project-map.md digest is written for the CLI and the Plan Builder.
-	data, err := os.ReadFile(filepath.Join(root, ".claude-suite", "project-map.md"))
+	data, err := os.ReadFile(filepath.Join(root, ".agent-center", "project-map.md"))
 	if err != nil {
 		t.Fatalf("project-map.md not written: %v", err)
 	}

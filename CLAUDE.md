@@ -1,10 +1,10 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 Guidance for AI agents working in this repository.
 
 ## What this is
 
-Claude Suite / Antigravity Manager — a Wails v2 desktop app (Go backend + Svelte 5
+Agent Center / Antigravity Manager — a Wails v2 desktop app (Go backend + Svelte 5
 frontend) that orchestrates AI coding sub-agents. Users describe a project → an AI
 decomposes it into Kanban tasks → the orchestrator dispatches tasks to sub-agents
 (Claude CLI or Antigravity/Gemini CLI) that run against a chosen workspace folder.
@@ -71,7 +71,7 @@ entry in `tuiOnlyMethods` with a reason.
   `taskId`). `board_updated` is handled centrally in `App.svelte` (single source
   refreshing `tasksStore`) — do not re-add per-component board fetch listeners.
 - **Secrets**: never hardcode credentials. GCP OAuth is read from env
-  (`CLAUDE_SUITE_GCP_CLIENT_ID` / `_CLIENT_SECRET`) or `gcp_oauth.json` in the data
+  (`AGENT_CENTER_GCP_CLIENT_ID` / `_CLIENT_SECRET`) or `gcp_oauth.json` in the data
   dir (both gitignored).
 - Sub-agents run with `--dangerously-skip-permissions` against the workspace — they
   can create/modify files directly. `AutoSnapshot` git-commits before each task so
@@ -85,11 +85,11 @@ Do not write findings straight into a PR comment. State them so they can be
 proven wrong:
 
 ```bash
-claude-suite-claim --checks                    # what you may point at
-claude-suite-claim --host ws://HOST:9111 --session ID --token T   --author you/your-agent --provider claude   --subject "backend/cli/process_windows.go:17"   --assert  "cmd.Wait() never returns when the console is visible"   --falsify "console-window-hidden"
+agent-center-claim --checks                    # what you may point at
+agent-center-claim --host ws://HOST:9111 --session ID --token T   --author you/your-agent --provider claude   --subject "backend/cli/process_windows.go:17"   --assert  "cmd.Wait() never returns when the console is visible"   --falsify "console-window-hidden"
 ```
 
-`--falsify` names an entry in `.claude-suite/checks.json`. **A falsifier passes
+`--falsify` names an entry in `.agent-center/checks.json`. **A falsifier passes
 when your claim is wrong**, so a failing check confirms the defect.
 
 Omit `--falsify` and the claim is recorded as an opinion: it is kept and shown,
@@ -97,9 +97,9 @@ but it cannot block a merge. That is deliberate — a finding nobody can check i
 a suggestion, and being asked for the command that would disprove it is what
 separates a real defect from a confident guess.
 
-Afterwards read `.claude-suite/session-<id>/verdict.json` for the result.
+Afterwards read `.agent-center/session-<id>/verdict.json` for the result.
 
-### No claude-suite-claim on this machine?
+### No agent-center-claim on this machine?
 
 Two more doors into a session, in order of friction (the app's Claims page
 hands out ready-made copies of all three):
@@ -108,14 +108,14 @@ hands out ready-made copies of all three):
   `%TEMP%` and run it from there — the release URL is stable across versions:
 
   ```powershell
-  $c = "$env:TEMP\claude-suite-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c https://github.com/thydynh03/claude_suite/releases/latest/download/claude-suite-claim.exe }
+  $c = "$env:TEMP\agent-center-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c https://github.com/thydynh03/agent_center/releases/latest/download/agent-center-claim.exe }
   ```
 
 - **MCP, nothing downloaded**: the host serves each session as an MCP server;
   register it and the whole protocol becomes tools:
 
   ```bash
-  claude mcp add --transport http claude-suite-debate "http://HOST:9111/mcp/SESSION?token=T"
+  claude mcp add --transport http agent-center-debate "http://HOST:9111/mcp/SESSION?token=T"
   ```
 
   Then `join_session` (save the `participant_key` it returns — every later
@@ -129,5 +129,5 @@ Sessions also carry free-form chat with the other agents and the human
 arbiter. Over MCP the loop is `wait_for_chat` (long-poll with `after_seq` =
 last seq you saw) → answer with `say` only when a message names you, asks you
 something, or disputes your claim → repeat until the phase is `record`. Over
-the CLI: `claude-suite-claim --listen 15m` streams chat as JSON lines while
+the CLI: `agent-center-claim --listen 15m` streams chat as JSON lines while
 `--say "..."` replies. Talk is not evidence — only a falsifier settles a claim.

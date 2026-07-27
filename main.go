@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 
-	"claude_suite/backend/logger"
+	"agent_center/backend/logger"
 
 	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2"
@@ -22,8 +22,8 @@ func main() {
 	// Startup diagnostics go to the log file as well as stdout: a release build
 	// is compiled with -H windowsgui, which has no console at all, so anything
 	// printed here is discarded exactly when a user needs it most.
-	logger.Info("Claude Suite starting")
-	fmt.Println("=== CLAUDE SUITE STARTING ===")
+	logger.Info("Agent Center starting")
+	fmt.Println("=== Agent Center STARTING ===")
 	_ = godotenv.Load() // Load .env file if it exists
 	app := NewApp()
 
@@ -35,7 +35,7 @@ func main() {
 	}
 
 	err := wails.Run(&options.App{
-		Title:     "Claude Suite",
+		Title:     "Agent Center",
 		Width:     1280,
 		Height:    800,
 		MinWidth:  1024,
@@ -60,7 +60,7 @@ func main() {
 			WebviewIsTransparent: false,
 		},
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId: "claude-suite-thydynh03",
+			UniqueId: "agent-center-thydynh03",
 		},
 		Bind: []interface{}{
 			app,
@@ -72,5 +72,5 @@ func main() {
 		fmt.Println("Wails Run Error:", err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("=== CLAUDE SUITE EXITING ===")
+	fmt.Println("=== Agent Center EXITING ===")
 }

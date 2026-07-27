@@ -1,10 +1,10 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"path/filepath"
 	"testing"
 
-	"claude_suite/backend/database"
+	"agent_center/backend/database"
 )
 
 // The identity the mapper stores under and the identity derived through the

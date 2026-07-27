@@ -1,4 +1,4 @@
-package models
+﻿package models
 
 import "time"
 
@@ -27,7 +27,7 @@ type MemoryLesson struct {
 
 // Regression is one fixed bug: what broke, how it was fixed, and (once a
 // human approves one) the falsifier check that guards it in
-// .claude-suite/checks.json.
+// .agent-center/checks.json.
 type Regression struct {
 	RegressionID string   `json:"regression_id"`
 	WorkspaceID  string   `json:"workspace_id"`

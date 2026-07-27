@@ -1,4 +1,4 @@
-package tui
+﻿package tui
 
 import (
 	"crypto/sha256"
@@ -114,7 +114,7 @@ func TestLoadReadOnlyRejectsIncompatibleSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = LoadReadOnly(path)
-	if err == nil || !strings.Contains(err.Error(), "incompatible Claude Suite schema") {
+	if err == nil || !strings.Contains(err.Error(), "incompatible Agent Center schema") {
 		t.Fatalf("error = %v", err)
 	}
 }

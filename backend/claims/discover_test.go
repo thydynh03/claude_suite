@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"encoding/json"
@@ -87,7 +87,7 @@ func TestDiscoverFindsNothingInAnEmptyWorkspace(t *testing.T) {
 func TestCatalogueForMergesExplicitOverDiscovered(t *testing.T) {
 	ws := t.TempDir()
 	writeFile(t, filepath.Join(ws, "go.mod"), "module example.com/x\n")
-	writeFile(t, filepath.Join(ws, ".claude-suite", "checks.json"), `{"checks":[
+	writeFile(t, filepath.Join(ws, ".agent-center", "checks.json"), `{"checks":[
 		{"name":"go-test","description":"only the slow ones","command":["go","test","./backend/...","-run","Slow"],"timeout_sec":900},
 		{"name":"custom-e2e","description":"bespoke","command":["./scripts/e2e.sh"],"timeout_sec":600}
 	]}`)

@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"bytes"
@@ -374,7 +374,7 @@ func TestAgentJoinPromptNamesTheRealMCPTools(t *testing.T) {
 			t.Errorf("prompt does not mention tool %q", named)
 		}
 	}
-	if !strings.Contains(p, fmt.Sprintf("claude mcp add --transport http claude-suite-debate")) {
+	if !strings.Contains(p, fmt.Sprintf("claude mcp add --transport http agent-center-debate")) {
 		t.Error("prompt does not carry the claude mcp add command")
 	}
 }

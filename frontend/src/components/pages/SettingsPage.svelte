@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from 'svelte';
   import type { Agent } from '../../lib/types';
   import { logs, addLog, addToast, agentsStore } from '../../lib/stores/appState';
@@ -671,7 +671,7 @@
     <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-center space-y-4 max-w-xl mx-auto">
       <h3 class="font-semibold text-sm text-on-surface flex items-center justify-center gap-2">
         <span class="material-symbols-outlined text-base text-on-surface-variant">system_update</span>
-        Claude Suite Control Center
+        Agent Center Control Center
       </h3>
       <p class="text-xs text-on-surface-variant">Phiên bản hiện tại: <span class="font-mono text-on-surface">{currentAppVersion}</span> (Go + Wails + Svelte)</p>
 

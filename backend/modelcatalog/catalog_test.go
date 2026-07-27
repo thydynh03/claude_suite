@@ -1,4 +1,4 @@
-package modelcatalog
+﻿package modelcatalog
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"claude_suite/backend/provider"
+	"agent_center/backend/provider"
 )
 
 func TestListLeadsWithAliasesAndCoversBothProviders(t *testing.T) {

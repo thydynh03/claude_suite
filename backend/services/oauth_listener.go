@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"context"
@@ -167,7 +167,7 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 				<div class="card">
 					<div class="icon">🎉</div>
 					<h1>Tự Động Lưu Key Thành Công!</h1>
-					<p>Tài khoản <strong>%s</strong> đã được xác thực và tự động lưu vào <strong>Claude Suite Control Center</strong>.</p>
+					<p>Tài khoản <strong>%s</strong> đã được xác thực và tự động lưu vào <strong>Agent Center Control Center</strong>.</p>
 					<div class="badge">✓ Bạn có thể đóng cửa sổ trình duyệt này</div>
 				</div>
 			</body>

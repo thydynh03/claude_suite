@@ -1,4 +1,4 @@
-package orchestrator
+﻿package orchestrator
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
-	"claude_suite/backend/services"
-	"claude_suite/backend/testsupport"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
+	"agent_center/backend/services"
+	"agent_center/backend/testsupport"
 )
 
 // newTestOrchestrator wires an orchestrator against a throwaway database and a

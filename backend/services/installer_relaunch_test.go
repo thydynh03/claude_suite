@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"os"
@@ -74,7 +74,7 @@ func TestTheRelaunchDoesNotInheritTheInstallersElevation(t *testing.T) {
 func TestInstallerStillShipsTheCompanionTools(t *testing.T) {
 	nsi := installerScript(t)
 
-	for _, tool := range []string{"claude-suite-claim.exe", "claude-suite-tui.exe"} {
+	for _, tool := range []string{"agent-center-claim.exe", "agent-center-tui.exe"} {
 		if !strings.Contains(nsi, tool) {
 			t.Errorf("project.nsi no longer packages %s — the join command the app hands out names that path", tool)
 		}

@@ -1,4 +1,4 @@
-# Đóng góp cho Claude Suite
+﻿# Đóng góp cho Agent Center
 
 [English](CONTRIBUTING.md) · **Tiếng Việt**
 
@@ -17,9 +17,9 @@ Khi tham gia, bạn đồng ý với [Quy tắc ứng xử](CODE_OF_CONDUCT.md).
 
 | Bạn muốn… | Bắt đầu từ đây |
 |---|---|
-| Báo lỗi | [Mở một bug report](https://github.com/thydynh03/claude_suite/issues/new?template=bug_report.yml) — kèm phiên bản trên thanh tiêu đề và file log trong thư mục dữ liệu |
-| Đề xuất tính năng | [Mở một feature request](https://github.com/thydynh03/claude_suite/issues/new?template=feature_request.yml) — mô tả vấn đề trước, giải pháp sau |
-| Sửa việc nhỏ | Bất kỳ issue nào gắn nhãn [`good first issue`](https://github.com/thydynh03/claude_suite/labels/good%20first%20issue) |
+| Báo lỗi | [Mở một bug report](https://github.com/thydynh03/agent_center/issues/new?template=bug_report.yml) — kèm phiên bản trên thanh tiêu đề và file log trong thư mục dữ liệu |
+| Đề xuất tính năng | [Mở một feature request](https://github.com/thydynh03/agent_center/issues/new?template=feature_request.yml) — mô tả vấn đề trước, giải pháp sau |
+| Sửa việc nhỏ | Bất kỳ issue nào gắn nhãn [`good first issue`](https://github.com/thydynh03/agent_center/labels/good%20first%20issue) |
 | Dịch thuật | `frontend/src/lib/stores/i18n.ts` chứa toàn bộ chuỗi. Giữ nhãn ngắn — thanh điều hướng rộng 240px và có test làm vỡ build khi một nhãn không còn vừa |
 | Cải thiện tài liệu | Mọi sửa đổi đều được hoan nghênh, kể cả lỗi chính tả. Hai bản ngôn ngữ nên đi cùng nhau |
 
@@ -50,16 +50,16 @@ Có hai giao diện trên một backend. Cả hai đọc cùng một database.
 wails dev
 
 # Giao diện terminal — mặc định chỉ đọc: không migration, không ghi
-go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db
+go run ./cmd/agent-center-tui --db /path/to/agent_manager.db
 
 # Giao diện terminal có quyền sửa task và điều phối
-go run ./cmd/claude-suite-tui --db /path/to/agent_manager.db --write
+go run ./cmd/agent-center-tui --db /path/to/agent_manager.db --write
 ```
 
 Build bản phát hành:
 
 ```bash
-wails build -platform windows/amd64 -clean   # -> build/bin/ClaudeSuite.exe
+wails build -platform windows/amd64 -clean   # -> build/bin/AgentCenter.exe
 ```
 
 Trong lúc phát triển, hãy trỏ app vào một **workspace vứt đi được**. Sub-agent chạy
@@ -138,8 +138,8 @@ từ — xem `orchestrator.keywordMatch` và `models.keywordTags`.
 
 ### 4. Bí mật không bao giờ nằm trong mã nguồn
 
-Thông tin GCP OAuth được đọc từ `CLAUDE_SUITE_GCP_CLIENT_ID` /
-`CLAUDE_SUITE_GCP_CLIENT_SECRET`, hoặc từ `gcp_oauth.json` trong thư mục dữ liệu. Cả
+Thông tin GCP OAuth được đọc từ `AGENT_CENTER_GCP_CLIENT_ID` /
+`AGENT_CENTER_GCP_CLIENT_SECRET`, hoặc từ `gcp_oauth.json` trong thư mục dữ liệu. Cả
 hai đều nằm trong gitignore. Đừng bao giờ dán token vào một issue — xem
 [SECURITY.md](SECURITY.md).
 
@@ -179,8 +179,8 @@ bằng mắt — lỗi này vô hình trong ảnh chụp màn hình.
 | `backend/tui/` | giao diện terminal (các file `model` / `update` / `commands` / `view`) |
 | `backend/contract/` | kiểm tra nhất quán giữa hai giao diện |
 | `frontend/src/` | UI desktop Svelte 5 (`*.test.ts` nằm cạnh thứ nó kiểm) |
-| `cmd/claude-suite-tui/` | điểm vào của TUI |
-| `cmd/claude-suite-claim/` | CLI để nộp claim |
+| `cmd/agent-center-tui/` | điểm vào của TUI |
+| `cmd/agent-center-claim/` | CLI để nộp claim |
 
 ---
 
@@ -213,15 +213,15 @@ phát biểu một phát hiện sao cho nó có thể bị chứng minh là sai,
 comment của PR:
 
 ```bash
-claude-suite-claim --checks                    # những thứ bạn được phép trỏ vào
-claude-suite-claim --host ws://HOST:9111 --session ID --token T \
+agent-center-claim --checks                    # những thứ bạn được phép trỏ vào
+agent-center-claim --host ws://HOST:9111 --session ID --token T \
   --author you/your-agent --provider claude \
   --subject "backend/cli/process_windows.go:17" \
   --assert  "cmd.Wait() never returns when the console is visible" \
   --falsify "console-window-hidden"
 ```
 
-`--falsify` gọi tên một mục trong `.claude-suite/checks.json`, và **một falsifier pass
+`--falsify` gọi tên một mục trong `.agent-center/checks.json`, và **một falsifier pass
 khi claim của bạn sai** — nên check thất bại mới là thứ xác nhận lỗi. Bỏ nó đi thì
 claim được giữ lại như một ý kiến, và ý kiến thì không chặn được merge. Chi tiết đầy
 đủ, gồm cả cách kết nối qua MCP, nằm trong [CLAUDE.md](CLAUDE.md).

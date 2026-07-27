@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/claims"
+	"agent_center/backend/claims"
 )
 
 // ClaimsHostService runs the adjudication host so agents on other machines can

@@ -1,4 +1,4 @@
-# Security Policy
+﻿# Security Policy
 
 [English](#english) · [Tiếng Việt](#tiếng-việt)
 
@@ -11,7 +11,7 @@
 **Do not open a public issue for a security problem.**
 
 Use GitHub's private vulnerability reporting:
-[Report a vulnerability](https://github.com/thydynh03/claude_suite/security/advisories/new).
+[Report a vulnerability](https://github.com/thydynh03/agent_center/security/advisories/new).
 It goes only to the maintainers, and you can attach details there safely.
 
 Please include what you would want if you received the report: the version, the
@@ -35,7 +35,7 @@ and ship in the next tag; there are no long-lived maintenance branches.
 
 ### What this app does that you should know about
 
-Claude Suite is an agent orchestrator, so several of its normal behaviours are
+Agent Center is an agent orchestrator, so several of its normal behaviours are
 things a security-minded reader should be told plainly rather than discover.
 
 **Sub-agents run with `--dangerously-skip-permissions`.** They create, edit and
@@ -95,7 +95,7 @@ way you would treat a script from that source.
 **Đừng mở issue công khai cho một vấn đề bảo mật.**
 
 Hãy dùng kênh báo cáo riêng tư của GitHub:
-[Report a vulnerability](https://github.com/thydynh03/claude_suite/security/advisories/new).
+[Report a vulnerability](https://github.com/thydynh03/agent_center/security/advisories/new).
 Nó chỉ đến tay maintainer, và bạn đính kèm chi tiết ở đó được an toàn.
 
 Xin ghi kèm những thứ chính bạn sẽ muốn có nếu nhận được báo cáo này: phiên bản,
@@ -119,7 +119,7 @@ theo tag kế tiếp; không có nhánh bảo trì dài hạn.
 
 ### Những gì app này làm mà bạn nên biết
 
-Claude Suite là công cụ điều phối agent, nên một số hành vi bình thường của nó là
+Agent Center là công cụ điều phối agent, nên một số hành vi bình thường của nó là
 thứ người quan tâm bảo mật nên được nói thẳng thay vì tự phát hiện.
 
 **Sub-agent chạy với `--dangerously-skip-permissions`.** Chúng tạo, sửa và xoá

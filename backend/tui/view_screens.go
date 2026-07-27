@@ -1,4 +1,4 @@
-package tui
+﻿package tui
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	"runtime"
 	"strings"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/models"
-	"claude_suite/backend/version"
+	"agent_center/backend/cli"
+	"agent_center/backend/models"
+	"agent_center/backend/version"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"

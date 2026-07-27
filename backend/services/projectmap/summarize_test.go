@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/testsupport"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/testsupport"
 )
 
 func TestRefreshSummariesAppliesValidUpdatesAndNeverWedges(t *testing.T) {

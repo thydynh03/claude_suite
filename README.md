@@ -1,8 +1,8 @@
-<div align="center">
+﻿<div align="center">
 
-<img src="docs/assets/logo.svg" alt="Claude Suite" width="420" />
+<img src="docs/assets/logo.svg" alt="Agent Center" width="420" />
 
-# Claude Suite
+# Agent Center
 
 **Describe what you want built. Watch a team of AI agents build it, check their own
 work, and fix what they broke.**
@@ -12,10 +12,10 @@ of tasks, dispatch those tasks to Claude and Gemini CLI sub-agents running in
 parallel against your project folder, and refuse to mark anything "done" until the
 workspace still builds.
 
-[![CI](https://github.com/thydynh03/claude_suite/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/claude_suite/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/thydynh03/claude_suite/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/claude_suite/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/thydynh03/claude_suite?color=2f81f7)](https://github.com/thydynh03/claude_suite/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/thydynh03/claude_suite/total?color=2f81f7)](https://github.com/thydynh03/claude_suite/releases)
+[![CI](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml/badge.svg)](https://github.com/thydynh03/agent_center/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/thydynh03/agent_center?color=2f81f7)](https://github.com/thydynh03/agent_center/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/thydynh03/agent_center/total?color=2f81f7)](https://github.com/thydynh03/agent_center/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](frontend/package.json)
@@ -41,7 +41,7 @@ falls apart the moment the work is "build me the thing", because nobody is holdi
 the plan, nobody notices that step 4 broke step 2, and nothing tells you whether
 the result actually runs.
 
-Claude Suite keeps the plan, the dependencies, the verification and the evidence in
+Agent Center keeps the plan, the dependencies, the verification and the evidence in
 one place:
 
 - **It plans.** An AI decomposes your requirement into tasks tagged by role — BA,
@@ -66,24 +66,24 @@ called, the git diff it produced, real token usage and real cost.
 
 ### Windows — the installer (recommended)
 
-1. Download `ClaudeSuite-amd64-installer.exe` from the
-   [latest release](https://github.com/thydynh03/claude_suite/releases/latest).
+1. Download `AgentCenter-amd64-installer.exe` from the
+   [latest release](https://github.com/thydynh03/agent_center/releases/latest).
 2. Run it. The app appears in the Start menu and uninstalls through
    **Apps & features** like any other program.
 3. The installer also places two command-line companions next to the app:
-   `claude-suite-claim` (used by teammates' agents to file findings) and
-   `claude-suite-tui` (the terminal UI). No Go toolchain needed.
+   `agent-center-claim` (used by teammates' agents to file findings) and
+   `agent-center-tui` (the terminal UI). No Go toolchain needed.
 
 The installer carries the Microsoft WebView2 bootstrapper, so the app works on a
 clean Windows install.
 
-> **Portable option.** `ClaudeSuite.exe` in the same release runs without
+> **Portable option.** `AgentCenter.exe` in the same release runs without
 > installing — good for a USB stick. It creates no shortcuts and does not
 > self-update.
 
 ### You also need at least one agent CLI
 
-Claude Suite orchestrates agent CLIs; it does not replace them. Install **at least
+Agent Center orchestrates agent CLIs; it does not replace them. Install **at least
 one** and make sure it is on your `PATH`:
 
 | Provider | CLI | Notes |
@@ -174,14 +174,14 @@ in the top bar.
 ## Adjudication: proving a finding instead of asserting it
 
 When several agents review the same code, they produce confident prose. Some of it
-is wrong. Claude Suite has a **claims** system that makes the difference checkable.
+is wrong. Agent Center has a **claims** system that makes the difference checkable.
 
 An agent files a claim with a **falsifier** — the name of a check in
-`.claude-suite/checks.json` that **passes when the claim is wrong**. So a *failing*
+`.agent-center/checks.json` that **passes when the claim is wrong**. So a *failing*
 check confirms the defect:
 
 ```bash
-claude-suite-claim --host ws://HOST:9111 --session ID --token T \
+agent-center-claim --host ws://HOST:9111 --session ID --token T \
   --author you/your-agent --provider claude \
   --subject "backend/cli/process_windows.go:17" \
   --assert  "cmd.Wait() never returns when the console is visible" \
@@ -194,14 +194,14 @@ suggestion, and being asked for the command that would disprove it is what separ
 a real defect from a confident guess.
 
 The collect phase is blind (agents cannot see each other's claims), adjudication runs
-the falsifiers, and the result lands in `.claude-suite/session-<id>/verdict.json`.
+the falsifiers, and the result lands in `.agent-center/session-<id>/verdict.json`.
 Sessions also carry free-form chat between the agents and a human arbiter — but talk
 is not evidence, and only a falsifier settles a claim.
 
 Agents can join over the CLI above or over **MCP**, with nothing downloaded:
 
 ```bash
-claude mcp add --transport http claude-suite-debate "http://HOST:9111/mcp/SESSION?token=T"
+claude mcp add --transport http agent-center-debate "http://HOST:9111/mcp/SESSION?token=T"
 ```
 
 ---
@@ -242,13 +242,13 @@ A keyboard-native frontend over the same database and services. It opens
 
 ```bash
 # Inspect an existing database safely
-claude-suite-tui --db /path/to/agent_manager.db
+agent-center-tui --db /path/to/agent_manager.db
 
 # Enable task mutations and orchestration
-claude-suite-tui --db /path/to/agent_manager.db --write
+agent-center-tui --db /path/to/agent_manager.db --write
 
 # Validate a database without starting the UI
-claude-suite-tui --db /path/to/agent_manager.db --check
+agent-center-tui --db /path/to/agent_manager.db --check
 ```
 
 | Key | Action |
@@ -270,9 +270,9 @@ lightweight inspector.
 
 | What | Where |
 |---|---|
-| Data directory (database, config, logs, Chrome profile) | `%LOCALAPPDATA%\ClaudeSuite` on Windows, `~/.claude_suite` elsewhere |
-| Move the data directory | `CLAUDE_SUITE_DATA_DIR=/some/path` |
-| Google OAuth client | `CLAUDE_SUITE_GCP_CLIENT_ID` / `CLAUDE_SUITE_GCP_CLIENT_SECRET`, or `gcp_oauth.json` in the data directory |
+| Data directory (database, config, logs, Chrome profile) | `%LOCALAPPDATA%\AgentCenter` on Windows, `~/.agent_center` elsewhere |
+| Move the data directory | `AGENT_CENTER_DATA_DIR=/some/path` |
+| Google OAuth client | `AGENT_CENTER_GCP_CLIENT_ID` / `AGENT_CENTER_GCP_CLIENT_SECRET`, or `gcp_oauth.json` in the data directory |
 | Outbound notifications | Settings → Integrations: a webhook URL receiving task-completed and task-failed events |
 | Agent role prompts | editable markdown per role, in the data directory |
 
@@ -285,11 +285,11 @@ machine will not hand over your accounts.
 ## Build from source
 
 ```bash
-git clone https://github.com/thydynh03/claude_suite.git
-cd claude_suite
+git clone https://github.com/thydynh03/agent_center.git
+cd agent_center
 
 wails dev                                     # desktop app, hot reload
-wails build -platform windows/amd64 -clean    # -> build/bin/ClaudeSuite.exe
+wails build -platform windows/amd64 -clean    # -> build/bin/AgentCenter.exe
 ```
 
 Prerequisites: Go (version pinned in `go.mod`), Node.js 20.x, and Wails CLI v2.13.0
@@ -354,7 +354,7 @@ afford to lose.
 
 The version shown in the app resolves in order: a persisted `version.json` in the
 data directory, then `git describe --tags`, then a value injected at build time with
-`-ldflags "-X claude_suite/backend/version.BuildVersion=..."`, then a compiled-in
+`-ldflags "-X agent_center/backend/version.BuildVersion=..."`, then a compiled-in
 fallback. Releases are built from a `v*` tag, and the tag is the single source of
 truth for what the binary reports.
 

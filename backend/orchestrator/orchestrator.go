@@ -1,4 +1,4 @@
-package orchestrator
+﻿package orchestrator
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/modelcatalog"
-	"claude_suite/backend/models"
-	"claude_suite/backend/services"
-	"claude_suite/backend/services/projectmap"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/modelcatalog"
+	"agent_center/backend/models"
+	"agent_center/backend/services"
+	"agent_center/backend/services/projectmap"
+	"agent_center/backend/textutil"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

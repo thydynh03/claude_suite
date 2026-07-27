@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package cli
 
@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/sysproc"
 )
 
 // newCLICommand builds the agent process so that cancelling ctx kills the

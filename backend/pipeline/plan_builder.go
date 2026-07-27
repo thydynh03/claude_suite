@@ -1,4 +1,4 @@
-package pipeline
+﻿package pipeline
 
 import (
 	"encoding/json"
@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"strings"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
-	"claude_suite/backend/services/projectmap"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
+	"agent_center/backend/services/projectmap"
+	"agent_center/backend/textutil"
 )
 
 type PlanBuilder struct {
@@ -136,7 +136,7 @@ func (p *PlanBuilder) buildWorkspaceContext(cwd string) string {
 	var parts []string
 
 	if cwd != "" {
-		if data, err := os.ReadFile(filepath.Join(cwd, ".claude-suite", "project-map.md")); err == nil && len(data) > 0 {
+		if data, err := os.ReadFile(filepath.Join(cwd, ".agent-center", "project-map.md")); err == nil && len(data) > 0 {
 			parts = append(parts, "## Project map of the workspace (auto-generated)\n"+
 				textutil.Truncate(string(data), 4000, "\n… (map truncated)"))
 		}

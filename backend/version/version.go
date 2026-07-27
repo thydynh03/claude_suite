@@ -1,4 +1,4 @@
-package version
+﻿package version
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"claude_suite/backend/paths"
+	"agent_center/backend/paths"
 )
 
 // devVersion is what an untagged local build reports. Seeing it in the UI means
@@ -17,7 +17,7 @@ import (
 const devVersion = "v0.0.0-dev"
 
 // BuildVersion is injected at release time with
-// -ldflags "-X claude_suite/backend/version.BuildVersion=$TAG".
+// -ldflags "-X agent_center/backend/version.BuildVersion=$TAG".
 // Leaving the default as "dev" is deliberate: a hardcoded real-looking version
 // is why every release kept reporting v2.8.0 no matter which tag built it.
 var BuildVersion = devVersion

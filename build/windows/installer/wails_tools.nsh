@@ -5,13 +5,13 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "claude_suite"
+    !define INFO_PROJECTNAME "agent_center"
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "thydynh03"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "Claude Suite"
+    !define INFO_PRODUCTNAME "Agent Center"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "2.13.1.0"

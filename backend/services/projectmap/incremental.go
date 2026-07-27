@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // IncrementalUpdate re-fingerprints just the changed paths and patches the

@@ -1,11 +1,11 @@
-package services
+﻿package services
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func TestMemoryConfigRoundTripsAndKeepsTheKillSwitch(t *testing.T) {

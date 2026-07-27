@@ -1,11 +1,11 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // memoryConfigFile sits beside the database like the other config files.

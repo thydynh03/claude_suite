@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { renderMarkdown } from '../../lib/markdown';
   import { activeTab } from '../../lib/stores/appState';
 
@@ -114,7 +114,7 @@ Task sẽ tự động được thêm vào Backlog của hệ thống.
         <span class="material-symbols-outlined text-lg text-on-surface-variant">description</span>
         Tài liệu hướng dẫn
       </h1>
-      <p class="text-on-surface-variant text-sm mt-0.5">Hướng dẫn chi tiết cách dùng Claude Suite: orchestrator, CLI engine và các API tích hợp.</p>
+      <p class="text-on-surface-variant text-sm mt-0.5">Hướng dẫn chi tiết cách dùng Agent Center: orchestrator, CLI engine và các API tích hợp.</p>
     </div>
 
     <button

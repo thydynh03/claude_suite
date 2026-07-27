@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"encoding/json"
@@ -23,7 +23,7 @@ var safeScripts = map[string]string{
 
 // Discover builds a catalogue from what the workspace already has.
 //
-// This is what makes .claude-suite/checks.json optional. The safety property is
+// This is what makes .agent-center/checks.json optional. The safety property is
 // unchanged and it is the only one that matters: an agent still names a check
 // and never supplies a command. The commands here come from the project's own
 // tooling — the same go.mod and package.json anyone who opens this workspace has

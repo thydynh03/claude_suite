@@ -1,9 +1,9 @@
-package orchestrator
+﻿package orchestrator
 
 import (
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 func TestFallbackHandler_IsQuotaExhausted(t *testing.T) {

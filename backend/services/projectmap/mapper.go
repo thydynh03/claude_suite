@@ -1,4 +1,4 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"bytes"
@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
+	"agent_center/backend/sysproc"
 )
 
 // Mapper builds and serves the project map. Git runs through sysproc (never
@@ -337,12 +337,12 @@ func (m *Mapper) Stats(workspaceDir string) (*models.ProjectMapStats, error) {
 }
 
 // writeProjectMapMarkdown renders a human/CLI-readable digest into the
-// workspace's .claude-suite dir so the Claude CLI can @-reference it and the
+// workspace's .agent-center dir so the Claude CLI can @-reference it and the
 // Plan Builder can inject it. Best-effort: a write failure never fails a build.
 func (m *Mapper) writeProjectMapMarkdown(workspaceDir, workspaceID string, report *BuildReport, dirs map[string]int) {
 	var b strings.Builder
 	b.WriteString("# Project Map\n\n")
-	b.WriteString(fmt.Sprintf("Sinh tự động bởi Claude Suite (workspace %s) — %d file, %d node, %d edge.\n", workspaceID, report.Files, report.Nodes, report.Edges))
+	b.WriteString(fmt.Sprintf("Sinh tự động bởi Agent Center (workspace %s) — %d file, %d node, %d edge.\n", workspaceID, report.Files, report.Nodes, report.Edges))
 	b.WriteString("KHÔNG sửa tay: file này bị ghi đè sau mỗi lần build lại project map.\n\n## Thư mục\n")
 
 	type dirCount struct {
@@ -367,7 +367,7 @@ func (m *Mapper) writeProjectMapMarkdown(workspaceDir, workspaceID string, repor
 		b.WriteString(fmt.Sprintf("- `%s` — %d file\n", dc.dir, dc.count))
 	}
 
-	dir := filepath.Join(workspaceDir, ".claude-suite")
+	dir := filepath.Join(workspaceDir, ".agent-center")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
@@ -439,13 +439,13 @@ func gitHeadCommit(dir string) string {
 	return gitOutput(dir, "rev-parse", "HEAD")
 }
 
-var porcelainClaudeSuiteRe = regexp.MustCompile(`(?m)^..\s+\.claude-suite/`)
+var porcelainAgentCenterRe = regexp.MustCompile(`(?m)^..\s+\.agent-center/`)
 
 func gitIsDirty(dir string) bool {
 	out := gitOutput(dir, "status", "--porcelain")
 	// The map's own artifacts must not count as dirt, or every build marks
 	// the workspace dirty forever.
-	out = porcelainClaudeSuiteRe.ReplaceAllString(out, "")
+	out = porcelainAgentCenterRe.ReplaceAllString(out, "")
 	return strings.TrimSpace(out) != ""
 }
 

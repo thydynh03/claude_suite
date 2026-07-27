@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"database/sql"
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"claude_suite/backend/paths"
+	"agent_center/backend/paths"
 )
 
 // seedLegacyDB writes a WAL-mode database with rows still sitting in the -wal

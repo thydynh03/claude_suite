@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"fmt"
@@ -194,11 +194,11 @@ func lanAddresses() []ifaceAddr {
 // claimToolURL is where the latest published claim tool always lives. GitHub
 // keeps this path stable across releases, which is what lets a machine that
 // never installed the app fetch the tool by itself.
-const claimToolURL = "https://github.com/thydynh03/claude_suite/releases/latest/download/claude-suite-claim.exe"
+const claimToolURL = "https://github.com/thydynh03/agent_center/releases/latest/download/agent-center-claim.exe"
 
 // projectRepoURL is the fallback for machines the prebuilt exe cannot serve
 // (macOS, Linux): clone and `go run` the tool from source.
-const projectRepoURL = "https://github.com/thydynh03/claude_suite"
+const projectRepoURL = "https://github.com/thydynh03/agent_center"
 
 // claimArgs is the part of a join line that is identical however the tool got
 // onto the recipient's machine. The placeholders describe themselves in the
@@ -220,7 +220,7 @@ func claimArgs(host, sessionID, token string) string {
 // installer puts the tool on PATH instead, so a bare name is correct on every
 // machine that has the app.
 func JoinCommand(host, sessionID, token string) string {
-	return "claude-suite-claim " + claimArgs(host, sessionID, token)
+	return "agent-center-claim " + claimArgs(host, sessionID, token)
 }
 
 // BootstrapJoinCommand is JoinCommand for a machine that has never installed
@@ -231,7 +231,7 @@ func JoinCommand(host, sessionID, token string) string {
 // GitHub. The $env:TEMP in it is the recipient's, so the line stays valid
 // wherever it is pasted.
 func BootstrapJoinCommand(host, sessionID, token string) string {
-	return `$c = "$env:TEMP\claude-suite-claim.exe"; ` +
+	return `$c = "$env:TEMP\agent-center-claim.exe"; ` +
 		`if (!(Test-Path $c)) { curl.exe -L -o $c ` + claimToolURL + ` }; ` +
 		`& $c ` + claimArgs(host, sessionID, token)
 }
@@ -255,7 +255,7 @@ func MCPJoinURL(host, sessionID, token string) string {
 // agent. One command, zero downloads: the agent then has join/submit/finish
 // as tools.
 func MCPJoinCommand(host, sessionID, token string) string {
-	return fmt.Sprintf(`claude mcp add --transport http claude-suite-debate "%s"`, MCPJoinURL(host, sessionID, token))
+	return fmt.Sprintf(`claude mcp add --transport http agent-center-debate "%s"`, MCPJoinURL(host, sessionID, token))
 }
 
 // AgentJoinPrompt is a self-contained instruction block the session owner
@@ -268,7 +268,7 @@ func MCPJoinCommand(host, sessionID, token string) string {
 // exe on someone's machine is their call, not their agent's.
 func AgentJoinPrompt(host, sessionID, token, subject string) string {
 	conn := fmt.Sprintf("--host %s --session %s --token %s --provider claude", host, sessionID, token)
-	return fmt.Sprintf(`Bạn được mời làm reviewer trong một phiên phân xử (adjudication session) của Claude Suite.
+	return fmt.Sprintf(`Bạn được mời làm reviewer trong một phiên phân xử (adjudication session) của Agent Center.
 
 Chủ đề: %s
 
@@ -279,42 +279,42 @@ Claim không kèm falsifier chỉ là ý kiến: được ghi lại nhưng khôn
 
 === BƯỚC 1 — KẾT NỐI (chọn một, theo thứ tự ưu tiên) ===
 
-A. Máy đã cài app Claude Suite: công cụ claude-suite-claim có sẵn trên PATH — sang BƯỚC 2A.
+A. Máy đã cài app Agent Center: công cụ agent-center-claim có sẵn trên PATH — sang BƯỚC 2A.
 
 B. Chưa có công cụ: HỎI người dùng của bạn trước, đừng tự quyết.
    - Họ đồng ý tải (Windows, PowerShell):
-     $c = "$env:TEMP\claude-suite-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c %s }
-     rồi dùng $c thay cho "claude-suite-claim" trong mọi lệnh bên dưới. Sang BƯỚC 2A.
-     (macOS/Linux: git clone %s rồi chạy "go run ./cmd/claude-suite-claim" — cần Go.)
+     $c = "$env:TEMP\agent-center-claim.exe"; if (!(Test-Path $c)) { curl.exe -L -o $c %s }
+     rồi dùng $c thay cho "agent-center-claim" trong mọi lệnh bên dưới. Sang BƯỚC 2A.
+     (macOS/Linux: git clone %s rồi chạy "go run ./cmd/agent-center-claim" — cần Go.)
    - Họ KHÔNG muốn tải: kết nối MCP, không tải gì cả —
-     claude mcp add --transport http claude-suite-debate "%s"
-     (Gemini CLI: gemini mcp add --transport http claude-suite-debate "%s")
+     claude mcp add --transport http agent-center-debate "%s"
+     (Gemini CLI: gemini mcp add --transport http agent-center-debate "%s")
      Khởi động lại agent nếu chưa thấy tool mới, rồi làm BƯỚC 2B và 3B; bỏ qua 2A/3A.
 
 === BƯỚC 2A — NỘP PHÁT HIỆN, bằng công cụ CLI ===
 
 1. Thử kết nối trước khi bỏ công review:
-   claude-suite-claim %s --ping
+   agent-center-claim %s --ping
 2. Xem danh sách check mà claim được phép trỏ tới (chạy trong thư mục dự án đang xét):
-   claude-suite-claim --checks
+   agent-center-claim --checks
 3. Tự đọc mã nguồn liên quan chủ đề, rồi nộp mỗi phát hiện một bộ ba:
-   claude-suite-claim %s --subject "duong-dan/file.go:12" --assert "loi la gi, mot cau" --falsify "ten-check"
+   agent-center-claim %s --subject "duong-dan/file.go:12" --assert "loi la gi, mot cau" --falsify "ten-check"
    (ba cờ này lặp lại được để nộp nhiều claim trong một lần chạy)
 4. Lệnh trên tự chờ các agent khác nộp xong và chờ check chạy; kết quả đầy đủ nằm ở
-   .claude-suite/session-%s/verdict.json
+   .agent-center/session-%s/verdict.json
 
 === BƯỚC 3A — THẢO LUẬN, bằng công cụ CLI ===
 
 Phiên có một kênh chat chung giữa các agent và người trọng tài (chủ phiên).
 - NGHE (chạy nền, in mỗi tin nhắn thành một dòng JSON có seq/author/text):
-  claude-suite-claim %s --listen 15m
+  agent-center-claim %s --listen 15m
 - NÓI:
-  claude-suite-claim %s --say "noi dung"
+  agent-center-claim %s --say "noi dung"
 Luật hội thoại: chỉ trả lời khi tin nhắn gọi tên bạn, hỏi bạn, hoặc phản bác claim của
 bạn. Trả lời ngắn, dẫn file:dòng. Không trả lời tin của chính mình. Chat không phải
 bằng chứng — chỉ falsifier mới kết luận được một claim.
 
-=== BƯỚC 2B — NỘP PHÁT HIỆN, qua MCP (tool trên server claude-suite-debate) ===
+=== BƯỚC 2B — NỘP PHÁT HIỆN, qua MCP (tool trên server agent-center-debate) ===
 
 1. join_session với author dạng "ten-ban@ten-may/agent". Nó trả về participant_key —
    LƯU LẠI: mọi tool sau đều phải gửi kèm key này cùng đúng author đó.

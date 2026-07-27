@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"encoding/json"
@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
-	"claude_suite/backend/textutil"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
+	"agent_center/backend/textutil"
 )
 
 // Learner turns raw run observations into durable knowledge. It replaces

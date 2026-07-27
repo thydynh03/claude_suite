@@ -1,4 +1,4 @@
-package tui
+﻿package tui
 
 import (
 	"fmt"
@@ -12,9 +12,9 @@ import (
 func (m Model) View() tea.View {
 	var content string
 	if m.width <= 0 || m.height <= 0 {
-		content = "Starting Claude Suite…"
+		content = "Starting Agent Center…"
 	} else if m.width < 52 || m.height < 14 {
-		content = exactFrame(centerText("◆ CLAUDE SUITE\n\nResize terminal to at least 52 × 14", m.width, m.height), m.width, m.height)
+		content = exactFrame(centerText("◆ Agent Center\n\nResize terminal to at least 52 × 14", m.width, m.height), m.width, m.height)
 	} else {
 		layout := m.layout()
 		content = exactFrame(
@@ -26,7 +26,7 @@ func (m Model) View() tea.View {
 	}
 	view := tea.NewView(content)
 	view.AltScreen = true
-	view.WindowTitle = "Claude Suite"
+	view.WindowTitle = "Agent Center"
 	view.MouseMode = tea.MouseModeCellMotion
 	return view
 }
@@ -56,7 +56,7 @@ func (m Model) layout() appLayout {
 }
 
 func (m Model) header(width int) string {
-	left := " " + prismaticText("CLAUDE SUITE") +
+	left := " " + prismaticText("Agent Center") +
 		mutedStyle.Render(" / ") + textStyle.Bold(true).Render(screenNames[m.screen])
 	mode := successStyle.Bold(true).Render("READ ONLY")
 	if m.tasks != nil {

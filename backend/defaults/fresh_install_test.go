@@ -1,19 +1,19 @@
-package defaults_test
+﻿package defaults_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"claude_suite/backend/database"
-	"claude_suite/backend/defaults"
-	"claude_suite/backend/paths"
+	"agent_center/backend/database"
+	"agent_center/backend/defaults"
+	"agent_center/backend/paths"
 )
 
 // What a downloaded build meets on first launch: no data directory, no
 // database, no roles, nothing to migrate from.
 func TestFreshInstallProducesUsableState(t *testing.T) {
-	fresh := filepath.Join(t.TempDir(), "ClaudeSuite")
+	fresh := filepath.Join(t.TempDir(), "AgentCenter")
 	t.Setenv(paths.DataDirEnv, fresh)
 	t.Setenv(paths.LegacyDataDirEnv, "")
 

@@ -1,12 +1,12 @@
-package pipeline
+﻿package pipeline
 
 import (
 	"context"
 	"fmt"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/database"
-	"claude_suite/backend/models"
+	"agent_center/backend/cli"
+	"agent_center/backend/database"
+	"agent_center/backend/models"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

@@ -1,4 +1,4 @@
-// Package paths resolves where Claude Suite keeps per-user state: the SQLite
+﻿// Package paths resolves where Agent Center keeps per-user state: the SQLite
 // database, the JSON configs, the agent role markdown and the logs.
 //
 // It exists as its own package so that both database and logger can agree on
@@ -14,28 +14,32 @@ import (
 
 // DataDirEnv overrides the data directory. Useful for tests, for portable
 // installs, and for staying on a legacy location without editing code.
-const DataDirEnv = "CLAUDE_SUITE_DATA_DIR"
+// Also checks the legacy AGENT_CENTER_DATA_DIR for backward compatibility.
+const DataDirEnv = "AGENT_CENTER_DATA_DIR"
 
 // DataDir is the per-user directory holding all application state.
 //
-// On Windows this is %LOCALAPPDATA%\ClaudeSuite, matching where the browser
-// agent already keeps its Chrome profile.
+// On Windows this is %LOCALAPPDATA%\AgentCenter.
 func DataDir() string {
 	if v := strings.TrimSpace(os.Getenv(DataDirEnv)); v != "" {
 		return v
 	}
+	// Backward-compat: honour old env var so existing setups keep working.
+	if v := strings.TrimSpace(os.Getenv("AGENT_CENTER_DATA_DIR")); v != "" {
+		return v
+	}
 	if runtime.GOOS == "windows" {
 		if base := os.Getenv("LOCALAPPDATA"); base != "" {
-			return filepath.Join(base, "ClaudeSuite")
+			return filepath.Join(base, "AgentCenter")
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".claude_suite")
+		return filepath.Join(home, ".agent_center")
 	}
 	// Last resort: the temp dir, never ".". A portable exe run from Program
 	// Files or a network share would otherwise try to create its database
 	// beside the executable and be denied, with no channel to say why.
-	return filepath.Join(os.TempDir(), "ClaudeSuite")
+	return filepath.Join(os.TempDir(), "AgentCenter")
 }
 
 // EnsureDataDir returns DataDir, creating it if necessary.
@@ -65,23 +69,26 @@ func LogDir() string {
 // LegacyDataDirEnv points at a directory from an older install whose contents
 // should be adopted once. It exists so that no build ships someone's machine
 // layout baked into it.
-const LegacyDataDirEnv = "CLAUDE_SUITE_LEGACY_DATA_DIR"
+const LegacyDataDirEnv = "AGENT_CENTER_LEGACY_DATA_DIR"
 
 // LegacyDataDirs lists locations earlier builds could have written to, so their
 // contents can be adopted once instead of silently abandoned.
 //
-// Only ~/.claude_suite is listed by default, because that is the only legacy
-// location a downloaded copy of the app could ever have used. Earlier builds
-// also hardcoded a specific developer checkout, but that path means nothing on
-// anyone else's machine — someone who needs it points LegacyDataDirEnv at it
-// rather than having it compiled in.
+// ~/.agent_center and the old %LOCALAPPDATA%\AgentCenter are included so that
+// data from an earlier "Agent Center" install is automatically migrated.
 func LegacyDataDirs() []string {
 	var dirs []string
 	if v := strings.TrimSpace(os.Getenv(LegacyDataDirEnv)); v != "" {
 		dirs = append(dirs, v)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs, filepath.Join(home, ".claude_suite"))
+		dirs = append(dirs, filepath.Join(home, ".agent_center"))
+		// Also check old .agent_center location
+		dirs = append(dirs, filepath.Join(home, ".agent_center"))
+	}
+	// Migrate from old Windows AgentCenter directory
+	if base := os.Getenv("LOCALAPPDATA"); base != "" {
+		dirs = append(dirs, filepath.Join(base, "AgentCenter"))
 	}
 
 	current := filepath.Clean(DataDir())

@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "claude_suite",
-  "outputfilename": "ClaudeSuite",
+  "name": "agent_center",
+  "outputfilename": "AgentCenter",
   "frontend:install": "npm install --legacy-peer-deps",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
@@ -11,8 +11,8 @@
     "email": "thindde180805@fpt.edu.vn"
   },
   "info": {
-    "companyName": "Claude Suite",
-    "productName": "Claude Suite",
+    "companyName": "Agent Center",
+    "productName": "Agent Center",
     "productVersion": "2.15.0.0",
     "copyright": "Copyright © 2026 thydynh03",
     "comments": "AI agent orchestration control center"

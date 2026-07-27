@@ -1,4 +1,4 @@
-package claims
+﻿package claims
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 func writeCatalogue(t *testing.T, checks ...Check) string {
 	t.Helper()
 	ws := t.TempDir()
-	dir := filepath.Join(ws, ".claude-suite")
+	dir := filepath.Join(ws, ".agent-center")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestAdjudicateSettlesEveryPendingClaim(t *testing.T) {
 
 func TestMalformedCatalogueIsRejected(t *testing.T) {
 	ws := t.TempDir()
-	dir := filepath.Join(ws, ".claude-suite")
+	dir := filepath.Join(ws, ".agent-center")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

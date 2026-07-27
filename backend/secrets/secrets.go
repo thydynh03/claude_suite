@@ -1,4 +1,4 @@
-// Package secrets seals small credential files to the local Windows user.
+﻿// Package secrets seals small credential files to the local Windows user.
 //
 // anti_accounts.json holds Google refresh tokens. 0600 permissions keep other
 // accounts out, but anything running AS the user — or a copied disk, a synced
@@ -20,7 +20,7 @@ import (
 
 // header marks a sealed file. Legacy files start with JSON ('[' or '{'), so
 // its absence is what makes transparent migration possible.
-const header = "claude-suite-sealed-v1\n"
+const header = "agent-center-sealed-v1\n"
 
 // Seal wraps plaintext for storage.
 func Seal(plaintext []byte) ([]byte, error) {

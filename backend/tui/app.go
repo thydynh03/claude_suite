@@ -1,9 +1,9 @@
-package tui
+﻿package tui
 
 import (
 	"time"
 
-	"claude_suite/backend/services"
+	"agent_center/backend/services"
 
 	tea "charm.land/bubbletea/v2"
 )

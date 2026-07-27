@@ -1,11 +1,11 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 // moduleGraphMaxNodes bounds what the UI is asked to draw. Modules are ranked

@@ -1,4 +1,4 @@
-package tui
+﻿package tui
 
 import (
 	"fmt"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/models"
+	"agent_center/backend/cli"
+	"agent_center/backend/models"
 
 	tea "charm.land/bubbletea/v2"
 )

@@ -79,7 +79,7 @@
   function diagnosticsReport(): string {
     const label = (h: Health) => (h === 'ok' ? 'ok' : h === 'error' ? 'error' : 'unknown');
     return [
-      'Claude Suite — báo cáo chẩn đoán',
+      'Agent Center — báo cáo chẩn đoán',
       `Thời điểm: ${new Date().toISOString()}`,
       `Phiên bản app: ${appVersion || 'không đọc được'}`,
       `IPC backend: ${label(ipcHealth)}`,
@@ -107,7 +107,7 @@
   const faqs = [
     {
       q: 'Làm sao khi gặp lỗi "API Quota Exhausted" hoặc 429?',
-      a: 'Claude Suite đã được tích hợp tính năng Smart Fallback tự động. Khi Claude CLI báo lỗi 429, hệ thống sẽ tự động chuyển sang dùng Gemini 3.6 Flash trên Antigravity CLI mà không bị dừng tiến trình.'
+      a: 'Agent Center đã được tích hợp tính năng Smart Fallback tự động. Khi Claude CLI báo lỗi 429, hệ thống sẽ tự động chuyển sang dùng Gemini 3.6 Flash trên Antigravity CLI mà không bị dừng tiến trình.'
     },
     {
       q: 'Khi đóng cửa sổ ứng dụng, kịch bản Scheduler có tiếp tục chạy không?',
@@ -115,7 +115,7 @@
     },
     {
       q: 'Ứng dụng lưu Database và Log ở đâu trên máy tính?',
-      a: 'Database SQLite và file Log xoay tự động được lưu tại đường dẫn mặc định:\n- Windows: C:\\Users\\<User>\\.claude_suite\\agent_manager.db\n- Log file: C:\\Users\\<User>\\.claude_suite\\logs\\claude_suite.log'
+      a: 'Database SQLite và file Log xoay tự động được lưu tại đường dẫn mặc định:\n- Windows: C:\\Users\\<User>\\AppData\\Local\\AgentCenter\\agent_manager.db\n- Log file: C:\\Users\\<User>\\AppData\\Local\\AgentCenter\\logs\\agent_center.log'
     },
     {
       q: 'Tôi có thể đổi mô hình AI cho từng Agent không?',
@@ -213,7 +213,7 @@
   <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-wrap items-center justify-between gap-4">
     <div class="space-y-1">
       <h3 class="text-sm font-semibold text-on-surface">Cần hỗ trợ trực tiếp hoặc báo lỗi?</h3>
-      <p class="text-xs text-on-surface-variant">Nếu bạn phát hiện lỗi hoặc muốn đóng góp ý kiến cải tiến dự án Claude Suite.</p>
+      <p class="text-xs text-on-surface-variant">Nếu bạn phát hiện lỗi hoặc muốn đóng góp ý kiến cải tiến dự án Agent Center.</p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
@@ -225,7 +225,7 @@
       </button>
 
       <a
-        href="https://github.com/thydynh03/claude_suite/issues"
+        href="https://github.com/thydynh03/agent_center/issues"
         target="_blank"
         rel="noreferrer"
         class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 hover:bg-surface-container-high transition-colors cursor-pointer">

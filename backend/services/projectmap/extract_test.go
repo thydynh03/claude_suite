@@ -1,10 +1,10 @@
-package projectmap
+﻿package projectmap
 
 import (
 	"strings"
 	"testing"
 
-	"claude_suite/backend/models"
+	"agent_center/backend/models"
 )
 
 const goSample = `package sample
@@ -12,7 +12,7 @@ const goSample = `package sample
 import (
 	"fmt"
 
-	"claude_suite/backend/textutil"
+	"agent_center/backend/textutil"
 )
 
 type Widget struct{ Name string }
@@ -66,7 +66,7 @@ func TestExtractGoFindsFunctionsTypesAndImports(t *testing.T) {
 	}
 
 	joined := strings.Join(ex.Imports, " ")
-	if !strings.Contains(joined, "claude_suite/backend/textutil") {
+	if !strings.Contains(joined, "agent_center/backend/textutil") {
 		t.Errorf("imports missing internal package: %v", ex.Imports)
 	}
 }

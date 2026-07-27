@@ -1,4 +1,4 @@
-# Code of Conduct
+﻿# Code of Conduct
 
 [English](#english) · [Tiếng Việt](#tiếng-việt)
 
@@ -44,7 +44,7 @@ elsewhere.
 
 Report a problem to the maintainer, [@thydynh03](https://github.com/thydynh03),
 through GitHub — a direct message, or a
-[private security advisory](https://github.com/thydynh03/claude_suite/security/advisories/new)
+[private security advisory](https://github.com/thydynh03/agent_center/security/advisories/new)
 if you would rather it stay confidential. Reports are handled privately and the
 reporter's identity is not shared.
 
@@ -99,7 +99,7 @@ commit, comment trong code — và với bất kỳ ai đại diện cho dự á
 
 Hãy báo vấn đề cho maintainer, [@thydynh03](https://github.com/thydynh03), qua
 GitHub — nhắn tin trực tiếp, hoặc
-[security advisory riêng tư](https://github.com/thydynh03/claude_suite/security/advisories/new)
+[security advisory riêng tư](https://github.com/thydynh03/agent_center/security/advisories/new)
 nếu bạn muốn giữ kín. Báo cáo được xử lý riêng tư và danh tính người báo không bị
 tiết lộ.
 

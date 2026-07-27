@@ -1,8 +1,8 @@
-package tui
+﻿package tui
 
 import (
-	"claude_suite/backend/models"
-	"claude_suite/backend/services"
+	"agent_center/backend/models"
+	"agent_center/backend/services"
 )
 
 // Snapshot is the read model consumed by the terminal frontend.

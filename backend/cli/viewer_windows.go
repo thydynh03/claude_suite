@@ -1,4 +1,4 @@
-//go:build windows
+﻿//go:build windows
 
 package cli
 
@@ -22,7 +22,7 @@ func spawnViewerConsole(logPath, title string) {
 
 	cmd := exec.Command(
 		"powershell", "-NoLogo", "-NoProfile", "-NoExit", "-Command",
-		"$Host.UI.RawUI.WindowTitle = 'Claude Suite — "+psTitle+"'; "+
+		"$Host.UI.RawUI.WindowTitle = 'Agent Center — "+psTitle+"'; "+
 			"Get-Content -LiteralPath '"+psPath+"' -Wait -Tail 1000",
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{

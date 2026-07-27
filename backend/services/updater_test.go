@@ -6,28 +6,28 @@ import (
 )
 
 // The v2.15.0 release ships exactly these four .exe assets — names verified
-// against the live release (the installer is claude_suite-…, from wails.json's
-// `name`, not ClaudeSuite-…). Upload order is not guaranteed, so the chooser
+// against the live release (the installer is agent_center-…, from wails.json's
+// `name`, not AgentCenter-…). Upload order is not guaranteed, so the chooser
 // must work by name, not position.
 func releaseAssets() []ReleaseAsset {
 	return []ReleaseAsset{
-		{Name: "claude-suite-claim.exe", BrowserDownloadURL: "https://example.com/claude-suite-claim.exe"},
-		{Name: "claude-suite-tui.exe", BrowserDownloadURL: "https://example.com/claude-suite-tui.exe"},
-		{Name: "claude_suite-amd64-installer.exe", BrowserDownloadURL: "https://example.com/claude_suite-amd64-installer.exe"},
-		{Name: "ClaudeSuite.exe", BrowserDownloadURL: "https://example.com/ClaudeSuite.exe"},
+		{Name: "agent-center-claim.exe", BrowserDownloadURL: "https://example.com/agent-center-claim.exe"},
+		{Name: "agent-center-tui.exe", BrowserDownloadURL: "https://example.com/agent-center-tui.exe"},
+		{Name: "agent_center-amd64-installer.exe", BrowserDownloadURL: "https://example.com/agent_center-amd64-installer.exe"},
+		{Name: "AgentCenter.exe", BrowserDownloadURL: "https://example.com/AgentCenter.exe"},
 	}
 }
 
 func TestChooseAssetURLInstalledPrefersInstaller(t *testing.T) {
 	got := chooseAssetURL(releaseAssets(), true)
-	if want := "https://example.com/claude_suite-amd64-installer.exe"; got != want {
+	if want := "https://example.com/agent_center-amd64-installer.exe"; got != want {
 		t.Fatalf("installed copy chose %q, want %q", got, want)
 	}
 }
 
 func TestChooseAssetURLPortablePrefersBareExe(t *testing.T) {
 	got := chooseAssetURL(releaseAssets(), false)
-	if want := "https://example.com/ClaudeSuite.exe"; got != want {
+	if want := "https://example.com/AgentCenter.exe"; got != want {
 		t.Fatalf("portable copy chose %q, want %q", got, want)
 	}
 }
@@ -37,8 +37,8 @@ func TestChooseAssetURLPortablePrefersBareExe(t *testing.T) {
 // select claim or tui.
 func TestChooseAssetURLNeverPicksCompanionTools(t *testing.T) {
 	assets := []ReleaseAsset{
-		{Name: "claude-suite-claim.exe", BrowserDownloadURL: "https://example.com/claim.exe"},
-		{Name: "claude-suite-tui.exe", BrowserDownloadURL: "https://example.com/tui.exe"},
+		{Name: "agent-center-claim.exe", BrowserDownloadURL: "https://example.com/claim.exe"},
+		{Name: "agent-center-tui.exe", BrowserDownloadURL: "https://example.com/tui.exe"},
 	}
 	for _, installed := range []bool{true, false} {
 		if got := chooseAssetURL(assets, installed); got != "" {
@@ -49,13 +49,13 @@ func TestChooseAssetURLNeverPicksCompanionTools(t *testing.T) {
 
 func TestChooseAssetURLFallsBackAcrossModes(t *testing.T) {
 	onlyInstaller := []ReleaseAsset{
-		{Name: "ClaudeSuite-amd64-installer.exe", BrowserDownloadURL: "https://example.com/installer.exe"},
+		{Name: "AgentCenter-amd64-installer.exe", BrowserDownloadURL: "https://example.com/installer.exe"},
 	}
 	if got := chooseAssetURL(onlyInstaller, false); got != "https://example.com/installer.exe" {
 		t.Fatalf("portable copy with installer-only release chose %q", got)
 	}
 	onlyPortable := []ReleaseAsset{
-		{Name: "ClaudeSuite.exe", BrowserDownloadURL: "https://example.com/portable.exe"},
+		{Name: "AgentCenter.exe", BrowserDownloadURL: "https://example.com/portable.exe"},
 	}
 	if got := chooseAssetURL(onlyPortable, true); got != "https://example.com/portable.exe" {
 		t.Fatalf("installed copy with portable-only release chose %q", got)
@@ -73,10 +73,10 @@ func TestChooseAssetURLIgnoresNonExeAssets(t *testing.T) {
 }
 
 func TestBuildUpdaterBatCarriesBothPathsAndBoundsTheRetry(t *testing.T) {
-	bat := buildUpdaterBat(`C:\Temp\ClaudeSuite-update-1.exe`, `C:\Apps\ClaudeSuite.exe`)
+	bat := buildUpdaterBat(`C:\Temp\AgentCenter-update-1.exe`, `C:\Apps\AgentCenter.exe`)
 	for _, want := range []string{
-		`set "NEW_EXE=C:\Temp\ClaudeSuite-update-1.exe"`,
-		`set "OLD_EXE=C:\Apps\ClaudeSuite.exe"`,
+		`set "NEW_EXE=C:\Temp\AgentCenter-update-1.exe"`,
+		`set "OLD_EXE=C:\Apps\AgentCenter.exe"`,
 		// copy, not move: a same-volume move keeps the %TEMP% owner-only ACL
 		// on the app exe, locking other accounts out of it.
 		`copy /b /y "%NEW_EXE%" "%OLD_EXE%"`,
@@ -118,7 +118,7 @@ func TestBuildUpdaterBatCarriesBothPathsAndBoundsTheRetry(t *testing.T) {
 // to come before any line that carries a path — otherwise the copy target is
 // mojibake, all 60 attempts fail, and the app never relaunches.
 func TestBuildUpdaterBatSwitchesToUTF8BeforeAnyPath(t *testing.T) {
-	bat := buildUpdaterBat(`C:\Users\Trần\AppData\Local\Temp\up.exe`, `D:\Phần mềm\ClaudeSuite.exe`)
+	bat := buildUpdaterBat(`C:\Users\Trần\AppData\Local\Temp\up.exe`, `D:\Phần mềm\AgentCenter.exe`)
 
 	chcp := strings.Index(bat, "chcp 65001")
 	newExe := strings.Index(bat, "set \"NEW_EXE=")
@@ -128,7 +128,7 @@ func TestBuildUpdaterBatSwitchesToUTF8BeforeAnyPath(t *testing.T) {
 	if chcp > newExe {
 		t.Fatalf("codepage switch comes after the paths, too late to help:\n%s", bat)
 	}
-	if !strings.Contains(bat, `set "OLD_EXE=D:\Phần mềm\ClaudeSuite.exe"`) {
+	if !strings.Contains(bat, `set "OLD_EXE=D:\Phần mềm\AgentCenter.exe"`) {
 		t.Fatalf("accented path did not survive into the script:\n%s", bat)
 	}
 }
@@ -136,19 +136,19 @@ func TestBuildUpdaterBatSwitchesToUTF8BeforeAnyPath(t *testing.T) {
 // Batch expands %VAR% while reading a line, so a single % inside a path eats
 // the text after it and the copy silently targets a truncated name.
 func TestBuildUpdaterBatEscapesPercentInPaths(t *testing.T) {
-	bat := buildUpdaterBat(`C:\Temp\up.exe`, `D:\100%% Work\ClaudeSuite.exe`)
-	if !strings.Contains(bat, `set "OLD_EXE=D:\100%%%% Work\ClaudeSuite.exe"`) {
+	bat := buildUpdaterBat(`C:\Temp\up.exe`, `D:\100%% Work\AgentCenter.exe`)
+	if !strings.Contains(bat, `set "OLD_EXE=D:\100%%%% Work\AgentCenter.exe"`) {
 		t.Fatalf("literal percent was not doubled for batch:\n%s", bat)
 	}
 }
 
 func TestIsInstallerAssetLooksOnlyAtTheFilename(t *testing.T) {
-	if !isInstallerAsset("https://github.com/thydynh03/claude_suite/releases/download/v2.15.0/claude_suite-amd64-installer.exe") {
+	if !isInstallerAsset("https://github.com/thydynh03/agent_center/releases/download/v2.15.0/agent_center-amd64-installer.exe") {
 		t.Error("the real installer asset was not recognized")
 	}
 	// The release tag is part of the URL; a tag mentioning "installer" must
 	// not reroute a portable exe through the installer branch.
-	if isInstallerAsset("https://github.com/thydynh03/claude_suite/releases/download/v2.16.0-installer-fix/ClaudeSuite.exe") {
+	if isInstallerAsset("https://github.com/thydynh03/agent_center/releases/download/v2.16.0-installer-fix/AgentCenter.exe") {
 		t.Error("a tag containing 'installer' misclassified the portable exe")
 	}
 }
@@ -181,7 +181,7 @@ func TestDirWritable(t *testing.T) {
 	if !dirWritable(t.TempDir()) {
 		t.Fatal("temp dir reported unwritable")
 	}
-	if dirWritable(`C:\this-directory-does-not-exist-claude-suite`) {
+	if dirWritable(`C:\this-directory-does-not-exist-agent-center`) {
 		t.Fatal("nonexistent dir reported writable")
 	}
 }

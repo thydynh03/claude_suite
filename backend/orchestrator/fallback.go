@@ -1,10 +1,10 @@
-package orchestrator
+﻿package orchestrator
 
 import (
 	"strings"
 
-	"claude_suite/backend/cli"
-	"claude_suite/backend/models"
+	"agent_center/backend/cli"
+	"agent_center/backend/models"
 )
 
 type FallbackHandler struct{}

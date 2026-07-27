@@ -1,4 +1,4 @@
-package cli
+﻿package cli
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ type runViewer struct {
 
 // runLogDir holds one log file per viewed run, under the OS temp dir.
 func runLogDir() string {
-	return filepath.Join(os.TempDir(), "claude-suite-runs")
+	return filepath.Join(os.TempDir(), "agent-center-runs")
 }
 
 // startRunViewer opens the log file and the console tailing it. Returns nil

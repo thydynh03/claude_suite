@@ -1,4 +1,4 @@
-// Command claude-suite-claim lets an AI agent in any IDE take part in an
+﻿// Command agent-center-claim lets an AI agent in any IDE take part in an
 // adjudication session.
 //
 // It exists because agents cannot speak websockets but can all run a shell
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/claims"
+	"agent_center/backend/claims"
 )
 
 type claimFlag struct {
@@ -39,7 +39,7 @@ func main() {
 		token    = flag.String("token", "", "join token")
 		author   = flag.String("author", "", "who is claiming (default: user@host/claude-code)")
 		provider = flag.String("provider", "", "model provider, e.g. claude or gemini")
-		outDir   = flag.String("out", ".claude-suite", "where to write verdict.json")
+		outDir   = flag.String("out", ".agent-center", "where to write verdict.json")
 		wait     = flag.Duration("wait", 30*time.Minute, "how long to wait for the outcome")
 		list     = flag.Bool("checks", false, "list the checks a claim may name, and exit")
 		wsPath   = flag.String("workspace", ".", "workspace root, for --checks")
@@ -72,7 +72,7 @@ func main() {
 	// discovers otherwise mid-review.
 	if *ping {
 		if err := pingSession(*host, *session, *token, who, *provider); err != nil {
-			fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+			fmt.Fprintln(os.Stderr, "agent-center-claim:", err)
 			os.Exit(1)
 		}
 		fmt.Println("ok: connected to", *host, "session", *session)
@@ -81,7 +81,7 @@ func main() {
 
 	if *say != "" {
 		if err := sayInSession(*host, *session, *token, who, *provider, *say); err != nil {
-			fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+			fmt.Fprintln(os.Stderr, "agent-center-claim:", err)
 			os.Exit(1)
 		}
 		fmt.Println("sent")
@@ -90,14 +90,14 @@ func main() {
 
 	if *listen > 0 {
 		if err := listenToSession(*host, *session, *token, who, *provider, *listen); err != nil {
-			fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+			fmt.Fprintln(os.Stderr, "agent-center-claim:", err)
 			os.Exit(1)
 		}
 		return
 	}
 
 	if err := run(*host, *session, *token, who, *provider, *outDir, *wait, c); err != nil {
-		fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+		fmt.Fprintln(os.Stderr, "agent-center-claim:", err)
 		os.Exit(1)
 	}
 }
@@ -105,7 +105,7 @@ func main() {
 func listChecks(workspace string) {
 	cat, err := claims.CatalogueFor(workspace)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "claude-suite-claim:", err)
+		fmt.Fprintln(os.Stderr, "agent-center-claim:", err)
 		os.Exit(1)
 	}
 	if len(cat.Checks) == 0 {

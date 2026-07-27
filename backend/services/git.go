@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"claude_suite/backend/sysproc"
+	"agent_center/backend/sysproc"
 )
 
 // logFieldSep separates the fields of one git-log line. A "|" was used before
