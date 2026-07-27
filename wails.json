@@ -1,6 +1,6 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "agent_center",
+  "name": "AgentCenter",
   "outputfilename": "AgentCenter",
   "frontend:install": "npm install --legacy-peer-deps",
   "frontend:build": "npm run build",
