@@ -163,6 +163,9 @@ cùng.
 **Hai giao diện, một backend**
 - App desktop Wails (Svelte 5): bảng Kanban, task inspector, command palette
   (`Ctrl+K`), văn phòng 3D
+- Phóng to/thu nhỏ giao diện bằng `Ctrl` + lăn chuột, hoặc `Ctrl` `+` / `Ctrl` `-`;
+  `Ctrl` `Shift` `0` về lại 100%. Mức zoom được nhớ giữa các lần mở app.
+  (`Ctrl` `0`–`9` là phím chuyển tab, nên phím reset mới phải kèm `Shift`.)
 - Giao diện terminal thuần bàn phím (Bubble Tea), chỉ đọc trừ khi truyền `--write`
 
 ---

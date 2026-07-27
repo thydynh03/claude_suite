@@ -164,6 +164,9 @@ in the top bar.
 **Two frontends, one backend**
 - Wails desktop app (Svelte 5): Kanban board, task inspector, command palette
   (`Ctrl+K`), 3D office view
+- Interface zoom with `Ctrl` + mouse wheel, or `Ctrl` `+` / `Ctrl` `-`;
+  `Ctrl` `Shift` `0` returns to 100%. The level is remembered between launches.
+  (`Ctrl` `0`–`9` are the navigation tabs, which is why reset takes `Shift`.)
 - Keyboard-native terminal UI (Bubble Tea), read-only unless you pass `--write`
 
 ---

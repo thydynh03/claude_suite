@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import TopNavBar from './components/layout/TopNavBar.svelte';
   import SideNavBar from './components/layout/SideNavBar.svelte';
   import CockpitPage from './components/pages/CockpitPage.svelte';
@@ -18,6 +18,8 @@
 
   import ToastHost from './components/ui/ToastHost.svelte';
   import CommandPalette from './components/ui/CommandPalette.svelte';
+  import ZoomIndicator from './components/ui/ZoomIndicator.svelte';
+  import { attachZoomControls } from './lib/stores/zoom';
   import OnboardingTour from './components/ui/OnboardingTour.svelte';
   import { activeTab, workspaceFolder, addLog, addTaskLog, addToast, setTaskScreenshot, sidebarCollapsed, tasksStore, agentsStore, onboardingOpen } from './lib/stores/appState';
   import * as AppBindings from '../wailsjs/go/main/App';
@@ -61,6 +63,9 @@
     'office', 'roles', 'settings',
   ];
 
+  let detachZoom: (() => void) | null = null;
+  onDestroy(() => detachZoom?.());
+
   function handleGlobalKeydown(e: KeyboardEvent) {
     // Escape closes the approval dialog. Closing it without an answer would
     // leave the waiting task blocked forever, so Escape means "reject".
@@ -93,6 +98,12 @@
     // script, so still before DOMContentLoaded) the queue lands in a live
     // listener instead of nowhere.
     registerEventListeners();
+
+    // Ctrl+wheel and Ctrl+plus/minus. Registered here rather than at module
+    // scope so it is torn down with the component, and before the awaits below
+    // for the same reason the Wails listeners are: a user who scrolls during
+    // the bootstrap round-trips should not have the gesture land on nothing.
+    detachZoom = attachZoomControls();
 
     // Wait until Wails IPC & Go bindings are fully injected by WebView2
     await new Promise<void>((resolve) => {
@@ -262,6 +273,7 @@
 
 <ToastHost />
 <CommandPalette />
+<ZoomIndicator />
 <OnboardingTour open={showOnboarding} on:close={closeOnboarding} />
 
 {#if showApprovalModal}
