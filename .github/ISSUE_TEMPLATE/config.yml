@@ -1,11 +1,11 @@
-blank_issues_enabled: true
+﻿blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability / Lỗ hổng bảo mật
-    url: https://github.com/thydynh03/claude_suite/security/advisories/new
+    url: https://github.com/thydynh03/agent_center/security/advisories/new
     about: Report privately, never in a public issue. Báo riêng tư, đừng mở issue công khai.
   - name: Question or idea / Câu hỏi hoặc ý tưởng
-    url: https://github.com/thydynh03/claude_suite/discussions
+    url: https://github.com/thydynh03/agent_center/discussions
     about: For anything that is not yet a bug or a concrete request. Cho những gì chưa phải lỗi hay yêu cầu cụ thể.
   - name: Setup and contributing guide / Hướng dẫn cài đặt và đóng góp
-    url: https://github.com/thydynh03/claude_suite/blob/master/CONTRIBUTING.md
+    url: https://github.com/thydynh03/agent_center/blob/master/CONTRIBUTING.md
     about: Prerequisites, what CI checks, and the rules that are not obvious from the code.

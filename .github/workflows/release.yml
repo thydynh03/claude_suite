@@ -1,4 +1,4 @@
-name: Automatic Build & Release
+﻿name: Automatic Build & Release
 
 # Build the full desktop app only when a version tag is pushed (or manually),
 # NOT on every master push — a full Wails build is slow and was running on each commit.
@@ -48,10 +48,10 @@ jobs:
         run: go test ./backend/... ./cmd/... -count=1
 
       - name: Go Test (race, TUI)
-        run: go test -race ./backend/tui ./cmd/claude-suite-tui
+        run: go test -race ./backend/tui ./cmd/agent-center-tui
 
       - name: Build TUI for Windows
-        run: GOOS=windows GOARCH=amd64 go build -o /tmp/ClaudeSuiteTUI.exe ./cmd/claude-suite-tui
+        run: GOOS=windows GOARCH=amd64 go build -o /tmp/AgentCenterTUI.exe ./cmd/agent-center-tui
 
       - name: Install Frontend Dependencies
         working-directory: ./frontend
@@ -133,10 +133,10 @@ jobs:
       # they are built after the app rather than before it.
       - name: Build Production Wails App + Installer
         run: |
-          wails build -platform windows/amd64 -clean -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
-          go build -o build/bin/claude-suite-claim.exe ./cmd/claude-suite-claim
-          go build -o build/bin/claude-suite-tui.exe ./cmd/claude-suite-tui
-          wails build -platform windows/amd64 -nsis -ldflags "-X claude_suite/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
+          wails build -platform windows/amd64 -clean -ldflags "-X agent_center/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
+          go build -o build/bin/agent-center-claim.exe ./cmd/agent-center-claim
+          go build -o build/bin/agent-center-tui.exe ./cmd/agent-center-tui
+          wails build -platform windows/amd64 -nsis -ldflags "-X agent_center/backend/version.BuildVersion=${{ steps.ver.outputs.tag }}"
 
       # Wails shells out to makensis itself and reports "Building 'amd64'
       # installer: Done." without showing its output, so a `File` line that
@@ -149,13 +149,13 @@ jobs:
         shell: pwsh
         working-directory: build/windows/installer
         run: |
-          makensis -V4 -DARG_WAILS_AMD64_BINARY="$(Resolve-Path ../../bin/ClaudeSuite.exe)" project.nsi
+          makensis -V4 -DARG_WAILS_AMD64_BINARY="$(Resolve-Path ../../bin/AgentCenter.exe)" project.nsi
           if ($LASTEXITCODE -ne 0) { Write-Error "makensis failed"; exit 1 }
 
       - name: Verify the companion tools were packaged
         shell: pwsh
         run: |
-          foreach ($tool in 'claude-suite-claim.exe','claude-suite-tui.exe') {
+          foreach ($tool in 'agent-center-claim.exe','agent-center-tui.exe') {
             if (-not (Test-Path "build/bin/$tool")) {
               Write-Error "$tool missing from build/bin — the installer would ship without it"
               exit 1
@@ -179,7 +179,7 @@ jobs:
       # This runs the installer instead of inspecting it. A `7z l` listing was
       # tried first and was doubted, because it reported the tools missing from an
       # installer built without /nonfatal, which cannot skip a file. Installing
-      # for real confirmed the listing: only claude_suite.exe and uninstall.exe
+      # for real confirmed the listing: only AgentCenter.exe and uninstall.exe
       # arrive. So the assertion stays on the thing that matters — what lands on a
       # user's disk. The runner is a throwaway VM, so installing on it is free.
       - name: The installer really delivers the companion tools
@@ -190,12 +190,12 @@ jobs:
           & $installer /S "/D=$target" | Out-Null
           # /S returns before the files are written; NSIS detaches from the console.
           $deadline = (Get-Date).AddSeconds(120)
-          while ((Get-Process makensis,ClaudeSuite-amd64-installer -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+          while ((Get-Process makensis,AgentCenter-amd64-installer -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
             Start-Sleep -Seconds 2
           }
           Start-Sleep -Seconds 5
           Get-ChildItem $target -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "installed: $($_.Name)" }
-          foreach ($tool in 'claude-suite-claim.exe','claude-suite-tui.exe','claude_suite.exe') {
+          foreach ($tool in 'agent-center-claim.exe','agent-center-tui.exe','AgentCenter.exe') {
             if (-not (Test-Path "$target\$tool")) {
               Write-Error "$tool was not installed — the installer does not carry it"
               exit 1
@@ -206,12 +206,12 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ClaudeSuite-Windows
+          name: AgentCenter-Windows
           path: |
-            build/bin/ClaudeSuite.exe
+            build/bin/AgentCenter.exe
             build/bin/*installer*.exe
-            build/bin/claude-suite-claim.exe
-            build/bin/claude-suite-tui.exe
+            build/bin/agent-center-claim.exe
+            build/bin/agent-center-tui.exe
 
       - name: Create GitHub Release on Tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -219,22 +219,22 @@ jobs:
         with:
           files: |
             build/bin/*installer*.exe
-            build/bin/ClaudeSuite.exe
-            build/bin/claude-suite-claim.exe
-            build/bin/claude-suite-tui.exe
+            build/bin/AgentCenter.exe
+            build/bin/agent-center-claim.exe
+            build/bin/agent-center-tui.exe
           name: Release ${{ github.ref_name }}
           body: |
-            Claude Suite ${{ github.ref_name }}
+            Agent Center ${{ github.ref_name }}
 
             **Cài đặt:** tải file `*-installer.exe` và chạy. App sẽ xuất hiện
             trong Start menu và gỡ được qua Apps & features như mọi ứng dụng khác.
 
-            `ClaudeSuite.exe` là bản chạy thẳng không cần cài, dành cho ai muốn
+            `AgentCenter.exe` là bản chạy thẳng không cần cài, dành cho ai muốn
             mang theo USB — nó không tạo shortcut và không tự cập nhật.
 
             Bản cài đặt kèm luôn hai công cụ dòng lệnh, đặt cạnh app:
-            `claude-suite-claim` (agent của đồng đội dùng để nộp claim — lệnh mà
-            app đưa cho bạn đã trỏ sẵn đường dẫn này) và `claude-suite-tui`
+            `agent-center-claim` (agent của đồng đội dùng để nộp claim — lệnh mà
+            app đưa cho bạn đã trỏ sẵn đường dẫn này) và `agent-center-tui`
             (giao diện terminal). Không cần cài Go hay build gì thêm.
           draft: false
           prerelease: false

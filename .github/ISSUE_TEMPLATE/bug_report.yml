@@ -1,4 +1,4 @@
-name: Bug report / Báo lỗi
+﻿name: Bug report / Báo lỗi
 description: Something behaves differently from what it says it does.
 title: "[Bug] "
 labels: ["bug"]
@@ -40,7 +40,7 @@ body:
     id: version
     attributes:
       label: Version / Phiên bản
-      description: Shown in the app's title bar, or `claude-suite-tui --check`.
+      description: Shown in the app's title bar, or `agent-center-tui --check`.
       placeholder: "v2.18.0"
     validations:
       required: true
@@ -52,7 +52,7 @@ body:
       options:
         - Desktop app (Wails)
         - Terminal UI (TUI)
-        - claude-suite-claim CLI
+        - agent-center-claim CLI
         - Build from source
         - Installer
     validations:
@@ -83,10 +83,10 @@ body:
     attributes:
       label: Log
       description: |
-        The log file lives in the data directory — `%LOCALAPPDATA%\ClaudeSuite` on Windows, `~/.claude_suite` elsewhere.
+        The log file lives in the data directory — `%LOCALAPPDATA%\AgentCenter` on Windows, `~/.agent_center` elsewhere.
         Startup messages are written there even when the window never renders.
 
-        File log nằm trong thư mục dữ liệu — `%LOCALAPPDATA%\ClaudeSuite` trên Windows, `~/.claude_suite` ở nơi khác.
+        File log nằm trong thư mục dữ liệu — `%LOCALAPPDATA%\AgentCenter` trên Windows, `~/.agent_center` ở nơi khác.
 
         **Check it for tokens before pasting. / Kiểm tra token trước khi dán.**
       render: shell
