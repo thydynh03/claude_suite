@@ -1,19 +1,23 @@
-﻿package main
+package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
-	"os/exec"
+	"agent_center/backend/sysproc"
 
 	"agent_center/backend/claims"
 	"agent_center/backend/cli"
@@ -64,6 +68,10 @@ type App struct {
 	claimsHost      *services.ClaimsHostService
 	mcpStore        *services.MCPStore
 	gitWatch        *services.GitWatchService
+
+	tunnelCmd    *exec.Cmd
+	tunnelCancel context.CancelFunc
+	tunnelMu     sync.Mutex
 
 	workspaceConfig    models.WorkspaceConfig
 	integrationsConfig models.IntegrationsConfig
@@ -2586,4 +2594,113 @@ func claimToolInstalled() bool {
 		}
 	}
 	return false
+}
+
+// StartTunnelProcess runs a shell/tunnel command (like cloudflared or ngrok) in background
+// and streams its log output line by line via Wails event 'tunnel_output'.
+// If a public URL (trycloudflare, ngrok, loca.lt) is detected in the log,
+// it emits 'tunnel_url_detected'.
+func (a *App) StartTunnelProcess(cmdStr string) (string, error) {
+	cmdStr = strings.TrimSpace(cmdStr)
+	if cmdStr == "" {
+		return "", fmt.Errorf("Lệnh rỗng")
+	}
+
+	a.tunnelMu.Lock()
+	if a.tunnelCmd != nil && a.tunnelCmd.Process != nil {
+		_ = a.tunnelCmd.Process.Kill()
+		if a.tunnelCancel != nil {
+			a.tunnelCancel()
+		}
+		a.tunnelCmd = nil
+		a.tunnelCancel = nil
+	}
+	a.tunnelMu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = sysproc.CommandContext(ctx, "powershell.exe", "-NoProfile", "-Command", cmdStr)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return "", fmt.Errorf("không mở được stdout: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		cancel()
+		return "", fmt.Errorf("không mở được stderr: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return "", fmt.Errorf("không khởi chạy được lệnh: %w", err)
+	}
+
+	a.tunnelMu.Lock()
+	a.tunnelCmd = cmd
+	a.tunnelCancel = cancel
+	a.tunnelMu.Unlock()
+
+	scanPipe := func(r io.Reader) {
+		scanner := bufio.NewScanner(r)
+		urlRegex := regexp.MustCompile(`https://[a-zA-Z0-9-]+\.(trycloudflare\.com|ngrok-free\.app|ngrok\.io|loca\.lt|lvh\.me)`)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if a.ctx != nil {
+				wailsRuntime.EventsEmit(a.ctx, "tunnel_output", map[string]string{
+					"line": line,
+				})
+				if match := urlRegex.FindString(line); match != "" {
+					wailsRuntime.EventsEmit(a.ctx, "tunnel_url_detected", map[string]string{
+						"url": match,
+					})
+				}
+			}
+		}
+	}
+
+	go scanPipe(stdout)
+	go scanPipe(stderr)
+
+	go func() {
+		_ = cmd.Wait()
+		a.tunnelMu.Lock()
+		if a.tunnelCmd == cmd {
+			a.tunnelCmd = nil
+			a.tunnelCancel = nil
+		}
+		a.tunnelMu.Unlock()
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "tunnel_stopped", map[string]string{})
+		}
+	}()
+
+	return "Đã khởi chạy lệnh tunnel", nil
+}
+
+func (a *App) StopTunnelProcess() bool {
+	a.tunnelMu.Lock()
+	defer a.tunnelMu.Unlock()
+	if a.tunnelCmd != nil && a.tunnelCmd.Process != nil {
+		_ = a.tunnelCmd.Process.Kill()
+		if a.tunnelCancel != nil {
+			a.tunnelCancel()
+		}
+		a.tunnelCmd = nil
+		a.tunnelCancel = nil
+		return true
+	}
+	return false
+}
+
+func (a *App) IsTunnelRunning() bool {
+	a.tunnelMu.Lock()
+	defer a.tunnelMu.Unlock()
+	return a.tunnelCmd != nil && a.tunnelCmd.Process != nil
 }

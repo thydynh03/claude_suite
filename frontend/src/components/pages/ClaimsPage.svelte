@@ -1,7 +1,8 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import * as AppBindings from '../../../wailsjs/go/main/App';
   import { addLog, addToast } from '../../lib/stores/appState';
+  import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
   interface Claim {
     id: string;
@@ -76,6 +77,74 @@
   let publicHost = '';
   let remoteTarget: { host: string; command: string; bootstrap: string; mcp: string; prompt: string } | null = null;
   let remoteBusy = false;
+
+  let customTunnelCmd = '';
+  $: if (!customTunnelCmd && port) {
+    customTunnelCmd = `cloudflared tunnel --url http://localhost:${port}`;
+  }
+  let isTunnelRunning = false;
+  let tunnelLogs: string[] = [];
+  let tunnelContainer: HTMLDivElement | null = null;
+
+  async function checkTunnelStatus() {
+    try {
+      if ((AppBindings as any).IsTunnelRunning) {
+        isTunnelRunning = await (AppBindings as any).IsTunnelRunning();
+      }
+    } catch (_) {}
+  }
+
+  onMount(() => {
+    checkTunnelStatus();
+    try {
+      EventsOn('tunnel_output', (data: any) => {
+        if (data && data.line) {
+          tunnelLogs = [...tunnelLogs, data.line];
+          if (tunnelContainer) {
+            setTimeout(() => {
+              if (tunnelContainer) tunnelContainer.scrollTop = tunnelContainer.scrollHeight;
+            }, 30);
+          }
+        }
+      });
+      EventsOn('tunnel_url_detected', (data: any) => {
+        if (data && data.url) {
+          publicHost = data.url;
+          addToast(`🎉 Đã tự động bắt URL Tunnel: ${data.url}`, 'SUCCESS');
+          if (selected) buildRemoteCommands();
+        }
+      });
+      EventsOn('tunnel_stopped', () => {
+        isTunnelRunning = false;
+        tunnelLogs = [...tunnelLogs, '--- Lệnh Tunnel đã dừng ---'];
+      });
+    } catch (_) {}
+  });
+
+  async function runTunnelCmd(cmdToRun?: string) {
+    const cmd = cmdToRun || customTunnelCmd;
+    if (!cmd.trim()) return;
+    customTunnelCmd = cmd;
+    isTunnelRunning = true;
+    tunnelLogs = [`> ${cmd}`, 'Đang khởi chạy...'];
+    try {
+      if ((AppBindings as any).StartTunnelProcess) {
+        await (AppBindings as any).StartTunnelProcess(cmd);
+      }
+    } catch (e) {
+      tunnelLogs = [...tunnelLogs, `Lỗi: ${e}`];
+      isTunnelRunning = false;
+    }
+  }
+
+  async function stopTunnelCmd() {
+    try {
+      if ((AppBindings as any).StopTunnelProcess) {
+        await (AppBindings as any).StopTunnelProcess();
+      }
+    } catch (e) {}
+    isTunnelRunning = false;
+  }
 
   async function buildRemoteCommands() {
     if (!publicHost.trim() || !selected) return;
@@ -535,14 +604,73 @@
               </p>
               <div class="flex items-center gap-2">
                 <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[11px] font-mono text-on-surface overflow-x-auto">cloudflared tunnel --url http://localhost:{port}</pre>
+                <button type="button" on:click={() => runTunnelCmd(`cloudflared tunnel --url http://localhost:${port}`)}
+                  class="bg-primary text-on-primary px-2.5 py-1 rounded text-xs font-medium hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap flex items-center gap-1">
+                  <span class="material-symbols-outlined text-xs">play_arrow</span> Chạy ngay
+                </button>
                 <button type="button" on:click={() => copyCommand(`cloudflared tunnel --url http://localhost:${port}`)}
                   class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
               </div>
               <div class="flex items-center gap-2">
                 <pre class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg p-2 text-[11px] font-mono text-on-surface overflow-x-auto">ngrok http {port}</pre>
+                <button type="button" on:click={() => runTunnelCmd(`ngrok http ${port}`)}
+                  class="bg-primary text-on-primary px-2.5 py-1 rounded text-xs font-medium hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap flex items-center gap-1">
+                  <span class="material-symbols-outlined text-xs">play_arrow</span> Chạy ngay
+                </button>
                 <button type="button" on:click={() => copyCommand(`ngrok http ${port}`)}
                   class="text-xs text-primary font-medium hover:underline cursor-pointer whitespace-nowrap">Sao chép</button>
               </div>
+
+              <!-- Interactive Quick Terminal -->
+              <div class="my-3 bg-surface-container-lowest border border-outline-variant rounded-xl p-3 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-semibold text-on-surface flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-sm text-primary">terminal</span>
+                    Terminal chạy lệnh Tunnel trực tiếp trên máy
+                  </span>
+                  <div class="flex items-center gap-2">
+                    {#if isTunnelRunning}
+                      <span class="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Đang chạy
+                      </span>
+                      <button type="button" on:click={stopTunnelCmd} class="bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded text-xs hover:bg-red-500/30 cursor-pointer font-medium">
+                        ⏹️ Dừng lệnh
+                      </button>
+                    {:else}
+                      <span class="text-[11px] text-on-surface-variant">○ Sẵn sàng</span>
+                    {/if}
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    bind:value={customTunnelCmd}
+                    placeholder="Nhập lệnh tunnel (vd: cloudflared tunnel --url http://localhost:9111)"
+                    class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg px-3 py-1.5 text-xs font-mono text-on-surface outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    on:click={() => runTunnelCmd()}
+                    disabled={isTunnelRunning || !customTunnelCmd.trim()}
+                    class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer whitespace-nowrap flex items-center gap-1"
+                  >
+                    <span class="material-symbols-outlined text-sm">play_arrow</span> Chạy
+                  </button>
+                </div>
+
+                {#if tunnelLogs.length > 0}
+                  <div
+                    bind:this={tunnelContainer}
+                    class="bg-black/90 text-green-400 font-mono text-[11px] p-3 rounded-lg max-h-48 overflow-y-auto space-y-0.5 border border-outline-variant/50 shadow-inner"
+                  >
+                    {#each tunnelLogs as line}
+                      <div class="whitespace-pre-wrap break-all leading-relaxed">{line}</div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+
               <p class="text-xs text-on-surface-variant">
                 Lệnh in ra một URL dạng <span class="font-mono">https://…</span> — dán vào đây để tạo bộ lệnh cho URL đó
                 (URL + token trong lệnh là chìa khoá vào phiên: chỉ gửi cho người mình mời):
