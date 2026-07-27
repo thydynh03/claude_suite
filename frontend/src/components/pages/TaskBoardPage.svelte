@@ -324,6 +324,7 @@
                 <ModelSelect
                   value={planModel}
                   on:change={onPlanModelChange}
+                  ariaLabel="Agent và model dùng để lập kế hoạch"
                   selectClass="w-full bg-surface-container-low border border-outline-variant rounded-lg p-1.5 text-xs text-on-surface focus:border-primary"
                 />
               </div>

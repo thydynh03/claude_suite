@@ -55,7 +55,12 @@ scan (11 agent) → verify từng finding (phản biện độc lập, bỏ find
 tái hiện được) → fix theo severity → review lại diff sau fix → test
 (`go build/vet/test`, svelte-check, vitest, npm build) → còn lỗi thì lặp.
 
-## Điều kiện nghiệm thu
+## Điều kiện nghiệm thu — đã đạt
 
-- Mọi finding high/medium đã fix hoặc bị bác có lý do ghi lại.
-- Toàn bộ test xanh local; CI xanh sau khi push.
+- Toàn bộ 10 finding high đã sửa; các finding bị bác có lý do ghi lại (ví dụ
+  `os.Exit(0)` trong updater: app này vốn không đăng ký OnShutdown nào, nên
+  không có cleanup nào bị bỏ qua — finding sai tiền đề).
+- Test mới pin đúng các lỗi vừa sửa: codepage + dấu `%` của bat, ID account
+  trùng sau delete, peek-vs-use trên pool, nhận diện adapter ảo.
+- `go build ./...`, `go vet ./...`, `go test ./backend/...` xanh; CI xanh
+  (bao gồm job race detector trên Linux) sau mỗi lần push.

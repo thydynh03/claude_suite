@@ -179,25 +179,27 @@
               {#if !['agents.md', 'claude.md', 'antigravity.md'].includes(role)}
                 <!-- Two-step confirm, in place of the native confirm() popup.
                      The first click has to *say* it armed something, or the
-                     button just looks broken. -->
-                {#if confirmingDelete === role}
-                  <button
-                    class="flex-shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-medium text-error hover:bg-error/10 transition-colors cursor-pointer whitespace-nowrap"
-                    on:click|stopPropagation={() => deleteRole(role)}
-                    title="Bấm lần nữa để xoá"
-                  >
+                     button just looks broken.
+
+                     ONE button whose contents change, not an {#if}/{:else}
+                     pair: swapping elements destroys the armed button, focus
+                     drops to <body>, and the second Enter reaches nothing —
+                     so step two stayed unreachable from the keyboard even
+                     after the bubbling bug next door was fixed. -->
+                <button
+                  class="flex-shrink-0 rounded-lg transition-colors cursor-pointer {confirmingDelete === role
+                    ? 'px-2 py-0.5 text-[11px] font-medium text-error hover:bg-error/10 whitespace-nowrap'
+                    : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 text-on-surface-variant hover:text-error hover:bg-error/10'}"
+                  on:click|stopPropagation={() => deleteRole(role)}
+                  title={confirmingDelete === role ? 'Bấm lần nữa để xoá' : 'Xoá role'}
+                  aria-label={confirmingDelete === role ? `Xác nhận xoá role ${role}` : `Xoá role ${role}`}
+                >
+                  {#if confirmingDelete === role}
                     Xoá?
-                  </button>
-                {:else}
-                  <button
-                    class="flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
-                    on:click|stopPropagation={() => deleteRole(role)}
-                    title="Xoá role"
-                    aria-label={`Xoá role ${role}`}
-                  >
+                  {:else}
                     <span class="material-symbols-outlined text-sm block">delete</span>
-                  </button>
-                {/if}
+                  {/if}
+                </button>
               {/if}
             </div>
           {/each}

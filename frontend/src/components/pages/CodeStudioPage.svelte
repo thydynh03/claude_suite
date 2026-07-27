@@ -286,7 +286,9 @@
       time: timeStr,
       fileSnapshots: { [activeTabPath]: initialOriginal },
       logs: [],
-      output: 'Agent đang thực thi...',
+      // Empty, not a placeholder sentence: anything rendered from `output`
+      // would otherwise show "Agent đang thực thi..." as the model's answer.
+      output: '',
       linesAdded: 0,
       linesRemoved: 0,
       status: 'running',
@@ -342,7 +344,10 @@
           } else {
             addTurnLog('success', `Phân tích xong. Tệp ${activeTabPath} không bị thay đổi.`);
           }
-          if (targetTurn) targetTurn.status = 'completed';
+          // An edit request that produced no code block did not succeed. It
+          // used to land in the 'completed' branch, which draws a green check
+          // and "Đã sửa 1 file (+0 -0)" over a turn that wrote nothing.
+          if (targetTurn) targetTurn.status = mode === 'edit' ? 'error' : 'completed';
           addLog(`AI đã trả lời về ${activeTabPath} (không sửa tệp)`, 'SUCCESS');
         } else {
           const newContent = block;
@@ -421,6 +426,7 @@
       const targetTurn = turns.find(t => t.id === turnId);
       if (targetTurn) {
         targetTurn.status = 'error';
+        targetTurn.output = `Lỗi hệ thống: ${e?.message || e}`;
       }
       addTurnLog('error', `Lỗi hệ thống: ${e?.message || e}`);
     } finally {

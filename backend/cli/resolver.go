@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -115,10 +116,15 @@ func isExecutableFile(path string) bool {
 		return false
 	}
 	// On Windows only a handful of extensions are runnable; a data file that
-	// happens to be named "claude" is not a CLI.
+	// happens to be named "claude" is not a CLI. .ps1 is deliberately absent:
+	// CreateProcess cannot execute one, so returning it produces the same
+	// "%1 is not a valid Win32 application" this function exists to prevent.
+	// An extensionless file is executable on Unix and never on Windows.
 	switch strings.ToLower(filepath.Ext(path)) {
-	case ".exe", ".cmd", ".bat", ".com", ".ps1", "":
+	case ".exe", ".cmd", ".bat", ".com":
 		return true
+	case "":
+		return runtime.GOOS != "windows"
 	default:
 		return false
 	}

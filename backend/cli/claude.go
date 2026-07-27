@@ -28,13 +28,13 @@ const claudeMissingMessage = "chưa tìm thấy Claude Code CLI trên máy này.
 	"rồi chạy lại task — không cần khởi động lại app."
 
 type ClaudeCLI struct {
-	executablePath string
+	executablePath *resolvedPath
 	antigravity    *AntigravityCLI
 }
 
 func NewClaudeCLI() *ClaudeCLI {
 	return &ClaudeCLI{
-		executablePath: ResolveClaudeCLI(),
+		executablePath: newResolvedPath(ResolveClaudeCLI()),
 		antigravity:    NewAntigravityCLI(),
 	}
 }
@@ -99,14 +99,9 @@ func (c *ClaudeCLI) executeCtx(parent context.Context, model, prompt, system, se
 	// resolved once at app start, so the natural repair loop — task fails, user
 	// installs the CLI, user retries — kept failing: a running process never
 	// sees the PATH an installer just extended.
-	exePath := c.executablePath
-	if !CLIInstalled(exePath) {
-		if fresh := ResolveClaudeCLI(); CLIInstalled(fresh) {
-			exePath = fresh
-			c.executablePath = fresh
-		} else {
-			return &RunResult{Success: false, Error: claudeMissingMessage}
-		}
+	exePath, ok := c.executablePath.ensure(ResolveClaudeCLI)
+	if !ok {
+		return &RunResult{Success: false, Error: claudeMissingMessage}
 	}
 
 	cmd := newCLICommand(ctx, exePath, args)

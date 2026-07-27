@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -324,6 +325,40 @@ func TestPeekCurrentAccountDoesNotCountARequest(t *testing.T) {
 	pool.GetCurrentAccount()
 	if after := pool.GetKeys()[0].Usage.Requests; after != before+1 {
 		t.Errorf("an actual run did not count: %d → %d", before, after)
+	}
+}
+
+// The runners share one instance across every task goroutine, so re-resolving
+// the executable must not be a plain field write. This drives the concurrent
+// path the race detector job would otherwise catch in production code.
+func TestResolvedPathSurvivesConcurrentEnsure(t *testing.T) {
+	rp := newResolvedPath("claude") // the bare fallback: not installed
+	resolved := "C:\\tools\\claude.exe"
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if got, ok := rp.ensure(func() string { return resolved }); !ok || got != resolved {
+				t.Errorf("ensure returned (%q, %v), want the resolved path", got, ok)
+			}
+			_ = rp.get()
+		}()
+	}
+	wg.Wait()
+
+	if rp.get() != resolved {
+		t.Errorf("cached path = %q, want %q", rp.get(), resolved)
+	}
+}
+
+// When nothing resolves, the caller must be told so it can name the missing
+// CLI rather than surfacing a raw exec error about %PATH%.
+func TestResolvedPathReportsWhenNothingIsInstalled(t *testing.T) {
+	rp := newResolvedPath("agy")
+	if _, ok := rp.ensure(func() string { return "agy" }); ok {
+		t.Error("ensure reported success for the bare fallback name")
 	}
 }
 

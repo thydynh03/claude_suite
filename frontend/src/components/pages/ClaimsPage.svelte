@@ -801,10 +801,13 @@
      trong app thay cho confirm() của webview. -->
 {#if confirmFinish}
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <!-- tabindex="-1": a full-viewport invisible button is otherwise the first
+         tab stop inside the dialog, and Enter on it silently dismisses. -->
     <button
       type="button"
+      tabindex="-1"
+      aria-hidden="true"
       class="absolute inset-0 cursor-default"
-      aria-label="Đóng hộp thoại"
       on:click={() => (confirmFinish = false)}
     ></button>
     <div class="relative w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">

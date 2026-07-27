@@ -795,10 +795,13 @@
 {#if confirmDelete}
   {@const cd = confirmDelete}
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <!-- tabindex="-1": see ClaimsPage — an invisible full-viewport button is
+         otherwise the dialog's first tab stop. -->
     <button
       type="button"
+      tabindex="-1"
+      aria-hidden="true"
       class="absolute inset-0 cursor-default"
-      aria-label="Đóng hộp thoại"
       on:click={() => (confirmDelete = null)}
     ></button>
     <div class="relative w-full max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 shadow-lg">

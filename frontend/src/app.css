@@ -99,6 +99,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* An icon is a glyph, not a line of prose. Moving the icon stylesheet into the
+   base layer let Tailwind's text-* utilities override its `line-height: 1` as
+   well as its font-size, so every icon gained the leading of body text: an
+   18px glyph sat in a 28px box — taller than the 24px it replaced. This rule
+   goes in the utilities layer, after Tailwind's own, so it wins on order at
+   equal specificity while leaving font-size to the text-* class. */
+@layer utilities {
+  .material-symbols-outlined {
+    line-height: 1;
+  }
+}
+
 /* Keyboard focus must stay visible app-wide: many controls strip the UA
    outline with `outline-none`, so this restores a consistent ring for
    keyboard users only (mouse clicks do not match :focus-visible). */

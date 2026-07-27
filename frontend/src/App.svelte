@@ -86,6 +86,14 @@
   }
 
   onMount(async () => {
+    // Event listeners FIRST, before any await. Wails drops an event that has
+    // no listener, and the backend flushes everything startup said at
+    // OnDomReady — which fires long before the IPC-wait and the four bootstrap
+    // round-trips below would finish. Registered here (a deferred module
+    // script, so still before DOMContentLoaded) the queue lands in a live
+    // listener instead of nowhere.
+    registerEventListeners();
+
     // Wait until Wails IPC & Go bindings are fully injected by WebView2
     await new Promise<void>((resolve) => {
       const check = setInterval(() => {
@@ -135,6 +143,9 @@
       }
     } catch (_) {}
 
+  });
+
+  function registerEventListeners() {
     try {
       EventsOn('log_entry', (data: any) => {
         if (data && data.message) {
@@ -186,7 +197,7 @@
     } catch (e) {
       console.warn('Wails events error:', e);
     }
-  });
+  }
 
   function resolveApproval(approved: boolean) {
     showApprovalModal = false;

@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { MergeView } from '@codemirror/merge';
   import { EditorView, lineNumbers } from '@codemirror/view';
-  import { EditorState } from '@codemirror/state';
+  import { EditorState, Compartment } from '@codemirror/state';
   import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
   import { oneDark } from '@codemirror/theme-one-dark';
   import { languageFor } from '../../lib/editorLang';
@@ -41,7 +41,20 @@
   $: normOriginal = original.replace(/\r\n/g, '\n');
   $: normModified = modified.replace(/\r\n/g, '\n');
 
-  function paneExtensions() {
+  // Font size lives in a compartment, like CodeEditor's. Rebuilding the whole
+  // MergeView on every stepper click would drop the scroll position and
+  // re-collapse every unchanged section the reader had just expanded — and the
+  // stepper fires a dozen times in a row.
+  const metricsA = new Compartment();
+  const metricsB = new Compartment();
+
+  function metricsTheme(px: number) {
+    return EditorView.theme({
+      '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: `${px}px` },
+    });
+  }
+
+  function paneExtensions(metrics: Compartment) {
     return [
       lineNumbers(),
       EditorView.editable.of(false),
@@ -50,9 +63,7 @@
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       languageFor(path),
       ...(dark ? [oneDark] : []),
-      EditorView.theme({
-        '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: `${fontSize}px` },
-      }),
+      metrics.of(metricsTheme(fontSize)),
     ];
   }
 
@@ -65,7 +76,6 @@
   let builtModified = '';
   let builtPath = '';
   let builtDark = true;
-  let builtFontSize = 13;
 
   function build() {
     if (!host) return;
@@ -73,11 +83,10 @@
     builtModified = normModified;
     builtPath = path;
     builtDark = dark;
-    builtFontSize = fontSize;
     view?.destroy();
     view = new MergeView({
-      a: { doc: normOriginal, extensions: paneExtensions() },
-      b: { doc: normModified, extensions: paneExtensions() },
+      a: { doc: normOriginal, extensions: paneExtensions(metricsA) },
+      b: { doc: normModified, extensions: paneExtensions(metricsB) },
       parent: host,
       // Chunk backgrounds plus per-character emphasis inside each chunk.
       highlightChanges: true,
@@ -100,13 +109,16 @@
   $: if (
     view &&
     host &&
-    (normOriginal !== builtOriginal ||
-      normModified !== builtModified ||
-      path !== builtPath ||
-      dark !== builtDark ||
-      fontSize !== builtFontSize)
+    (normOriginal !== builtOriginal || normModified !== builtModified || path !== builtPath || dark !== builtDark)
   ) {
     build();
+  }
+
+  // Font size is reconfigured in place — no rebuild, so folds and scroll stay.
+  $: if (view) {
+    const t = metricsTheme(fontSize);
+    view.a.dispatch({ effects: metricsA.reconfigure(t) });
+    view.b.dispatch({ effects: metricsB.reconfigure(t) });
   }
 </script>
 

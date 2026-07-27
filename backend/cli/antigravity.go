@@ -477,12 +477,12 @@ const antigravityMissingMessage = "chưa tìm thấy Antigravity/Gemini CLI (agy
 	"Cài rồi chạy lại task — không cần khởi động lại app."
 
 type AntigravityCLI struct {
-	executablePath string
+	executablePath *resolvedPath
 }
 
 func NewAntigravityCLI() *AntigravityCLI {
 	return &AntigravityCLI{
-		executablePath: ResolveAntigravityCLI(),
+		executablePath: newResolvedPath(ResolveAntigravityCLI()),
 	}
 }
 
@@ -556,14 +556,9 @@ func (a *AntigravityCLI) execute(parent context.Context, model, prompt, system s
 	// Same two guards as the Claude runner: a stale cached path (the CLI was
 	// installed after the app started) and a workspace that no longer exists,
 	// which silently ran the agent in the app's own directory.
-	exePath := a.executablePath
-	if !CLIInstalled(exePath) {
-		if fresh := ResolveAntigravityCLI(); CLIInstalled(fresh) {
-			exePath = fresh
-			a.executablePath = fresh
-		} else {
-			return &RunResult{Success: false, Error: antigravityMissingMessage}
-		}
+	exePath, ok := a.executablePath.ensure(ResolveAntigravityCLI)
+	if !ok {
+		return &RunResult{Success: false, Error: antigravityMissingMessage}
 	}
 
 	cmd := newCLICommand(ctx, exePath, args)

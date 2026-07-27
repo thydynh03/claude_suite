@@ -93,6 +93,9 @@ type hosted struct {
 	session *Session
 	token   string
 	expires time.Time
+	// hardExpires is the ceiling the sliding expiry may not pass, so a polling
+	// agent cannot keep a session alive indefinitely.
+	hardExpires time.Time
 
 	mu        sync.Mutex
 	conns     map[string]*connection
@@ -191,10 +194,14 @@ func (h *Host) Open(subject string, ttl time.Duration) (sessionID, token string,
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sessions[id] = &hosted{
-		session:    NewSession(id, subject),
-		token:      token,
-		expires:    time.Now().Add(ttl),
-		conns:      map[string]*connection{},
+		session: NewSession(id, subject),
+		token:   token,
+		expires: time.Now().Add(ttl),
+		// A day is far past any real adjudication (collect + up to 30 minutes
+		// of falsifier runs + debate), and short enough that a forgotten
+		// session and its token do not outlive the working day.
+		hardExpires: time.Now().Add(24 * time.Hour),
+		conns:       map[string]*connection{},
 		submitted:  map[string]bool{},
 		remote:     map[string]time.Time{},
 		remoteKeys: map[string]string{},
@@ -239,8 +246,18 @@ func (h *Host) lookup(id, token string) (*hosted, error) {
 	//
 	// s.expires is only ever touched under h.mu (here and in Open), never
 	// under the per-session lock, so this stays race-free.
+	//
+	// The slide is capped: the MCP instructions tell agents to keep polling, so
+	// an agent left running would otherwise hold its session — and its join
+	// token, which is short-lived on purpose — valid forever, with the whole
+	// transcript pinned in memory.
 	if min := time.Now().Add(15 * time.Minute); s.expires.Before(min) {
-		s.expires = min
+		if min.After(s.hardExpires) {
+			min = s.hardExpires
+		}
+		if min.After(s.expires) {
+			s.expires = min
+		}
 	}
 	return s, nil
 }
@@ -667,7 +684,16 @@ func (h *Host) Finish(sessionID string) (*Outcome, error) {
 	// "cannot record before adjudicating" guard. Finishing during collect
 	// turned every verifiable claim into Inconclusive→Escalated without a
 	// single falsifier having run — one click, no undo, no way to reopen.
-	if hs.session.Phase() == PhaseCollect {
+	//
+	// `closed` is consulted too: maybeAdjudicate sets it and then advances the
+	// phase from a goroutine, so for a moment the session is on its way out
+	// while still reporting PhaseCollect. Refusing on the phase alone left that
+	// window with both doors shut — Finish said "still collecting" and
+	// ForceAdjudicate said "already left collect".
+	hs.mu.Lock()
+	closing := hs.closed
+	hs.mu.Unlock()
+	if hs.session.Phase() == PhaseCollect && !closing {
 		return nil, fmt.Errorf("phiên đang thu thập claim — bấm \"Chạy kiểm chứng ngay\" trước khi chốt, nếu không mọi claim sẽ bị bỏ ngỏ")
 	}
 

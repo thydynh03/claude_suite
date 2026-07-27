@@ -998,7 +998,9 @@ func (a *App) loadAntiKeys() {
 	if err != nil {
 		// A sealed file this user cannot open — copied from another machine
 		// or account. Refusing beats silently starting with an empty pool
-		// and overwriting the file on the next save.
+		// and overwriting the file on the next save: this is the branch that
+		// case actually takes, so it is the one that most needs the guard.
+		a.antiKeysLoadFailed = true
 		a.emitLog("❌ Không giải mã được anti_accounts.json (file thuộc máy/tài khoản khác?): "+err.Error(), "ERROR")
 		return
 	}
@@ -1021,15 +1023,23 @@ func (a *App) loadAntiKeys() {
 }
 
 func (a *App) saveAntiKeys() {
-	// The file could not be read this session, so what is in memory is not a
-	// newer version of it — it is nothing. Writing that over a damaged but
-	// recoverable file destroys the refresh tokens for good.
-	if a.antiKeysLoadFailed {
-		a.emitLog("⚠️ Bỏ qua lưu anti_accounts.json: file hiện tại chưa đọc được, ghi đè sẽ mất toàn bộ tài khoản cũ.", "WARN")
-		return
-	}
 	dbDir := filepath.Dir(database.GetDBPath())
 	cfgPath := filepath.Join(dbDir, "anti_accounts.json")
+
+	// The file could not be read this session, so what is in memory is not a
+	// newer version of it — it is nothing. Rather than refuse every save for
+	// the rest of the session (which silently blocked adding accounts, signing
+	// in, every toggle), the unreadable file is moved aside once and named, so
+	// nothing is destroyed and the user is not stuck.
+	if a.antiKeysLoadFailed {
+		backup := fmt.Sprintf("%s.unreadable-%d", cfgPath, time.Now().Unix())
+		if err := os.Rename(cfgPath, backup); err != nil && !os.IsNotExist(err) {
+			a.emitLog("⚠️ Chưa lưu được tài khoản: file cũ không đọc được và cũng không đổi tên được ("+err.Error()+"). Hãy tự sao lưu rồi xoá "+cfgPath, "ERROR")
+			return
+		}
+		a.antiKeysLoadFailed = false
+		a.emitLog("⚠️ File anti_accounts.json cũ không đọc được — đã giữ lại tại "+backup+" và tạo file mới. Không mất dữ liệu cũ.", "WARN")
+	}
 	data, _ := json.MarshalIndent(cli.GlobalAntiPool.GetKeys(), "", "  ")
 	// DPAPI-sealed to this Windows user: the file holds OAuth refresh
 	// tokens, and 0600 alone does nothing against anything running as the
@@ -2135,15 +2145,27 @@ func (a *App) emitLog(message, level string) {
 		"time":    time.Now().Format("15:04:05"),
 	}
 
+	// Every line goes to the log file, not just the queued ones: the event bus
+	// keeps nothing, so an error the user scrolled past is gone the moment the
+	// app closes.
+	if level == "ERROR" {
+		logger.Error(message)
+	} else {
+		logger.Info(level + ": " + message)
+	}
+
 	// Wails drops an event nobody is listening for, and the frontend registers
 	// its listeners as it mounts — so everything startup had to say (a data
 	// file that could not be decrypted, tasks recovered from a killed session)
 	// used to vanish. Those lines are held until the DOM is ready.
 	a.noticeMu.Lock()
 	if !a.domIsReady {
-		a.pendingNotices = append(a.pendingNotices, entry)
+		// Bounded: a broken WebView2 runtime means OnDomReady never fires, and
+		// the schedulers keep logging for as long as the app is open.
+		if len(a.pendingNotices) < 500 {
+			a.pendingNotices = append(a.pendingNotices, entry)
+		}
 		a.noticeMu.Unlock()
-		logger.Info(level + ": " + message)
 		return
 	}
 	a.noticeMu.Unlock()
@@ -2152,7 +2174,15 @@ func (a *App) emitLog(message, level string) {
 }
 
 // domReady flushes what startup said before anyone could hear it.
+//
+// The flush is delayed a beat on purpose. OnDomReady is DOMContentLoaded; the
+// frontend registers its listeners in onMount, and Wails drops an event with
+// no listener — so flushing at the instant DOM-ready fires can still be
+// flushing into nothing on a slow first paint. App.svelte registers before its
+// awaits for the same reason; this is the second half of the same fix.
 func (a *App) domReady(ctx context.Context) {
+	time.Sleep(300 * time.Millisecond)
+
 	a.noticeMu.Lock()
 	a.domIsReady = true
 	pending := a.pendingNotices
@@ -2187,14 +2217,23 @@ func (a *App) ClaimsHostStatus() map[string]interface{} {
 	if a.claimsHost.IsRunning() {
 		workspace = a.claimsHost.Workspace()
 	}
+	if workspace == "" {
+		// Discovery against an empty path stats relative names in whatever
+		// directory the exe was launched from — Downloads, for a portable copy
+		// — and the page then lists falsifiers belonging to a folder the user
+		// never chose. Do not look at all.
+		return map[string]interface{}{
+			"running":  a.claimsHost.IsRunning(),
+			"addr":     a.claimsHost.Addr(),
+			"checks":   []string{},
+			"warning":  "Chưa chọn workspace — hãy chọn thư mục dự án trước, catalogue check và falsifier đều đọc từ đó.",
+			"sessions": a.claimsHost.SessionIDs(),
+		}
+	}
 	checks, err := a.claimsHost.CatalogueNames(workspace)
 	warning := ""
 	if err != nil {
 		warning = err.Error()
-	} else if workspace == "" {
-		// Discovery against an empty path stats relative names in whatever
-		// directory the exe was launched from, so say what is actually wrong.
-		warning = "Chưa chọn workspace — hãy chọn thư mục dự án trước, catalogue check và falsifier đều đọc từ đó."
 	} else if len(checks) == 0 {
 		// Worth saying plainly: with no checks every claim becomes an opinion and
 		// nothing can ever block, which looks like the feature is broken. Checks

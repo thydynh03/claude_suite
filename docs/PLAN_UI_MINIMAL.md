@@ -26,21 +26,26 @@ nhất trên mọi page, light + dark.
 ## Hạng mục
 
 - [x] **Fonts/icons offline**: bỏ Google Fonts links; bundle `@fontsource/geist-sans`,
-  `@fontsource/jetbrains-mono`, `material-symbols` qua npm + main.ts. Sửa mojibake
-  `<title>`. (đã làm)
-- [ ] **Shell**: TopNavBar + SideNavBar + App.svelte — icon neutral một màu, bỏ
-  cờ 🇻🇳/🇺🇸 (thay chữ "VI/EN"), bỏ ALL-CAPS, thu icon toolbar về 16–20px, bỏ
-  "v4.8 Orchestrator" hardcode (đọc version thật từ backend), nút Prompt
-  Architect bớt nổi.
-- [ ] **KanbanView + TaskBoardPage**: cột phẳng, header cột không màu mè, card
-  viền 1px, drawer Inspector cùng ngôn ngữ.
-- [ ] **CodeStudioPage + GitPanel + DiffView**: thanh công cụ gọn, tab file kiểu
-  editor tối giản.
-- [ ] **SettingsPage + SchedulerPage + MemoryPage**: form phẳng, section header
-  chữ thường, bỏ emoji template.
-- [ ] **ClaimsPage + OAuthPoolDashboard + BrowserAgentPage + CockpitPage**: như trên.
-- [ ] **Misc**: VirtualOffice3D, AgentRolesPage, Docs, Support, OnboardingTour,
+  `@fontsource/jetbrains-mono`, `material-symbols` qua npm. Sửa mojibake `<title>`.
+- [x] **Shell**: TopNavBar + SideNavBar + App.svelte — icon neutral, bỏ cờ
+  emoji, bỏ ALL-CAPS, version thật từ backend, phím tắt ma đã gỡ/nối đúng.
+- [x] **KanbanView + TaskBoardPage** — kèm modal quota-fallback vốn không tồn tại.
+- [x] **CodeStudioPage + GitPanel** (DiffView chỉ nhận thêm prop fontSize).
+- [x] **SettingsPage + SchedulerPage + MemoryPage**.
+- [x] **ClaimsPage + OAuthPoolDashboard + BrowserAgentPage + CockpitPage**.
+- [x] **Misc**: VirtualOffice3D, AgentRolesPage, Docs, Support, OnboardingTour,
   AgentFormModal, MCPManager, CommandPalette, ToastHost, Dropdown, ModelSelect.
+
+### Bẫy đã trả giá: cascade layer
+
+`import 'material-symbols/outlined.css'` trong `main.ts` nạp CSS đó **ngoài
+layer**, còn utility của Tailwind nằm trong `@layer utilities` — khai báo
+unlayered thắng mọi khai báo layered cùng specificity. Hệ quả: `font-size:
+24px` của package đè mọi `text-sm/base/lg`, **toàn bộ 34 icon render 24px bất
+kể class**, và không ảnh chụp nào lộ ra điều đó. Phải import từ `app.css` với
+`layer(base)`, sau `@import "tailwindcss"` (dòng này mới là chỗ khai báo thứ tự
+layer). Kiểm chứng bằng `getComputedStyle(el).fontSize` trên app đang chạy, chứ
+không bằng mắt.
 
 ## Chi tiết theo file (từ scan wf_6f420570 — 239 finding UI: 24 high, ~115 medium, ~100 low)
 
@@ -69,10 +74,13 @@ Toàn bộ danh sách chi tiết nằm trong scratchpad phiên làm việc
 (`findings-ui-*.md`) và được giao cho 6 fixer agent theo nhóm file (workflow
 wf_e21390d7): shell / board / studio / settings / ops / misc.
 
-## Điều kiện nghiệm thu
+## Điều kiện nghiệm thu — đã đạt
 
-- `git grep` không còn emoji trong template `.svelte` (ngoài phần render log).
-- Không còn class màu thô (`rose-*`, `emerald-*`, `amber-*`, hex) ngoài bộ token
-  + 3 màu ngữ nghĩa đã định nghĩa tập trung.
-- svelte-check 0 lỗi, vitest xanh, npm build xanh; soi bằng mắt các page chính
-  ở cả light lẫn dark.
+- Không còn emoji làm chrome trong template `.svelte` (log backend giữ nguyên).
+- `grep` toàn bộ `frontend/src`: 0 class palette thô, 0 hex trong class, 0
+  gradient, 0 `rounded-2xl`.
+- Icon: đo trên app đang chạy — 34/34 ở 14px/16px/18px, không cái nào >18px.
+- Token mới resolve ra màu thật (`--warning: #b45309`), không phải fallback
+  trong suốt — đo bằng `getComputedStyle`.
+- svelte-check 0 lỗi, 124 test, build sạch, CI xanh; soi mắt các page chính ở
+  cả light lẫn dark.

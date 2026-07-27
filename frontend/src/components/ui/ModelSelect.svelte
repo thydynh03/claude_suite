@@ -46,6 +46,12 @@
    */
   export let selectClass =
     'w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-xs text-on-surface focus:border-primary';
+  /**
+   * Accessible name for the control. Call sites used to write a <label for>
+   * pointing at an id this component never rendered, so the label was attached
+   * to nothing and the dropdown announced itself as unlabelled.
+   */
+  export let ariaLabel = 'Chọn model';
 
   const CUSTOM = '__custom__';
   const dispatch = createEventDispatcher<{ change: { value: string; provider: 'claude' | 'anti' } }>();
@@ -88,7 +94,7 @@
 </script>
 
 {#if !useCustom}
-  <select class={selectClass} {value} on:change={onSelect}>
+  <select class={selectClass} {value} aria-label={ariaLabel} on:change={onSelect}>
     {#if provider === ''}
       <optgroup label="Claude Agent">
         {#each claudeModels as m (m.id)}
@@ -113,6 +119,7 @@
       class={selectClass}
       bind:value={customText}
       on:change={onCustomChange}
+      aria-label={ariaLabel}
       placeholder="model id (vd: claude-opus-5)"
       spellcheck="false"
     />
