@@ -236,6 +236,79 @@
     }
   }
 
+  // Reading the real plan and quota from Google's Code Assist endpoints.
+  //
+  // Until this existed the tier was whatever a human typed and the quota table
+  // was blank, because the numbers that used to fill it were a compile-time
+  // constant nobody had ever fetched. The backend refuses to write anything
+  // Google did not send, so a failure here leaves a stated reason rather than a
+  // plausible-looking bar.
+  let fetchingQuota: Record<string, boolean> = {};
+  let fetchingAllQuota = false;
+
+  async function fetchQuota(id: string) {
+    if (fetchingQuota[id]) return;
+    fetchingQuota = { ...fetchingQuota, [id]: true };
+    try {
+      const r = await (AppBindings as any).RefreshAntiAccountQuota(id);
+      await loadAccounts();
+      if (r?.ok) {
+        addToast(`Gói ${r.tier}${r.raw_tier ? ` (${r.raw_tier})` : ''} · đọc được hạn mức ${r.models} model.`, 'SUCCESS');
+      } else {
+        addToast(`Chưa đọc được hạn mức: ${r?.error || 'không rõ lý do'}`, 'ERROR', 9000);
+      }
+    } catch (e) {
+      addLog(`Lỗi đọc hạn mức: ${e}`, 'ERROR');
+      addToast(`Lỗi đọc hạn mức: ${e}`, 'ERROR');
+    } finally {
+      const next = { ...fetchingQuota };
+      delete next[id];
+      fetchingQuota = next;
+    }
+  }
+
+  async function fetchAllQuota() {
+    if (fetchingAllQuota) return;
+    fetchingAllQuota = true;
+    try {
+      const r = await (AppBindings as any).RefreshAllAntiAccountQuota();
+      await loadAccounts();
+      // Per-account outcome, not a flat "done" — the same reason handleWarmupAll
+      // reports its failures: a silent failure hides a revoked account until a
+      // task dies on it.
+      if ((r?.failed ?? 0) > 0) {
+        addToast(`Đọc hạn mức: ${r.ok}/${r.total} tài khoản có dữ liệu, ${r.failed} không.`, 'WARN', 9000);
+      } else {
+        addToast(`Đã đọc gói và hạn mức của ${r?.ok ?? 0} tài khoản.`, 'SUCCESS');
+      }
+    } catch (e) {
+      addLog(`Lỗi đọc hạn mức hàng loạt: ${e}`, 'ERROR');
+      addToast(`Lỗi đọc hạn mức: ${e}`, 'ERROR');
+    } finally {
+      fetchingAllQuota = false;
+    }
+  }
+
+  // A model Google reported on. usage_pct is -1 when it said nothing, and that
+  // stays a blank rather than an empty bar that reads as "0% used".
+  function knownQuotas(acc: any) {
+    return (acc?.model_quotas || []).filter((q: any) => (q?.usage_pct ?? -1) >= 0);
+  }
+
+  function quotaBarClass(status: string) {
+    if (status === 'exceeded') return 'bg-error';
+    if (status === 'warning') return 'bg-warning';
+    return 'bg-primary';
+  }
+
+  function fetchedAgo(iso: string) {
+    if (!iso || String(iso).startsWith('0001')) return '';
+    const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+    if (secs < 60) return 'vừa xong';
+    if (secs < 3600) return `${Math.round(secs / 60)} phút trước`;
+    return `${Math.round(secs / 3600)} giờ trước`;
+  }
+
   function openExternal(url: string) {
     try {
       (AppBindings as any).OpenURLInBrowser(url);
@@ -385,6 +458,16 @@
         >
           <span class="material-symbols-outlined text-sm {isWarming ? 'animate-spin' : ''}">{isWarming ? 'progress_activity' : 'local_fire_department'}</span>
           {isWarming ? 'Đang làm nóng…' : 'Làm nóng tất cả'}
+        </button>
+        <button
+          type="button"
+          on:click={fetchAllQuota}
+          disabled={fetchingAllQuota}
+          title="Hỏi Google gói và hạn mức còn lại của từng tài khoản"
+          class="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-sm {fetchingAllQuota ? 'animate-spin' : ''}">{fetchingAllQuota ? 'progress_activity' : 'cloud_sync'}</span>
+          {fetchingAllQuota ? 'Đang đọc hạn mức…' : 'Lấy gói & hạn mức'}
         </button>
         <button
           type="button"
@@ -680,13 +763,40 @@
                   </span>
                 </div>
 
-                <div class="flex items-start gap-1.5 text-[11px] text-on-surface-variant">
-                  <span class="material-symbols-outlined text-sm">info</span>
-                  <span>
-                    Hạn mức từng model chưa lấy được — app chưa có API quota của Google.
-                    Số ở trên là do app tự đo trong lúc chạy.
-                  </span>
-                </div>
+                <!-- Real per-model quota, when Google has actually been asked.
+                     usage_pct is -1 until then, and -1 renders as the note
+                     below rather than as an empty bar. -->
+                {#if knownQuotas(acc).length > 0}
+                  <div class="space-y-1.5">
+                    {#each knownQuotas(acc) as q (q.name)}
+                      <div class="space-y-0.5">
+                        <div class="flex items-center justify-between text-[11px]">
+                          <span class="text-on-surface-variant truncate max-w-[190px]" title={q.name}>{q.name}</span>
+                          <span class="font-mono {q.status === 'exceeded' ? 'text-error' : q.status === 'warning' ? 'text-warning' : 'text-on-surface-variant'}">
+                            còn {100 - q.usage_pct}%{q.reset_time ? ` · reset ${q.reset_time}` : ''}
+                          </span>
+                        </div>
+                        <div class="h-1 rounded-full bg-surface-container-high overflow-hidden">
+                          <div class="h-full rounded-full {quotaBarClass(q.status)}" style="width: {100 - q.usage_pct}%"></div>
+                        </div>
+                      </div>
+                    {/each}
+                    <div class="text-[11px] text-outline">
+                      Đọc từ Google {fetchedAgo(acc.quota_fetched_at)}{acc.raw_tier ? ` · gói "${acc.raw_tier}"` : ''}
+                    </div>
+                  </div>
+                {:else}
+                  <div class="flex items-start gap-1.5 text-[11px] {acc.quota_error ? 'text-warning' : 'text-on-surface-variant'}">
+                    <span class="material-symbols-outlined text-sm">{acc.quota_error ? 'warning' : 'info'}</span>
+                    <span>
+                      {#if acc.quota_error}
+                        Chưa đọc được hạn mức: {acc.quota_error}
+                      {:else}
+                        Chưa hỏi Google về hạn mức — bấm nút bên phải để lấy. Số ở trên là do app tự đo trong lúc chạy.
+                      {/if}
+                    </span>
+                  </div>
+                {/if}
               </td>
 
               <!-- Last Used -->
@@ -705,6 +815,23 @@
                       class="p-1.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
                     >
                       <span class="material-symbols-outlined text-sm">check_circle</span>
+                    </button>
+                  {/if}
+
+                  <!-- Only a Google sign-in has a plan to read; an API key
+                       would just come back 401, so it does not get the button. -->
+                  {#if acc.type === 'oauth_token' || acc.refresh_token}
+                    <button
+                      type="button"
+                      on:click={() => fetchQuota(acc.id)}
+                      disabled={fetchingQuota[acc.id]}
+                      title="Lấy gói và hạn mức từ Google"
+                      aria-label="Lấy gói và hạn mức từ Google cho {acc.email || acc.name}"
+                      class="p-1.5 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <span class="material-symbols-outlined text-sm {fetchingQuota[acc.id] ? 'animate-spin' : ''}">
+                        {fetchingQuota[acc.id] ? 'progress_activity' : 'cloud_sync'}
+                      </span>
                     </button>
                   {/if}
 

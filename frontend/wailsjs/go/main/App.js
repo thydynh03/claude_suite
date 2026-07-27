@@ -330,6 +330,14 @@ export function RefreshAccountTokens() {
   return window['go']['main']['App']['RefreshAccountTokens']();
 }
 
+export function RefreshAllAntiAccountQuota() {
+  return window['go']['main']['App']['RefreshAllAntiAccountQuota']();
+}
+
+export function RefreshAntiAccountQuota(arg1) {
+  return window['go']['main']['App']['RefreshAntiAccountQuota'](arg1);
+}
+
 export function RefreshGeminiModels() {
   return window['go']['main']['App']['RefreshGeminiModels']();
 }

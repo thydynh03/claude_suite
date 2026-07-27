@@ -1,0 +1,59 @@
+name: Feature request / Đề xuất tính năng
+description: Something the tool should be able to do and cannot.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in **English or Vietnamese** — both are fine.
+        Viết bằng **tiếng Anh hoặc tiếng Việt** đều được.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem / Vấn đề
+      description: |
+        Describe what you were trying to do and where it stopped. The problem is more useful than the solution — it leaves room for a better fix than the one either of us thought of first.
+
+        Mô tả bạn đang định làm gì và nó tắc ở đâu. Vấn đề có ích hơn giải pháp — nó chừa chỗ cho một cách sửa tốt hơn cách mà cả hai ta nghĩ ra đầu tiên.
+      placeholder: |
+        When I run 20 tasks I cannot tell which agent is stuck, because...
+        Khi tôi chạy 20 task tôi không biết agent nào đang kẹt, vì...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind / Bạn hình dung thế nào
+      description: Optional. If you already have a shape in mind, sketch it.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead / Bạn đã thử cách nào
+      description: Workarounds you are using now, and why they are not enough.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which frontend / Giao diện nào
+      description: |
+        A capability must use the same method name on both adapters — see CONTRIBUTING.md.
+        Một năng lực phải dùng cùng tên method ở cả hai adapter — xem CONTRIBUTING.md.
+      options:
+        - Desktop app
+        - Terminal UI
+        - Both / Cả hai
+        - Backend only / Chỉ backend
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Would you like to build it? / Bạn có muốn tự làm không?
+      options:
+        - label: I am willing to open a pull request for this / Tôi sẵn sàng mở pull request cho việc này
+          required: false

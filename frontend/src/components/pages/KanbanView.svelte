@@ -335,6 +335,32 @@
     dragOverColumn = null;
   }
 
+  // A drag abandoned outside a column fires neither drop nor dragleave, so the
+  // column kept its highlight and draggedTaskID kept pointing at a task nobody
+  // moved — the board looked mid-gesture with no gesture in progress.
+  function handleDragEnd() {
+    draggedTaskID = null;
+    dragOverColumn = null;
+  }
+
+  // The whole card opens the inspector, not just the title line.
+  //
+  // The title div was the only click target on the card, and it is `truncate`d
+  // to one line — so a click on the prompt, the badges, the "Phụ trách" row or
+  // the padding, which is most of the card's area, did nothing whatsoever. With
+  // no hover cue to say where the live target was, a board that ignored nearly
+  // every click read as a frozen board.
+  //
+  // Interactive children are excluded here rather than each calling
+  // stopPropagation: the checkbox, both Dropdowns (they render a <button>) and
+  // the blocked-task retry button all sit inside the card, and every one of
+  // them would otherwise open the drawer on the way past.
+  function openInspectorFromCard(e: MouseEvent, taskID: string) {
+    const el = e.target as HTMLElement | null;
+    if (el?.closest('input,select,button,a,[role="button"],[role="listbox"],[role="option"]')) return;
+    detailTaskId = taskID;
+  }
+
   async function handleDrop(e: DragEvent, targetStatus: string) {
     e.preventDefault();
     dragOverColumn = null;
@@ -541,13 +567,22 @@
           on:drop={(e) => handleDrop(e, col.key)}
         >
           {#each colTasks as task (task.task_id)}
+            <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
+            <!-- The click handler is a mouse convenience on top of a keyboard
+                 path that already exists: the title below is the role="button"
+                 tabindex="0" element, and it stays the only thing in the tab
+                 order. Putting role="button" on this container instead would
+                 nest a checkbox and two dropdowns inside a button, which is
+                 what the markup was deliberately moved away from. -->
             <div
               role="group"
               draggable="true"
               animate:flip={{ duration: 180 }}
               in:fade={{ duration: 160 }}
               on:dragstart={(e) => handleDragStart(e, task.task_id)}
-              class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 space-y-2 transition-colors cursor-grab active:cursor-grabbing group relative"
+              on:dragend={handleDragEnd}
+              on:click={(e) => openInspectorFromCard(e, task.task_id)}
+              class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 space-y-2 transition-colors cursor-pointer active:cursor-grabbing group relative hover:border-primary/40"
             >
               <!-- Exactly one keyboard-activatable element opens the inspector.
                    The checkbox and the drag handle sit beside it, not inside

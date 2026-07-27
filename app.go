@@ -2107,6 +2107,108 @@ func (a *App) RefreshAccountTokens() (refreshed int, failed int) {
 	return refreshed, failed
 }
 
+// quotaCategory buckets a Code Assist model id into the three groups the table
+// colours by. Unrecognised ids fall to "gemini" because that is what this
+// endpoint is mostly listing; the display name is shown verbatim either way.
+func quotaCategory(modelID string) string {
+	id := strings.ToLower(modelID)
+	switch {
+	case strings.Contains(id, "claude"):
+		return "claude"
+	case strings.Contains(id, "gpt"), strings.Contains(id, "oss"):
+		return "gpt"
+	default:
+		return "gemini"
+	}
+}
+
+// fetchQuotaFor reads one account's plan and per-model quota from Google.
+//
+// The access token is minted first when the stored one has expired: an hour-old
+// token would come back 401, which reads as "Google refused this account" and is
+// not what happened.
+func (a *App) fetchQuotaFor(accountID string) (services.AccountPlan, error) {
+	acc := cli.GlobalAntiPool.AccountByID(accountID)
+	if acc == nil {
+		return services.AccountPlan{}, fmt.Errorf("không tìm thấy tài khoản %s", accountID)
+	}
+	// A bare API key is not a Google sign-in and has no plan to read. Saying so
+	// beats sending it and reporting whatever 401 comes back.
+	if acc.RefreshToken == "" && acc.OAuthToken == "" {
+		return services.AccountPlan{}, fmt.Errorf("tài khoản này là API key, không phải đăng nhập Google — không có gói để đọc")
+	}
+
+	if acc.OAuthToken == "" || (!acc.TokenExpiresAt.IsZero() && time.Now().After(acc.TokenExpiresAt)) {
+		if err := a.refreshOneAccountToken(accountID); err != nil {
+			return services.AccountPlan{}, err
+		}
+		acc = cli.GlobalAntiPool.AccountByID(accountID)
+		if acc == nil {
+			return services.AccountPlan{}, fmt.Errorf("tài khoản %s biến mất khi đang làm mới token", accountID)
+		}
+	}
+
+	return services.FetchAccountPlan(context.Background(), acc.OAuthToken)
+}
+
+// RefreshAntiAccountQuota reads gói (FREE/PRO/ULTRA) and per-model quota for one
+// account from Google's Code Assist endpoints, and records it against the
+// account with tier_source "google".
+//
+// This is the first thing in the app that genuinely asks Google about quota. The
+// table it fills used to be a compile-time constant — the same 53% for every
+// account — and backend/cli/quota_honesty_test.go exists to keep that from
+// coming back. Nothing here writes a number Google did not send: a partial
+// answer becomes a blank with a reason attached, never a plausible-looking bar.
+func (a *App) RefreshAntiAccountQuota(accountID string) map[string]interface{} {
+	plan, err := a.fetchQuotaFor(accountID)
+
+	quotas := make([]cli.ModelQuota, 0, len(plan.Models))
+	for _, m := range plan.Models {
+		frac := m.RemainingFraction
+		if !m.HasQuota {
+			frac = -1
+		}
+		var resetIn time.Duration
+		if !m.ResetTime.IsZero() {
+			resetIn = time.Until(m.ResetTime)
+		}
+		quotas = append(quotas, cli.QuotaFromFraction(m.DisplayName, quotaCategory(m.ID), frac, m.IsExhausted, resetIn))
+	}
+
+	reason := ""
+	if err != nil {
+		reason = err.Error()
+	}
+	cli.GlobalAntiPool.ApplyQuota(accountID, plan.Tier, plan.RawTier, plan.ProjectID, quotas, reason)
+	a.saveAntiKeys()
+
+	if err != nil {
+		a.emitLog(fmt.Sprintf("⚠️ Chưa đọc được hạn mức của %s: %v", accountLabel(accountID), err), "WARN")
+		return map[string]interface{}{"ok": false, "error": reason, "tier": plan.Tier}
+	}
+	a.emitLog(fmt.Sprintf("✅ Đã đọc gói %s và hạn mức %d model của %s.", plan.Tier, len(quotas), accountLabel(accountID)), "SUCCESS")
+	return map[string]interface{}{"ok": true, "tier": plan.Tier, "raw_tier": plan.RawTier, "models": len(quotas)}
+}
+
+// RefreshAllAntiAccountQuota does the same for every account in the pool,
+// sequentially — eleven accounts hitting one internal endpoint at once is how a
+// pool gets itself rate-limited while asking about rate limits.
+func (a *App) RefreshAllAntiAccountQuota() map[string]interface{} {
+	keys := cli.GlobalAntiPool.GetKeys()
+	ok, failed := 0, 0
+	for _, k := range keys {
+		res := a.RefreshAntiAccountQuota(k.ID)
+		if v, _ := res["ok"].(bool); v {
+			ok++
+		} else {
+			failed++
+		}
+	}
+	a.emitLog(fmt.Sprintf("Đọc hạn mức xong: %d tài khoản có dữ liệu, %d không.", ok, failed), "INFO")
+	return map[string]interface{}{"ok": ok, "failed": failed, "total": len(keys)}
+}
+
 // refreshOneAccountToken mints a fresh access token for a single account, on
 // the run path, so an expired token never reaches the CLI. Disabling follows
 // the same rule as everywhere else: only Google's refusal counts.

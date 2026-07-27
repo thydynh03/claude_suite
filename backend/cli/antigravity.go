@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -54,13 +55,29 @@ type AntiAccountKey struct {
 	IsCurrent      bool         `json:"is_current"`
 	LastUsed       string       `json:"last_used"`
 	ModelQuotas    []ModelQuota `json:"model_quotas"`
-	// Usage is measured, not guessed. ModelQuotas stays for the day a real quota
-	// endpoint is wired up; until then its entries carry status "unknown".
+	// Usage is measured, not guessed: it counts what this app watched happen.
+	// ModelQuotas is now filled from Google's Code Assist endpoint by ApplyQuota,
+	// but only once somebody asks for it — entries carry status "unknown" until
+	// then, and go back to "unknown" if a later read fails.
 	Usage UsageStats `json:"usage"`
-	// TierSource records where Tier came from: "user" when somebody labelled the
-	// account in the UI, "unknown" otherwise. Every account used to be born "PRO"
-	// with no evidence, which is why the PRO filter never matched anything real.
+	// TierSource records where Tier came from: "google" when it was read from
+	// the Code Assist endpoint, "user" when somebody labelled the account in the
+	// UI, "unknown" otherwise. Every account used to be born "PRO" with no
+	// evidence, which is why the PRO filter never matched anything real.
 	TierSource string `json:"tier_source"`
+	// RawTier is the string Google actually returned ("standard-tier",
+	// "ai-ultra", …). Kept because Tier collapses it into three buckets, and a
+	// plan this code has never heard of should still be readable by a human
+	// instead of silently becoming UNKNOWN with nothing to go on.
+	RawTier string `json:"raw_tier"`
+	// ProjectID is the cloudaicompanion project the quota is billed against.
+	// Without it the quota endpoint answers 100% for everything, so its absence
+	// is the reason a reading is refused rather than an incidental detail.
+	ProjectID      string    `json:"project_id"`
+	QuotaFetchedAt time.Time `json:"quota_fetched_at"`
+	// QuotaError says why the last attempt produced nothing, so the UI can be
+	// specific instead of showing an unexplained blank.
+	QuotaError string `json:"quota_error"`
 }
 
 // tierUnknown is the honest starting state for an account nobody has labelled.
@@ -385,6 +402,103 @@ func (p *AccountKeyPool) SetTier(id, tier string) bool {
 		}
 	}
 	return false
+}
+
+// ApplyQuota records a reading fetched from Google.
+//
+// It is the only path other than SetTier that may write Tier, and it stamps
+// TierSource "google" so the UI can tell a measured plan from one a human typed
+// in. The caller lives in app.go because backend/services already imports this
+// package — the translation from the Code Assist response into ModelQuota
+// happens there rather than dragging a cycle in here.
+//
+// A failed fetch still lands: quotaErr is what the UI shows instead of an
+// unexplained blank, and clearing the stale quota matters more than keeping a
+// number nobody can date.
+func (p *AccountKeyPool) ApplyQuota(id, tier, rawTier, projectID string, quotas []ModelQuota, quotaErr string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i := range p.keys {
+		if p.keys[i].ID != id {
+			continue
+		}
+		p.keys[i].QuotaFetchedAt = time.Now()
+		p.keys[i].QuotaError = quotaErr
+		p.keys[i].ProjectID = projectID
+		p.keys[i].RawTier = rawTier
+
+		// A tier Google did not give us must not overwrite one the user did.
+		// They took the trouble to say; an empty answer has not earned that.
+		if tier != "" && tier != tierUnknown {
+			p.keys[i].Tier = tier
+			p.keys[i].TierSource = "google"
+		}
+
+		if len(quotas) > 0 {
+			p.keys[i].ModelQuotas = quotas
+		} else {
+			// Nothing came back, so nothing is known — leaving the previous
+			// reading on screen would date it to now.
+			p.keys[i].ModelQuotas = unknownQuotas()
+		}
+		return true
+	}
+	return false
+}
+
+// QuotaFromFraction turns Google's remainingFraction into the ModelQuota the UI
+// already renders. frac < 0 means the response carried no quota for that model,
+// which stays "unknown" — the distinction between "none left" and "not known"
+// is the whole reason this area was rewritten.
+func QuotaFromFraction(name, category string, frac float64, exhausted bool, resetIn time.Duration) ModelQuota {
+	q := ModelQuota{Name: name, Category: category, UsagePct: -1, Status: "unknown"}
+	if frac < 0 {
+		return q
+	}
+
+	used := int(math.Round((1 - frac) * 100))
+	if used < 0 {
+		used = 0
+	}
+	if used > 100 {
+		used = 100
+	}
+	q.UsagePct = used
+
+	switch {
+	case exhausted || frac <= 0:
+		q.Status = "exceeded"
+	case frac < 0.2:
+		q.Status = "warning"
+	default:
+		q.Status = "ok"
+	}
+
+	if resetIn > 0 {
+		q.ResetTime = humanDuration(resetIn)
+	}
+	return q
+}
+
+// humanDuration formats a reset countdown the way the table reads: "1d 6h",
+// "2h 15m", "8m". A reset already in the past prints nothing rather than a
+// negative, because that means the window has rolled over.
+func humanDuration(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	mins := int(d.Minutes()) % 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh", days, hours)
+	case hours > 0:
+		return fmt.Sprintf("%dh %dm", hours, mins)
+	default:
+		return fmt.Sprintf("%dm", mins)
+	}
 }
 
 func (p *AccountKeyPool) GetCurrentKey() string {

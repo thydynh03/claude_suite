@@ -173,6 +173,10 @@ export function RebuildProjectMap():Promise<projectmap.BuildReport>;
 
 export function RefreshAccountTokens():Promise<number|number>;
 
+export function RefreshAllAntiAccountQuota():Promise<Record<string, any>>;
+
+export function RefreshAntiAccountQuota(arg1:string):Promise<Record<string, any>>;
+
 export function RefreshGeminiModels():Promise<number>;
 
 export function RefreshProjectSummaries():Promise<number>;

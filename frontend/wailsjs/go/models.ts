@@ -298,6 +298,11 @@ export namespace cli {
 	    model_quotas: ModelQuota[];
 	    usage: UsageStats;
 	    tier_source: string;
+	    raw_tier: string;
+	    project_id: string;
+	    // Go type: time
+	    quota_fetched_at: any;
+	    quota_error: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AntiAccountKey(source);
@@ -320,6 +325,10 @@ export namespace cli {
 	        this.model_quotas = this.convertValues(source["model_quotas"], ModelQuota);
 	        this.usage = this.convertValues(source["usage"], UsageStats);
 	        this.tier_source = source["tier_source"];
+	        this.raw_tier = source["raw_tier"];
+	        this.project_id = source["project_id"];
+	        this.quota_fetched_at = this.convertValues(source["quota_fetched_at"], null);
+	        this.quota_error = source["quota_error"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

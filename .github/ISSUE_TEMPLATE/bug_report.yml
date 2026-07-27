@@ -1,0 +1,102 @@
+name: Bug report / Báo lỗi
+description: Something behaves differently from what it says it does.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Write in **English or Vietnamese** — both are fine.
+
+        Cảm ơn bạn đã bỏ công. Viết bằng **tiếng Anh hoặc tiếng Việt** đều được.
+
+        ⚠️ **Never paste a token, refresh token, API key or OAuth secret here.**
+        ⚠️ **Đừng bao giờ dán token, refresh token, API key hay OAuth secret vào đây.**
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened / Chuyện gì đã xảy ra
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I clicked X on the Task Board and expected Y. Instead Z.
+        Tôi bấm X trên Task Board và mong đợi Y. Nhưng lại ra Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / Các bước tái hiện
+      description: The shortest sequence that shows it. "It happens sometimes" is still worth filing — say so and describe when.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / Phiên bản
+      description: Shown in the app's title bar, or `claude-suite-tui --check`.
+      placeholder: "v2.18.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where / Ở đâu
+      options:
+        - Desktop app (Wails)
+        - Terminal UI (TUI)
+        - claude-suite-claim CLI
+        - Build from source
+        - Installer
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Agent CLI in use / Agent CLI đang dùng
+      options:
+        - Claude CLI
+        - Antigravity / Gemini CLI
+        - Both
+        - Not relevant / Không liên quan
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / Hệ điều hành
+      placeholder: "Windows 11 26200, or Ubuntu 24.04 for the TUI"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        The log file lives in the data directory — `%LOCALAPPDATA%\ClaudeSuite` on Windows, `~/.claude_suite` elsewhere.
+        Startup messages are written there even when the window never renders.
+
+        File log nằm trong thư mục dữ liệu — `%LOCALAPPDATA%\ClaudeSuite` trên Windows, `~/.claude_suite` ở nơi khác.
+
+        **Check it for tokens before pasting. / Kiểm tra token trước khi dán.**
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting / Trước khi gửi
+      options:
+        - label: I searched existing issues / Tôi đã tìm trong các issue có sẵn
+          required: true
+        - label: There are no credentials in what I pasted / Không có thông tin đăng nhập nào trong phần tôi dán
+          required: true
