@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1438,10 +1439,11 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 		return ""
 	}
 
+	boundPort := 8045
 	state := ""
 	if a.oauthListener != nil {
 		var err error
-		state, err = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, accessToken, refreshToken string) {
+		boundPort, state, err = a.oauthListener.StartOAuthListener(clientID, clientSecret, func(email, accessToken, refreshToken string) {
 			if refreshToken != "" {
 				cli.GlobalAntiPool.AddRefreshAccount(email, refreshToken)
 				a.saveAntiKeys()
@@ -1472,9 +1474,10 @@ func (a *App) OpenGoogleOAuthLogin(customClientID string) string {
 		}
 	}
 
+	redirectURI := fmt.Sprintf("http://localhost:%d/auth/callback", boundPort)
 	// access_type=offline + prompt=consent so Google returns a refresh_token;
 	// state ties the callback to this click — the listener rejects anything else.
-	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=http://localhost:8045/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&access_type=offline&prompt=consent&state=" + state
+	authURL := "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + clientID + "&redirect_uri=" + url.QueryEscape(redirectURI) + "&response_type=code&scope=https://www.googleapis.com/auth/cloud-platform%20https://www.googleapis.com/auth/userinfo.email&access_type=offline&prompt=consent&state=" + state
 	if a.ctx != nil {
 		wailsRuntime.BrowserOpenURL(a.ctx, authURL)
 	}

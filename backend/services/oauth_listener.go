@@ -53,10 +53,10 @@ var oauthHTTPClient = &http.Client{Timeout: 30 * time.Second}
 // taken port must fail here — ListenAndServe in a goroutine reported success
 // while Google's redirect landed on connection-refused (the same defect the
 // webhook service fixed; this was the remaining copy).
-func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string, onSuccess func(email, accessToken, refreshToken string)) (string, error) {
+func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string, onSuccess func(email, accessToken, refreshToken string)) (int, string, error) {
 	stateBytes := make([]byte, 24)
 	if _, err := rand.Read(stateBytes); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	state := hex.EncodeToString(stateBytes)
 
@@ -67,6 +67,28 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 	}
 	s.state = state
 	s.mu.Unlock()
+
+	// Loopback only, bound before returning. Try ports in range 8045-8052
+	var listener net.Listener
+	var err error
+	var boundPort int
+	portsToTry := []int{8045, 8046, 8047, 8048, 8049, 8050, 8051, 8052}
+	for _, port := range portsToTry {
+		for i := 0; i < 3; i++ {
+			listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if err == nil {
+				boundPort = port
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if listener != nil {
+			break
+		}
+	}
+	if err != nil || boundPort == 0 {
+		return 0, "", fmt.Errorf("cổng 8045-8052 đang bị chiếm (app khác hoặc phiên đăng nhập cũ?): %w", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +112,12 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 		}
 
 		// Exchange authorization code for OAuth access token
+		redirectURI := fmt.Sprintf("http://localhost:%d/auth/callback", boundPort)
 		resp, err := oauthHTTPClient.PostForm("https://oauth2.googleapis.com/token", url.Values{
 			"code":          {code},
 			"client_id":     {clientID},
 			"client_secret": {clientSecret},
-			"redirect_uri":  {"http://localhost:8045/auth/callback"},
+			"redirect_uri":  {redirectURI},
 			"grant_type":    {"authorization_code"},
 		})
 
@@ -184,20 +207,6 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 		}
 	})
 
-	// Loopback only, bound before returning. Try up to 5 times if port was just closed.
-	var listener net.Listener
-	var err error
-	for i := 0; i < 5; i++ {
-		listener, err = net.Listen("tcp", "127.0.0.1:8045")
-		if err == nil {
-			break
-		}
-		time.Sleep(150 * time.Millisecond)
-	}
-	if err != nil {
-		return "", fmt.Errorf("cổng 8045 đang bị chiếm (app khác hoặc phiên đăng nhập cũ?): %w", err)
-	}
-
 	server := &http.Server{Handler: mux}
 	s.mu.Lock()
 	s.server = server
@@ -207,5 +216,5 @@ func (s *OAuthListenerService) StartOAuthListener(clientID, clientSecret string,
 		_ = server.Serve(listener)
 	}()
 
-	return state, nil
+	return boundPort, state, nil
 }
