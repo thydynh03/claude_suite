@@ -8,20 +8,34 @@ beforeEach(() => {
 
 describe('translations', () => {
   it('returns Vietnamese by default', () => {
-    expect(get(t)('cockpit')).toBe('Bàn Điều Khiển (Cockpit)')
+    expect(get(t)('scheduler')).toBe('Lịch tự động')
   })
 
   // The sidebar renders through this store, so switching the language has to
   // change what those labels resolve to — a toggle that only sets a variable is
   // the bug this replaced.
   it('re-resolves every label when the language changes', () => {
-    const before = get(t)('kanban')
+    const before = get(t)('settings')
 
     currentLang.set('en')
-    const after = get(t)('kanban')
+    const after = get(t)('settings')
 
-    expect(before).toBe('Bảng Kanban Kế Hoạch')
-    expect(after).toBe('Kanban Board')
+    expect(before).toBe('Cài đặt')
+    expect(after).toBe('Settings')
+  })
+
+  // The sidebar rail is 240px and these labels sit beside an icon and a
+  // shortcut hint, so a long one is not a cosmetic problem: it truncates to
+  // "Bàn Điều Khiển (Coc…" and stops naming the page.
+  it('keeps nav labels short enough for the sidebar', () => {
+    const navKeys = ['cockpit', 'kanban', 'code_studio', 'scheduler', 'browser_agent', 'settings'] as const
+    for (const lang of ['vi', 'en'] as const) {
+      currentLang.set(lang)
+      const translate = get(t)
+      for (const key of navKeys) {
+        expect(translate(key).length, `${lang}/${key} is too long for the rail`).toBeLessThanOrEqual(18)
+      }
+    }
   })
 
   it('falls back to the key itself when there is no translation', () => {
