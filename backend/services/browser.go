@@ -414,6 +414,25 @@ func (s *BrowserAgentService) RunAutonomousBrowserTask(
 		}), chromedp.FullScreenshot(&buf, 90))
 	}
 
+	// Allocate the browser and the page target on cdpCtx, which has no deadline,
+	// BEFORE anything runs under a timeout.
+	//
+	// chromedp binds the target's lifetime to the context passed to the first
+	// Run. That used to be a 60-second timeout context, so exactly sixty seconds
+	// into a run — however many steps in — chromedp tore the target down and
+	// every later action failed with "context canceled". Two logs pin it: last
+	// success at +55s, first failure at +60s on the dot, and in another run the
+	// first failure at +60s exactly. The step that failed was never the problem;
+	// the clock was.
+	if err := chromedp.Run(cdpCtx); err != nil {
+		logMsg(fmt.Sprintf("❌ Không mở được tab điều khiển: %v", err))
+		result.Success = false
+		result.Error = err.Error()
+		result.Status = "failed"
+		return result, err
+	}
+
+	// Now a deadline is safe: it bounds this batch of work, not the session.
 	initCtx, cancelInit := context.WithTimeout(cdpCtx, 60*time.Second)
 	defer cancelInit()
 	if err := chromedp.Run(initCtx, initTasks); err != nil {
